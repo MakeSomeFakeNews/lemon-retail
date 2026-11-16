@@ -83,6 +83,13 @@ DROP TABLE IF EXISTS wms_serial_log;
 DROP TABLE IF EXISTS wms_stock_flow;
 DROP TABLE IF EXISTS wms_serial;
 DROP TABLE IF EXISTS wms_reservation;
+DROP TABLE IF EXISTS dist_date_lock;
+DROP TABLE IF EXISTS dist_store_ledger;
+DROP TABLE IF EXISTS dist_discrepancy;
+DROP TABLE IF EXISTS dist_delivery_item;
+DROP TABLE IF EXISTS dist_delivery;
+DROP TABLE IF EXISTS dist_requisition_item;
+DROP TABLE IF EXISTS dist_requisition;
 DROP TABLE IF EXISTS store_info;
 DROP TABLE IF EXISTS store_region;
 DROP TABLE IF EXISTS wms_stock;
@@ -717,6 +724,179 @@ CREATE TABLE store_info (
     UNIQUE KEY uk_store_code (code, tenant_id),
     KEY idx_store_region (region_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '门店';
+
+-- ---------------------------------------------------------------- 门店要货与配送：要货单 → 审核 → 配送单（在途调拨）→ 门店收货（差异）；门店退仓；门店往来；日期锁定
+-- 单据的门店由仓库决定（store_id 冗余保存便于显示，数据权限按仓库所属门店过滤）；库存移动全部经 wms 的调拨单（source_no 为本模块单号）
+
+CREATE TABLE dist_requisition (
+    id                  BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id           BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    req_no              VARCHAR(32)    NOT NULL COMMENT '要货单号（编码规则 YH）',
+    store_id            BIGINT         NOT NULL COMMENT '要货门店',
+    warehouse_id        BIGINT         NOT NULL COMMENT '收货仓库（要货门店的仓库）',
+    supply_store_id     BIGINT         NOT NULL COMMENT '供货门店（总部 / 配送中心，默认为要货门店的上级配送门店）',
+    supply_warehouse_id BIGINT         NOT NULL COMMENT '供货仓库（默认为供货门店的默认仓库）',
+    biz_date            DATE           NOT NULL COMMENT '要货日期',
+    expected_date       DATE                    DEFAULT NULL COMMENT '期望到货日期，用于配送及时率',
+    status              VARCHAR(16)    NOT NULL DEFAULT 'DRAFT' COMMENT '状态(字典 dist_requisition_status) DRAFT草稿 APPROVING审批中 SUBMITTED待审核 APPROVED已审核 PARTIAL部分配送 DELIVERED已配送 CLOSED已关闭',
+    total_qty           DECIMAL(18, 4) NOT NULL DEFAULT 0 COMMENT '要货数量合计',
+    approved_qty        DECIMAL(18, 4) NOT NULL DEFAULT 0 COMMENT '批准数量合计（审核后）',
+    delivered_qty       DECIMAL(18, 4) NOT NULL DEFAULT 0 COMMENT '已配送（发货）数量合计',
+    remark              VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    reject_reason       VARCHAR(255)            DEFAULT NULL COMMENT '最近一次驳回原因（审批驳回或总部驳回）',
+    close_reason        VARCHAR(255)            DEFAULT NULL COMMENT '关闭原因',
+    flow_instance_id    VARCHAR(64)             DEFAULT NULL COMMENT '审批流程实例ID',
+    submit_time         DATETIME                DEFAULT NULL COMMENT '提交时间',
+    audit_by            BIGINT                  DEFAULT NULL COMMENT '审核人',
+    audit_time          DATETIME                DEFAULT NULL COMMENT '审核时间',
+    dept_id             BIGINT                  DEFAULT NULL COMMENT '制单人部门',
+    create_by           BIGINT                  DEFAULT NULL COMMENT '制单人',
+    create_time         DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time         DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_dist_requisition_no (req_no, tenant_id),
+    KEY idx_dist_requisition_wh (warehouse_id),
+    KEY idx_dist_requisition_supply (supply_warehouse_id, status),
+    KEY idx_dist_requisition_date (biz_date)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '门店要货单';
+
+CREATE TABLE dist_requisition_item (
+    id             BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id      BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    requisition_id BIGINT         NOT NULL COMMENT '要货单',
+    material_id    BIGINT         NOT NULL COMMENT '物料',
+    qty            DECIMAL(18, 4) NOT NULL COMMENT '要货数量（基本单位）',
+    suggest_qty    DECIMAL(18, 4)          DEFAULT NULL COMMENT '建议量（安全库存 − 现存 − 在途，录入时参考）',
+    approved_qty   DECIMAL(18, 4)          DEFAULT NULL COMMENT '批准数量（审核时填写，默认等于要货数量）',
+    delivered_qty  DECIMAL(18, 4) NOT NULL DEFAULT 0 COMMENT '已配送（发货）数量',
+    remark         VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    create_time    DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time    DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_dist_requisition_item_req (requisition_id),
+    KEY idx_dist_requisition_item_material (material_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '门店要货单明细';
+
+CREATE TABLE dist_delivery (
+    id                BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id         BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    delivery_no       VARCHAR(32)    NOT NULL COMMENT '单号（配送单 PS / 退仓单 TC）',
+    kind              VARCHAR(16)    NOT NULL COMMENT '种类(字典 dist_delivery_kind) DELIVERY配送 RETURN门店退仓',
+    from_store_id     BIGINT         NOT NULL COMMENT '发货门店（配送：配送中心；退仓：门店）',
+    from_warehouse_id BIGINT         NOT NULL COMMENT '发货仓库',
+    to_store_id       BIGINT         NOT NULL COMMENT '收货门店',
+    to_warehouse_id   BIGINT         NOT NULL COMMENT '收货仓库',
+    biz_date          DATE           NOT NULL COMMENT '业务日期（发货日期）',
+    receive_date      DATE                    DEFAULT NULL COMMENT '收货日期',
+    status            VARCHAR(16)    NOT NULL DEFAULT 'DRAFT' COMMENT '状态(字典 dist_delivery_status) DRAFT草稿 SUBMITTED待审核 APPROVED已审核 SHIPPED已发货 RECEIVED已收货 DIFF收货有差异 CLOSED已完成',
+    transfer_id       BIGINT                  DEFAULT NULL COMMENT '发货时生成的在途调拨单（wms_stock_doc）',
+    total_qty         DECIMAL(18, 4) NOT NULL DEFAULT 0 COMMENT '发货数量合计',
+    received_qty      DECIMAL(18, 4)          DEFAULT NULL COMMENT '实收数量合计',
+    total_amount      DECIMAL(18, 2)          DEFAULT NULL COMMENT '配送金额（数量 × 配送价，发货时生成；加盟店结算依据）',
+    remark            VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    reject_reason     VARCHAR(255)            DEFAULT NULL COMMENT '退仓驳回原因',
+    approve_by        BIGINT                  DEFAULT NULL COMMENT '审核人（退仓）',
+    approve_time      DATETIME                DEFAULT NULL COMMENT '审核时间（退仓）',
+    ship_by           BIGINT                  DEFAULT NULL COMMENT '发货人',
+    ship_time         DATETIME                DEFAULT NULL COMMENT '发货时间',
+    receive_by        BIGINT                  DEFAULT NULL COMMENT '收货人',
+    receive_time      DATETIME                DEFAULT NULL COMMENT '收货时间',
+    dept_id           BIGINT                  DEFAULT NULL COMMENT '制单人部门',
+    create_by         BIGINT                  DEFAULT NULL COMMENT '制单人',
+    create_time       DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time       DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_dist_delivery_no (delivery_no, tenant_id),
+    KEY idx_dist_delivery_from (from_warehouse_id),
+    KEY idx_dist_delivery_to (to_warehouse_id),
+    KEY idx_dist_delivery_status (kind, status),
+    KEY idx_dist_delivery_date (biz_date)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '配送单 / 门店退仓单（在途调拨：发货调出，收货调入）';
+
+CREATE TABLE dist_delivery_item (
+    id                  BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id           BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    delivery_id         BIGINT         NOT NULL COMMENT '配送单',
+    requisition_id      BIGINT                  DEFAULT NULL COMMENT '来源要货单（配送）',
+    requisition_item_id BIGINT                  DEFAULT NULL COMMENT '来源要货单明细，发货时回写已配送数量',
+    material_id         BIGINT         NOT NULL COMMENT '物料',
+    location_id         BIGINT         NOT NULL DEFAULT 0 COMMENT '发货库位，0 为未指定',
+    batch_no            VARCHAR(64)    NOT NULL DEFAULT '' COMMENT '批次号',
+    serial_nos          TEXT COMMENT '序列号，逗号分隔（序列号物料须按发货数量收货，差异走退仓）',
+    qty                 DECIMAL(18, 4) NOT NULL COMMENT '发货数量',
+    price               DECIMAL(18, 6)          DEFAULT NULL COMMENT '配送价（内部结算价）：草稿为指定的价格（为空按规则），发货后为实际调拨价',
+    amount              DECIMAL(18, 2)          DEFAULT NULL COMMENT '配送金额 = 数量 × 配送价（发货时生成）',
+    cost_price          DECIMAL(18, 6)          DEFAULT NULL COMMENT '调出成本价（发货时生成）',
+    received_qty        DECIMAL(18, 4)          DEFAULT NULL COMMENT '实收数量（收货时填写）',
+    remark              VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    create_time         DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time         DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_dist_delivery_item_delivery (delivery_id),
+    KEY idx_dist_delivery_item_req (requisition_item_id),
+    KEY idx_dist_delivery_item_material (material_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '配送单 / 退仓单明细';
+
+CREATE TABLE dist_discrepancy (
+    id               BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id        BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    delivery_id      BIGINT         NOT NULL COMMENT '配送单 / 退仓单',
+    delivery_item_id BIGINT         NOT NULL COMMENT '配送单明细',
+    material_id      BIGINT         NOT NULL COMMENT '物料',
+    batch_no         VARCHAR(64)    NOT NULL DEFAULT '' COMMENT '批次号',
+    kind             VARCHAR(16)    NOT NULL COMMENT '差异种类(字典 dist_discrepancy_kind) SHORT少收 DAMAGED破损 OVER多收',
+    qty              DECIMAL(18, 4) NOT NULL COMMENT '差异数量（正数）',
+    price            DECIMAL(18, 6)          DEFAULT NULL COMMENT '配送价',
+    amount           DECIMAL(18, 2)          DEFAULT NULL COMMENT '差异金额 = 数量 × 配送价',
+    status           VARCHAR(16)    NOT NULL DEFAULT 'PENDING' COMMENT '状态(字典 dist_discrepancy_status) PENDING待处理 HANDLED已处理',
+    transfer_id      BIGINT                  DEFAULT NULL COMMENT '少收 / 破损：收货时生成的差异在途调拨（收货仓库 → 发货仓库）',
+    reason           VARCHAR(255)            DEFAULT NULL COMMENT '收货方填写的差异说明',
+    handling         VARCHAR(16)             DEFAULT NULL COMMENT '处理方式(字典 dist_discrepancy_handling) RETURN_SOURCE退回发货方 SOURCE_WRITE_OFF发货方承担 TARGET_WRITE_OFF收货方承担 ACCEPT收货方留用',
+    io_category      VARCHAR(32)             DEFAULT NULL COMMENT '报损出库的出库类别（字典 wms_out_category）',
+    handle_doc_nos   VARCHAR(255)            DEFAULT NULL COMMENT '处理生成的仓库单据号（逗号分隔）',
+    handle_remark    VARCHAR(255)            DEFAULT NULL COMMENT '处理说明',
+    handle_by        BIGINT                  DEFAULT NULL COMMENT '处理人',
+    handle_time      DATETIME                DEFAULT NULL COMMENT '处理时间',
+    create_by        BIGINT                  DEFAULT NULL COMMENT '登记人（收货人）',
+    create_time      DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time      DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_dist_discrepancy_delivery (delivery_id),
+    KEY idx_dist_discrepancy_status (status)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '收货差异：实收与发货不一致的明细，由总部判定责任后处理';
+
+CREATE TABLE dist_store_ledger (
+    id                BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id         BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    transfer_id       BIGINT         NOT NULL COMMENT '调拨单（冲销时为红字调拨单）',
+    transfer_no       VARCHAR(32)    NOT NULL COMMENT '调拨单号',
+    source_no         VARCHAR(64)             DEFAULT NULL COMMENT '来源单号（配送单等）',
+    biz_date          DATE           NOT NULL COMMENT '业务日期',
+    from_store_id     BIGINT         NOT NULL COMMENT '调出门店（应收方）',
+    to_store_id       BIGINT         NOT NULL COMMENT '调入门店（应付方）',
+    from_warehouse_id BIGINT         NOT NULL COMMENT '调出仓库',
+    to_warehouse_id   BIGINT         NOT NULL COMMENT '调入仓库',
+    cost_amount       DECIMAL(18, 2)          DEFAULT NULL COMMENT '调出成本金额（冲销为负数）',
+    amount            DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '往来金额 = 调拨金额（内部结算价，冲销为负数）',
+    create_time       DATETIME                DEFAULT NULL COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_dist_store_ledger_transfer (transfer_id, tenant_id),
+    KEY idx_dist_store_ledger_from (from_store_id, biz_date),
+    KEY idx_dist_store_ledger_to (to_store_id, biz_date)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '门店往来：跨门店的差价调拨（含加盟配送）按调拨金额记调出门店应收、调入门店应付（内部结算，不生成凭证）';
+
+CREATE TABLE dist_date_lock (
+    id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id   BIGINT       NOT NULL DEFAULT 1 COMMENT '租户ID',
+    store_id    BIGINT       NOT NULL DEFAULT 0 COMMENT '门店，0 为全公司',
+    lock_date   DATE         NOT NULL COMMENT '锁定日期：业务日期不晚于该日期的单据不能新增、修改、确认、作废',
+    remark      VARCHAR(255)          DEFAULT NULL COMMENT '备注',
+    update_by   BIGINT                DEFAULT NULL COMMENT '最近设置人',
+    create_time DATETIME              DEFAULT NULL COMMENT '创建时间',
+    update_time DATETIME              DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_dist_date_lock (store_id, tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '日期锁定（结账日）：全公司一条（store_id = 0），门店可另设（两者都检查）';
 
 -- ---------------------------------------------------------------- 仓库管理
 
@@ -2963,6 +3143,93 @@ INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, s
 INSERT INTO wf_model (model_key, name, category, sort, status, design_json, remark, create_time, update_time) VALUES
 ('scm_price_adjust', '调价单审批', 'SALES', 30, 1, '{"form": [], "flow": {"id": "start", "type": "START", "name": "发起人", "next": {"id": "leader", "type": "APPROVER", "name": "部门主管审批", "assignee": {"type": "DEPT_LEADER", "ids": [], "names": [], "level": 1}, "approveMode": "OR", "emptyAction": "TO_ADMIN", "next": null}}}', '内置流程（未发布）：部门主管审批。发布后调价单提交即进入审批，通过后到生效时间生效；流程变量 target 调价对象、itemCount 调价商品数、adjustNo 调价单号', NOW(), NOW());
 
+-- ---------------------------------------------------------------- 门店要货与配送：菜单、字典、流程
+-- 菜单：模块 20，分组 460–462，页面 463–479（日期锁定 472 放在「系统管理」下，所有租户可用），按钮 4600–4799
+
+INSERT INTO sys_menu (id, parent_id, name, type, path, component, perms, icon, sort, visible, status, create_time, update_time) VALUES
+(20,  0, '配送', 'M', '/dist', NULL, NULL, 'CarOutlined', 3, 1, 1, NOW(), NOW()),
+(460, 20, '门店要货', 'M', NULL, NULL, NULL, NULL, 1, 1, 1, NOW(), NOW()),
+(461, 20, '配送与收货', 'M', NULL, NULL, NULL, NULL, 2, 1, 1, NOW(), NOW()),
+(462, 20, '查询与报表', 'M', NULL, NULL, NULL, NULL, 3, 1, 1, NOW(), NOW()),
+(463, 460, '要货单', 'C', 'requisition', 'dist/requisition/index', 'dist:requisition:list', 'FileAddOutlined', 1, 1, 1, NOW(), NOW()),
+(464, 460, '要货审核', 'C', 'audit', 'dist/audit/index', 'dist:audit:list', 'AuditOutlined', 2, 1, 1, NOW(), NOW()),
+(465, 461, '配送单', 'C', 'delivery', 'dist/delivery/index', 'dist:delivery:list', 'CarOutlined', 1, 1, 1, NOW(), NOW()),
+(466, 461, '门店收货', 'C', 'receive', 'dist/receive/index', 'dist:receive:list', 'InboxOutlined', 2, 1, 1, NOW(), NOW()),
+(467, 461, '门店退仓', 'C', 'return', 'dist/return/index', 'dist:return:list', 'RollbackOutlined', 3, 1, 1, NOW(), NOW()),
+(468, 461, '收货差异', 'C', 'discrepancy', 'dist/discrepancy/index', 'dist:discrepancy:list', 'ExceptionOutlined', 4, 1, 1, NOW(), NOW()),
+(469, 462, '在途查询', 'C', 'transit', 'dist/transit/index', 'dist:transit:list', 'NodeExpandOutlined', 1, 1, 1, NOW(), NOW()),
+(470, 462, '门店往来', 'C', 'ledger', 'dist/ledger/index', 'dist:ledger:list', 'SwapOutlined', 2, 1, 1, NOW(), NOW()),
+(471, 462, '门店对比', 'C', 'store-compare', 'dist/compare/index', 'dist:report:compare', 'BarChartOutlined', 3, 1, 1, NOW(), NOW()),
+(472, 1, '日期锁定', 'C', 'date-lock', 'dist/date-lock/index', 'dist:dateLock:list', 'LockOutlined', 11, 1, 1, NOW(), NOW()),
+(4630, 463, '要货单新增', 'F', NULL, NULL, 'dist:requisition:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4631, 463, '要货单修改', 'F', NULL, NULL, 'dist:requisition:edit', NULL, 2, 1, 1, NOW(), NOW()),
+(4632, 463, '要货单删除', 'F', NULL, NULL, 'dist:requisition:remove', NULL, 3, 1, 1, NOW(), NOW()),
+(4633, 463, '要货单提交', 'F', NULL, NULL, 'dist:requisition:submit', NULL, 4, 1, 1, NOW(), NOW()),
+(4640, 464, '审核要货', 'F', NULL, NULL, 'dist:requisition:audit', NULL, 1, 1, 1, NOW(), NOW()),
+(4641, 464, '关闭要货', 'F', NULL, NULL, 'dist:requisition:close', NULL, 2, 1, 1, NOW(), NOW()),
+(4642, 464, '缺货生成采购订单', 'F', NULL, NULL, 'dist:summary:purchase', NULL, 3, 1, 1, NOW(), NOW()),
+(4650, 465, '配送单新增', 'F', NULL, NULL, 'dist:delivery:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4651, 465, '配送单修改', 'F', NULL, NULL, 'dist:delivery:edit', NULL, 2, 1, 1, NOW(), NOW()),
+(4652, 465, '配送单删除', 'F', NULL, NULL, 'dist:delivery:remove', NULL, 3, 1, 1, NOW(), NOW()),
+(4653, 465, '配送发货', 'F', NULL, NULL, 'dist:delivery:ship', NULL, 4, 1, 1, NOW(), NOW()),
+(4654, 465, '超量配送', 'F', NULL, NULL, 'dist:delivery:overQty', NULL, 5, 1, 1, NOW(), NOW()),
+(4655, 465, '修改配送价', 'F', NULL, NULL, 'dist:delivery:price', NULL, 6, 1, 1, NOW(), NOW()),
+(4660, 466, '确认收货', 'F', NULL, NULL, 'dist:receive:confirm', NULL, 1, 1, 1, NOW(), NOW()),
+(4670, 467, '退仓单新增', 'F', NULL, NULL, 'dist:return:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4671, 467, '退仓单修改', 'F', NULL, NULL, 'dist:return:edit', NULL, 2, 1, 1, NOW(), NOW()),
+(4672, 467, '退仓单删除', 'F', NULL, NULL, 'dist:return:remove', NULL, 3, 1, 1, NOW(), NOW()),
+(4673, 467, '退仓审核', 'F', NULL, NULL, 'dist:return:audit', NULL, 4, 1, 1, NOW(), NOW()),
+(4674, 467, '退仓发货', 'F', NULL, NULL, 'dist:return:ship', NULL, 5, 1, 1, NOW(), NOW()),
+(4675, 467, '退仓收货', 'F', NULL, NULL, 'dist:return:receive', NULL, 6, 1, 1, NOW(), NOW()),
+(4680, 468, '差异处理', 'F', NULL, NULL, 'dist:discrepancy:handle', NULL, 1, 1, 1, NOW(), NOW()),
+(4720, 472, '日期锁定设置', 'F', NULL, NULL, 'dist:dateLock:edit', NULL, 1, 1, 1, NOW(), NOW());
+
+-- 普通用户只读；总经理全部；仓库管理员负责配送中心一侧（要货审核、配送发货、退仓收货，查看要货、差异、在途）
+INSERT INTO sys_role_menu (role_id, menu_id) VALUES
+(2, 20), (2, 460), (2, 461), (2, 462), (2, 463), (2, 464), (2, 465), (2, 466), (2, 467), (2, 468), (2, 469), (2, 470), (2, 471), (2, 472),
+(3, 20), (3, 460), (3, 461), (3, 462), (3, 463), (3, 464), (3, 465), (3, 466), (3, 467), (3, 468), (3, 469), (3, 470), (3, 471), (3, 472),
+(3, 4630), (3, 4631), (3, 4632), (3, 4633), (3, 4640), (3, 4641), (3, 4642), (3, 4650), (3, 4651), (3, 4652), (3, 4653), (3, 4654), (3, 4655),
+(3, 4660), (3, 4670), (3, 4671), (3, 4672), (3, 4673), (3, 4674), (3, 4675), (3, 4680), (3, 4720),
+(6, 20), (6, 460), (6, 461), (6, 462), (6, 463), (6, 464), (6, 465), (6, 467), (6, 468), (6, 469),
+(6, 4640), (6, 4641), (6, 4650), (6, 4651), (6, 4652), (6, 4653), (6, 4675);
+
+INSERT INTO sys_dict_type (id, name, type, kind, status, remark, create_time, update_time) VALUES
+(280, '要货单状态', 'dist_requisition_status', 'SYSTEM', 1, '草稿 → 审批中（可选）→ 待审核 → 已审核 → 部分配送 / 已配送；可关闭', NOW(), NOW()),
+(281, '配送单种类', 'dist_delivery_kind', 'SYSTEM', 1, '配送（配送中心 → 门店）、门店退仓（门店 → 配送中心）', NOW(), NOW()),
+(282, '配送单状态', 'dist_delivery_status', 'SYSTEM', 1, '草稿 →（退仓：待审核 → 已审核）→ 已发货（在途）→ 已收货 / 收货有差异 → 已完成', NOW(), NOW()),
+(283, '收货差异种类', 'dist_discrepancy_kind', 'SYSTEM', 1, '少收、破损、多收', NOW(), NOW()),
+(284, '收货差异状态', 'dist_discrepancy_status', 'SYSTEM', 1, '待处理、已处理', NOW(), NOW()),
+(285, '差异处理方式', 'dist_discrepancy_handling', 'SYSTEM', 1, '退回发货方、发货方承担、收货方承担、收货方留用', NOW(), NOW());
+INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, status, builtin, create_time, update_time) VALUES
+('dist_requisition_status', '草稿', 'DRAFT', 'default', 1, 1, 1, NOW(), NOW()),
+('dist_requisition_status', '审批中', 'APPROVING', 'processing', 2, 1, 1, NOW(), NOW()),
+('dist_requisition_status', '待审核', 'SUBMITTED', 'orange', 3, 1, 1, NOW(), NOW()),
+('dist_requisition_status', '已审核', 'APPROVED', 'blue', 4, 1, 1, NOW(), NOW()),
+('dist_requisition_status', '部分配送', 'PARTIAL', 'cyan', 5, 1, 1, NOW(), NOW()),
+('dist_requisition_status', '已配送', 'DELIVERED', 'green', 6, 1, 1, NOW(), NOW()),
+('dist_requisition_status', '已关闭', 'CLOSED', 'default', 7, 1, 1, NOW(), NOW()),
+('dist_delivery_kind', '配送', 'DELIVERY', 'blue', 1, 1, 1, NOW(), NOW()),
+('dist_delivery_kind', '门店退仓', 'RETURN', 'orange', 2, 1, 1, NOW(), NOW()),
+('dist_delivery_status', '草稿', 'DRAFT', 'default', 1, 1, 1, NOW(), NOW()),
+('dist_delivery_status', '待审核', 'SUBMITTED', 'orange', 2, 1, 1, NOW(), NOW()),
+('dist_delivery_status', '已审核', 'APPROVED', 'blue', 3, 1, 1, NOW(), NOW()),
+('dist_delivery_status', '已发货', 'SHIPPED', 'processing', 4, 1, 1, NOW(), NOW()),
+('dist_delivery_status', '已收货', 'RECEIVED', 'green', 5, 1, 1, NOW(), NOW()),
+('dist_delivery_status', '收货有差异', 'DIFF', 'red', 6, 1, 1, NOW(), NOW()),
+('dist_delivery_status', '已完成', 'CLOSED', 'cyan', 7, 1, 1, NOW(), NOW()),
+('dist_discrepancy_kind', '少收', 'SHORT', 'orange', 1, 1, 1, NOW(), NOW()),
+('dist_discrepancy_kind', '破损', 'DAMAGED', 'red', 2, 1, 1, NOW(), NOW()),
+('dist_discrepancy_kind', '多收', 'OVER', 'blue', 3, 1, 1, NOW(), NOW()),
+('dist_discrepancy_status', '待处理', 'PENDING', 'orange', 1, 1, 1, NOW(), NOW()),
+('dist_discrepancy_status', '已处理', 'HANDLED', 'green', 2, 1, 1, NOW(), NOW()),
+('dist_discrepancy_handling', '退回发货方', 'RETURN_SOURCE', 'blue', 1, 1, 1, NOW(), NOW()),
+('dist_discrepancy_handling', '发货方承担', 'SOURCE_WRITE_OFF', 'orange', 2, 1, 1, NOW(), NOW()),
+('dist_discrepancy_handling', '收货方承担', 'TARGET_WRITE_OFF', 'red', 3, 1, 1, NOW(), NOW()),
+('dist_discrepancy_handling', '收货方留用', 'ACCEPT', 'green', 4, 1, 1, NOW(), NOW());
+-- 门店要货审批（内置流程，未发布）：发布后要货单提交即进入审批，通过后待总部审核
+INSERT INTO wf_model (model_key, name, category, sort, status, design_json, remark, create_time, update_time) VALUES
+('dist_requisition', '门店要货审批', 'INVENTORY', 40, 1, '{"form": [], "flow": {"id": "start", "type": "START", "name": "发起人", "next": {"id": "leader", "type": "APPROVER", "name": "部门主管审批", "assignee": {"type": "DEPT_LEADER", "ids": [], "names": [], "level": 1}, "approveMode": "OR", "emptyAction": "TO_ADMIN", "next": null}}}', '内置流程（未发布）：部门主管审批。发布后要货单提交即进入审批，通过后待总部审核，驳回回到草稿；流程变量 reqNo 要货单号、storeName 要货门店、totalQty 要货数量、itemCount 商品数', NOW(), NOW());
+
 -- ---------------------------------------------------------------- 供应链管理：菜单、字典
 
 INSERT INTO sys_menu (id, parent_id, name, type, path, component, perms, icon, sort, visible, status, create_time, update_time) VALUES
@@ -3022,7 +3289,8 @@ INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, s
 ('scm_trade_kind', '销售出库', 'SALES_OUT', 'green', 3, 1, NOW(), NOW()),
 ('scm_trade_kind', '销售退货', 'SALES_RETURN', 'red', 4, 1, NOW(), NOW()),
 ('scm_order_source', '手工', 'MANUAL', 'default', 1, 1, NOW(), NOW()),
-('scm_order_source', '补货建议', 'REORDER', 'cyan', 2, 1, NOW(), NOW());
+('scm_order_source', '补货建议', 'REORDER', 'cyan', 2, 1, NOW(), NOW()),
+('scm_order_source', '门店要货', 'REQUISITION', 'purple', 3, 1, NOW(), NOW());
 
 -- 普通用户：供应链各页面只读
 INSERT INTO sys_role_menu (role_id, menu_id) VALUES
@@ -3595,6 +3863,9 @@ INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, s
 ('wms_out_category', '研发领用', 'RD', 'purple', 4, 1, NOW(), NOW()),
 ('wms_out_category', '办公领用', 'OFFICE', 'cyan', 5, 1, NOW(), NOW()),
 ('wms_out_category', '其他', 'OTHER', 'default', 9, 1, NOW(), NOW());
+-- 配送收货差异报损（程序默认使用，内置）
+INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, status, builtin, create_time, update_time) VALUES
+('wms_out_category', '配送差异报损', 'DIST_LOSS', 'red', 8, 1, 1, NOW(), NOW());
 
 -- 凭证科目设置：自动凭证各用途使用的科目
 INSERT INTO sys_menu (id, parent_id, name, type, path, component, perms, icon, sort, visible, status, create_time, update_time) VALUES

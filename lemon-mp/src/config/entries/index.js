@@ -2,6 +2,7 @@ import { hasPerm } from '@/store/user'
 import { bizRule, loadBizRules } from '@/store/bizRules'
 import approval from './approval'
 import wms from './wms'
+import dist from './dist'
 import notice from './notice'
 
 /**
@@ -11,7 +12,7 @@ import notice from './notice'
  * group：office 办公 / sales 销售 / warehouse 仓储。links 用于把首页待办、站内消息中的 Web 端链接转到小程序页面
  */
 export const GROUPS = ['office', 'sales', 'warehouse']
-const ALL = [...approval, ...notice, ...wms]
+const ALL = [...approval, ...notice, ...wms, ...dist]
 
 export function visibleEntries() {
   return ALL.filter((e) => hasPerm(e.perm) && (e.permAll || []).every((p) => hasPerm(p)) && (!e.rule || bizRule(e.rule, true) !== false))

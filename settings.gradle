@@ -17,6 +17,7 @@ include 'lemon-framework'
     'wms',        // 仓库管理
     'scm',        // 供应链管理
     'fin',        // 财务管理
+    'dist',       // 门店要货与配送：要货单、要货汇总、配送单、门店收货与差异、门店退仓、门店往来、日期锁定、门店对比（依赖 store）
     'bi',         // 商务智能
     'ai',         // 智能：大模型客户端、模型配置与用量、AI 问数（只依赖 framework）
 ].each { include "lemon-modules:lemon-${it}" }

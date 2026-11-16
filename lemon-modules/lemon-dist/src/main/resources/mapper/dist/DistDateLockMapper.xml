@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.dist.mapper.DistDateLockMapper">
+
+    <select id="selectAllWithNames" resultType="com.lemon.erp.modules.dist.entity.DistDateLock">
+        SELECT l.*, s.name AS store_name, u.nickname AS update_by_name
+        FROM dist_date_lock l
+        LEFT JOIN store_info s ON s.id = l.store_id
+        LEFT JOIN sys_user u ON u.id = l.update_by
+        ORDER BY l.store_id
+    </select>
+
+    <select id="selectEffectiveDate" resultType="java.time.LocalDate">
+        SELECT MAX(l.lock_date) FROM dist_date_lock l
+        WHERE (l.store_id = 0
+        <if test="warehouseId != null">
+            OR l.store_id IN (SELECT w.store_id FROM wms_warehouse w WHERE w.id = #{warehouseId})
+        </if>)
+    </select>
+
+</mapper>

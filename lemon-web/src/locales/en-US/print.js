@@ -144,7 +144,22 @@ export default {
     operator: 'Operator',
     dept: 'Department',
     deliveryNote: 'Delivery Note',
-    total: 'Total'
+    total: 'Total',
+    modDist: 'Distribution',
+    requisition: 'Store Requisition',
+    distDelivery: 'Delivery Order',
+    storeReturn: 'Store Return',
+    requestStore: 'Requesting Store',
+    supplyWarehouse: 'Supplying Warehouse',
+    expectedDate: 'Expected Arrival',
+    requestQty: 'Requested Qty',
+    approvedQty: 'Approved Qty',
+    shipStore: 'Shipping Store',
+    receiveStore: 'Receiving Store',
+    deliveryPrice: 'Delivery Price',
+    deliveryAmount: 'Delivery Amount',
+    receivedQty: 'Received Qty',
+    receiver: 'Receiver'
   },
   paper: {
     size: '{name} ({size})',

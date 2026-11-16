@@ -366,6 +366,12 @@ export const DateRange = Object.freeze({
   ALL: 'ALL', // 全部
 })
 
+/** com.lemon.erp.modules.dist.model.DeliveryKind（字典 dist_delivery_kind） */
+export const DeliveryKind = Object.freeze({
+  DELIVERY: 'DELIVERY', // 配送
+  RETURN: 'RETURN', // 门店退仓
+})
+
 /** com.lemon.erp.modules.scm.model.DeliveryStatus（字典 scm_delivery_status） */
 export const DeliveryStatus = Object.freeze({
   PENDING: 'PENDING',
@@ -378,6 +384,38 @@ export const DeliveryStatus = Object.freeze({
 export const DictKind = Object.freeze({
   SYSTEM: 'SYSTEM', // 系统字典
   BUSINESS: 'BUSINESS', // 业务字典
+})
+
+/** com.lemon.erp.modules.dist.model.DiscrepancyHandling（字典 dist_discrepancy_handling） */
+export const DiscrepancyHandling = Object.freeze({
+  RETURN_SOURCE: 'RETURN_SOURCE', // 退回发货方
+  SOURCE_WRITE_OFF: 'SOURCE_WRITE_OFF', // 发货方承担
+  TARGET_WRITE_OFF: 'TARGET_WRITE_OFF', // 收货方承担
+  ACCEPT: 'ACCEPT', // 收货方留用
+})
+
+/** com.lemon.erp.modules.dist.model.DiscrepancyKind（字典 dist_discrepancy_kind） */
+export const DiscrepancyKind = Object.freeze({
+  SHORT: 'SHORT', // 少收
+  DAMAGED: 'DAMAGED', // 破损
+  OVER: 'OVER', // 多收
+})
+
+/** com.lemon.erp.modules.dist.model.DiscrepancyStatus（字典 dist_discrepancy_status） */
+export const DiscrepancyStatus = Object.freeze({
+  PENDING: 'PENDING', // 待处理
+  HANDLED: 'HANDLED', // 已处理
+})
+
+/** com.lemon.erp.modules.dist.model.DistDeliveryStatus（字典 dist_delivery_status） */
+export const DistDeliveryStatus = Object.freeze({
+  DRAFT: 'DRAFT',
+  SUBMITTED: 'SUBMITTED', // 待审核
+  APPROVED: 'APPROVED', // 已审核
+  SHIPPED: 'SHIPPED', // 已发货
+  RECEIVED: 'RECEIVED', // 已收货
+  DIFF: 'DIFF', // 收货有差异
+  CLOSED: 'CLOSED', // 已完成
 })
 
 /** com.lemon.erp.modules.wms.model.DocStatus（字典 wms_doc_status） */
@@ -674,6 +712,7 @@ export const OrderKind = Object.freeze({
 export const OrderSource = Object.freeze({
   MANUAL: 'MANUAL', // 手工
   REORDER: 'REORDER', // 补货建议
+  REQUISITION: 'REQUISITION', // 门店要货
   DIRECT: 'DIRECT', // 直接开单
 })
 
@@ -803,6 +842,17 @@ export const RefType = Object.freeze({
   STORE: 'STORE', // 门店
   REGION: 'REGION', // 区域
   PRICE_SCHEME: 'PRICE_SCHEME', // 门店价格方案
+})
+
+/** com.lemon.erp.modules.dist.model.RequisitionStatus（字典 dist_requisition_status） */
+export const RequisitionStatus = Object.freeze({
+  DRAFT: 'DRAFT',
+  APPROVING: 'APPROVING', // 审批中
+  SUBMITTED: 'SUBMITTED', // 待审核
+  APPROVED: 'APPROVED', // 已审核
+  PARTIAL: 'PARTIAL', // 部分配送
+  DELIVERED: 'DELIVERED', // 已配送
+  CLOSED: 'CLOSED', // 已关闭
 })
 
 /** com.lemon.erp.modules.wms.model.ReservationSource */
