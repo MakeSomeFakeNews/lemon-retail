@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.pos.mapper.PosPaymentMapper">
+
+    <select id="selectBySaleId" resultType="com.lemon.erp.modules.pos.entity.PosPayment">
+        SELECT p.*, a.name AS account_name
+        FROM pos_payment p
+        LEFT JOIN fin_account a ON a.id = p.account_id
+        WHERE p.sale_id = #{saleId}
+        ORDER BY p.id
+    </select>
+
+    <update id="bindSale">
+        UPDATE pos_payment SET sale_id = #{saleId}, account_id = #{accountId}, update_time = NOW()
+        WHERE id = #{id} AND status = 'SUCCESS' AND sale_id IS NULL
+    </update>
+
+    <update id="addRefunded">
+        UPDATE pos_payment SET refunded_amount = refunded_amount + #{amount}, update_time = NOW()
+        WHERE id = #{id} AND amount - refunded_amount &gt;= #{amount}
+    </update>
+
+    <select id="selectForUpdate" resultType="com.lemon.erp.modules.pos.entity.PosPayment">
+        SELECT * FROM pos_payment WHERE id = #{id} FOR UPDATE
+    </select>
+
+</mapper>

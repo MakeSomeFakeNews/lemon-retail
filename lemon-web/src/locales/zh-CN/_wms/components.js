@@ -113,7 +113,9 @@ export default {
       salesOut: '由销售出库单自动生成',
       salesReturn: '由销售退货单自动生成',
       opening: '由期初库存导入自动生成',
-      assembly: '由组装拆卸单自动生成'
+      assembly: '由组装拆卸单自动生成',
+      retailSale: '由 POS 销售单自动生成',
+      retailReturn: '由 POS 退货 / 作废自动生成'
     }
   },
   transfer: {

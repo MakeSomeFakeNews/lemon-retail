@@ -100,6 +100,7 @@ export default {
   // 物料分类
   // 入库类型
   wms_in_type: {
+    'RETAIL_RETURN': 'Retail Return', // 零售退货
     'PURCHASE': 'Purchase Receipt', // 采购入库
     'SALES_RETURN': 'Sales Return', // 销售退货
     'OTHER': 'Other Inbound', // 其他入库
@@ -126,6 +127,7 @@ export default {
     OTHER: 'Other' // 其他
   },
   wms_out_type: {
+    'RETAIL': 'Retail Sale', // 零售出库
     'SALES': 'Sales Delivery', // 销售出库
     'PURCHASE_RETURN': 'Purchase Return', // 采购退货
     'OTHER': 'Other Outbound', // 其他出库
@@ -228,6 +230,7 @@ export default {
   },
   // 应收应付来源
   fin_bill_source: {
+    'POS_DAILY_CLOSE': 'Store Daily Close', // 门店日结
     'SALES_OUT': 'Sales Delivery', // 销售出库
     'SALES_RETURN': 'Sales Return', // 销售退货
     'PURCHASE_IN': 'Purchase Receipt', // 采购入库
@@ -461,6 +464,90 @@ export default {
   scm_price_adjust_target: {
     'HQ': 'HQ Price', // 总部价
     'SCHEME': 'Price Scheme', // 价格方案
+  },
+  // POS 支付方式
+  pos_pay_method: {
+    'CASH': 'Cash', // 现金
+    'WECHAT': 'WeChat Pay', // 微信
+    'ALIPAY': 'Alipay', // 支付宝
+    'BANK_CARD': 'Bank Card', // 银行卡
+    'STORED_VALUE': 'Stored Value', // 储值
+  },
+  // POS 单据种类
+  pos_sale_kind: {
+    'SALE': 'Sale', // 销售
+    'RETURN': 'Return', // 退货
+  },
+  // POS 单据状态
+  pos_sale_status: {
+    'COMPLETED': 'Completed', // 已完成
+    'VOIDED': 'Voided', // 已作废
+  },
+  // 班次状态
+  pos_shift_status: {
+    'OPEN': 'On Duty', // 当班
+    'CLOSED': 'Closed', // 已交班
+  },
+  // POS 收款状态
+  pos_payment_status: {
+    'PENDING': 'Pending', // 处理中
+    'SUCCESS': 'Succeeded', // 成功
+    'FAILED': 'Failed', // 失败
+    'CLOSED': 'Closed', // 已关闭
+  },
+  // 聚合支付通道
+  pos_pay_provider: {
+    'OFFLINE': 'Offline Registration', // 线下登记
+    'MOCK': 'Mock (Testing)', // 模拟通道（测试）
+  },
+  // POS 价格来源
+  pos_price_source: {
+    'SPECIAL': 'Special', // 特价
+    'MEMBER': 'Member Price', // 会员价
+    'SCHEME': 'Store Price', // 门店价
+    'RETAIL': 'Retail Price', // 零售价
+    'MANUAL': 'Manual', // 手工改价
+  },
+  // 特价活动状态
+  pos_special_status: {
+    'DRAFT': 'Draft', // 草稿
+    'ACTIVE': 'Active', // 进行中
+    'ENDED': 'Ended', // 已结束
+  },
+  // 活动适用门店
+  pos_special_scope: {
+    'ALL': 'All Stores', // 全部门店
+    'STORES': 'Selected Stores', // 指定门店
+    'REGIONS': 'Selected Regions', // 指定区域
+  },
+  // 活动渠道
+  pos_sale_channel: {
+    'POS': 'In-store POS', // 门店收银
+    'ALL': 'All Channels', // 全部渠道
+  },
+  // 门店日结状态
+  pos_daily_close_status: {
+    'CLOSED': 'Closed', // 已日结
+    'REOPENED': 'Reopened', // 已反日结
+  },
+  // 会员性别
+  pos_member_gender: {
+    'MALE': 'Male', // 男
+    'FEMALE': 'Female', // 女
+    'UNKNOWN': 'Unknown', // 未知
+  },
+  // 小票纸宽
+  pos_receipt_paper: {
+    'MM80': '80mm', // 80mm
+    'MM58': '58mm', // 58mm
+  },
+  // 收银日报维度
+  pos_report_dimension: {
+    'DATE': 'Date', // 日期
+    'STORE': 'Store', // 门店
+    'TERMINAL': 'Terminal', // 收银台
+    'CASHIER': 'Cashier', // 收银员
+    'SHIFT': 'Shift', // 班次
   },
   // 要货单状态
   dist_requisition_status: {

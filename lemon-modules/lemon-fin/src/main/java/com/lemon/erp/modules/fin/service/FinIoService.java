@@ -144,6 +144,58 @@ public class FinIoService {
         return d.getId();
     }
 
+    /**
+     * 由业务单据生成收入或支出单（待确认，出纳确认后生成凭证）：如门店日结按结算账户汇总的零售收款（收入）/ 退款（支出）。
+     * 方向取内置类别的方向；生成的单据不能修改、删除，可以确认、取消确认，来源单据撤销时用 {@link #deleteGenerated} 删除
+     *
+     * @param code      内置收支类别（决定收入 / 支出）
+     * @param accountId 结算账户（现金 / 银行末级科目）
+     * @return 收支单 ID
+     */
+    @Transactional
+    public Long createGenerated(IoCategoryCode code, LocalDate date, Long accountId, BigDecimal amount,
+                                BillSource sourceType, Long sourceId, String sourceNo, String remark) {
+        accountService.requireCashAccount(accountId);
+        periodGuard.checkOpen(date, "fin.label.incomeExpenseDoc");
+        FinIoCategory category = categoryService.getBuiltin(code);
+        FinIoDoc d = new FinIoDoc();
+        d.setDocNo(docNoService.next(category.getDirection() == FundDirection.IN ? INCOME_NO : EXPENSE_NO));
+        d.setDirection(category.getDirection());
+        d.setStatus(IoStatus.DRAFT);
+        d.setDocDate(date);
+        d.setAccountId(accountId);
+        d.setAmount(amount);
+        d.setRemark(cut(remark));
+        d.setSourceType(sourceType);
+        d.setSourceId(sourceId);
+        d.setSourceNo(sourceNo);
+        docMapper.insert(d);
+        FinIoDocItem item = new FinIoDocItem();
+        item.setCategoryId(category.getId());
+        item.setAmount(amount);
+        DetailLines.replace(itemMapper, FinIoDocItem::getDocId, d.getId(), List.of(item), FinIoDocItem::setDocId, itemMapper::insertBatch);
+        return d.getId();
+    }
+
+    /**
+     * 删除来源单据生成的收支单（来源撤销时，如门店反日结）：都必须是待确认，已确认的需先由出纳取消确认
+     */
+    @Transactional
+    public void deleteGenerated(BillSource sourceType, Long sourceId) {
+        List<FinIoDoc> docs = docMapper.selectList(Wrappers.<FinIoDoc>lambdaQuery()
+                .eq(FinIoDoc::getSourceType, sourceType).eq(FinIoDoc::getSourceId, sourceId));
+        for (FinIoDoc d : docs) {
+            if (d.getStatus() != IoStatus.DRAFT) {
+                throw new BizException("fin.error.generatedIoDocConfirmed", d.getDocNo());
+            }
+            periodGuard.checkOpen(d.getDocDate(), "fin.label.incomeExpenseDoc");
+            if (docMapper.delete(Wrappers.<FinIoDoc>lambdaQuery().eq(FinIoDoc::getId, d.getId()).eq(FinIoDoc::getStatus, IoStatus.DRAFT)) == 0) {
+                throw new BizException("fin.error.generatedIoDocConfirmed", d.getDocNo());
+            }
+            itemMapper.delete(Wrappers.<FinIoDocItem>lambdaQuery().eq(FinIoDocItem::getDocId, d.getId()));
+        }
+    }
+
     /** 修改（待确认）；收入 / 支出方向不能修改 */
     @Transactional
     public void update(Long id, IoRequests.Save req) {

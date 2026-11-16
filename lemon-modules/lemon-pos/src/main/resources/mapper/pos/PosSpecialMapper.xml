@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.pos.mapper.PosSpecialMapper">
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.pos.entity.PosSpecial">
+        SELECT s.*, u.nickname AS create_by_name,
+               (SELECT COUNT(*) FROM pos_special_item i WHERE i.special_id = s.id) AS item_count
+        FROM pos_special s
+        LEFT JOIN sys_user u ON u.id = s.create_by
+        <where>
+            <if test="q.keyword != null and q.keyword != ''">s.name LIKE CONCAT('%', #{q.keyword}, '%')</if>
+            <if test="q.status != null">AND s.status = #{q.status}</if>
+            <if test="q.materialId != null">AND EXISTS (SELECT 1 FROM pos_special_item i WHERE i.special_id = s.id AND i.material_id = #{q.materialId})</if>
+        </where>
+        ORDER BY s.id DESC
+    </select>
+
+    <select id="selectDetail" resultType="com.lemon.erp.modules.pos.entity.PosSpecial">
+        SELECT s.*, u.nickname AS create_by_name
+        FROM pos_special s
+        LEFT JOIN sys_user u ON u.id = s.create_by
+        WHERE s.id = #{id}
+    </select>
+
+    <select id="selectCandidates" resultType="com.lemon.erp.modules.pos.mapper.PosSpecialMapper$Candidate">
+        SELECT s.id AS special_id, s.store_scope, s.member_only, i.material_id, i.special_price, i.discount_rate, i.limit_qty
+        FROM pos_special_item i
+        JOIN pos_special s ON s.id = i.special_id
+        WHERE s.status = 'ACTIVE' AND s.channel IN ('POS', 'ALL') AND s.begin_time &lt;= #{now} AND s.end_time &gt;= #{now}
+          AND i.material_id IN
+          <foreach collection="materialIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+</mapper>

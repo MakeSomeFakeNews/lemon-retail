@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.pos.mapper.PosHeldSaleMapper">
+
+    <select id="selectByStore" resultType="com.lemon.erp.modules.pos.entity.PosHeldSale">
+        SELECT h.id, h.store_id, h.terminal_id, h.member_id, h.item_count, h.amount, h.remark, h.create_by, h.create_time, h.update_time,
+               t.name AS terminal_name, u.nickname AS cashier_name, m.name AS member_name
+        FROM pos_held_sale h
+        LEFT JOIN pos_terminal t ON t.id = h.terminal_id
+        LEFT JOIN sys_user u ON u.id = h.create_by
+        LEFT JOIN pos_member m ON m.id = h.member_id
+        WHERE h.store_id = #{storeId}
+        ORDER BY h.id DESC
+    </select>
+
+</mapper>

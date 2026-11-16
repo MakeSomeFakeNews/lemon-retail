@@ -69,6 +69,17 @@ const trade = (key, name, partner, sign, lineWarehouse = false) => ({
   signs: [n.prepared, n.storekeeper, sign],
   note: true
 })
+/** POS 小票：一行商品名称、数量、单价、金额，表头为门店、收银台、收银员、时间、会员，合计为应收、实收、找零、支付方式 */
+const receiptType = (key, name, paper) => ({
+  key,
+  module: n.modPos,
+  name,
+  fields: [n.store, n.terminal, n.cashier, n.saleTime, n.member, n.totalQty, n.listAmount, n.discountAmount, n.roundOff, n.receivable, n.paid, n.change, n.payMethods],
+  columns: [n.goods, num(n.quantity), num(n.salePrice), num(n.amount)],
+  signs: [],
+  note: true,
+  defaults: { paper, margin: 2, fontSize: 7 }
+})
 const stock = (key, name, warehouse, transfer, type, category) => ({
   key,
   module: n.warehouse,
@@ -180,6 +191,19 @@ export const PRINT_TYPES = [
     columns: [n.item, n.lineNo, num(n.amount)],
     signs: [n.entityHead, n.accountingManager, n.tabulator]
   },
+  // POS 小票（80mm / 58mm 纸宽，收银台设置使用哪一种）：默认使用小票纸张、小字号、窄页边距；交班单
+  receiptType('pos.receipt80', n.posReceipt80, 'R80'),
+  receiptType('pos.receipt58', n.posReceipt58, 'R58'),
+  {
+    key: 'pos.shift',
+    module: n.modPos,
+    name: n.posShift,
+    fields: [n.store, n.terminal, n.cashier, n.shiftNo, n.openTime, n.closeTime, n.openingCash, n.saleCount, n.saleAmount, n.returnAmount, n.expectedCash, n.countedCash, n.cashDiff],
+    columns: [n.payMethod, n.account, num(n.receipts), num(n.refunds), num(n.netAmount), num(n.payCount)],
+    signs: [n.cashier, n.handover, n.storeManager],
+    note: true,
+    defaults: { paper: 'R80', margin: 3, fontSize: 8 }
+  },
   {
     key: 'fin.partnerStatement',
     module: n.modFin,
@@ -232,6 +256,9 @@ export const PAPERS = [
   { value: '241x280', label: t('print.paper.size', { name: t('print.paper.continuous1'), size: '241 × 280' }), width: 241, height: 280 },
   { value: '241x140', label: t('print.paper.size', { name: t('print.paper.continuous2'), size: '241 × 140' }), width: 241, height: 140 },
   { value: '241x93', label: t('print.paper.size', { name: t('print.paper.continuous3'), size: '241 × 93' }), width: 241, height: 93 },
+  // 小票纸（热敏卷纸）：高度按一页的长度，超出时分页
+  { value: 'R80', label: t('print.paper.size', { name: t('print.paper.receipt'), size: '80 × 200' }), width: 80, height: 200 },
+  { value: 'R58', label: t('print.paper.size', { name: t('print.paper.receipt'), size: '58 × 200' }), width: 58, height: 200 },
   { value: 'custom', label: t('print.paper.custom') }
 ]
 const PAPER_MAP = Object.fromEntries(PAPERS.map((p) => [p.value, p]))

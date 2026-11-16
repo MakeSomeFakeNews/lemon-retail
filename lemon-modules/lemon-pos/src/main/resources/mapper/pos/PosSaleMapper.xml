@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.pos.mapper.PosSaleMapper">
+
+    <sql id="columns">
+        s.id, s.sale_no, s.kind, s.status, s.store_id, s.terminal_id, s.shift_id, s.warehouse_id, s.member_id, s.orig_sale_id,
+        s.business_date, s.sale_time, s.total_qty, s.list_amount, s.amount, s.order_discount, s.round_off, s.payable_amount,
+        s.paid_amount, s.change_amount, s.wms_doc_id, s.wms_doc_no, s.remark, s.void_by, s.void_time, s.void_reason, s.void_doc_id,
+        s.dept_id, s.create_by, s.create_time, s.update_time,
+        st.name AS store_name, t.name AS terminal_name, sh.shift_no, u.nickname AS cashier_name,
+        m.member_code, m.name AS member_name, m.phone AS member_phone, o.sale_no AS orig_sale_no
+    </sql>
+
+    <sql id="joins">
+        LEFT JOIN store_info st ON st.id = s.store_id
+        LEFT JOIN pos_terminal t ON t.id = s.terminal_id
+        LEFT JOIN pos_shift sh ON sh.id = s.shift_id
+        LEFT JOIN sys_user u ON u.id = s.create_by
+        LEFT JOIN pos_member m ON m.id = s.member_id
+        LEFT JOIN pos_sale o ON o.id = s.orig_sale_id
+    </sql>
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.pos.entity.PosSale">
+        SELECT <include refid="columns"/>
+        FROM pos_sale s
+        <include refid="joins"/>
+        <where>
+            <if test="q.keyword != null and q.keyword != ''">
+                (s.sale_no LIKE CONCAT('%', #{q.keyword}, '%') OR m.phone = #{q.keyword} OR m.member_code = #{q.keyword})
+            </if>
+            <if test="q.kind != null">AND s.kind = #{q.kind}</if>
+            <if test="q.status != null">AND s.status = #{q.status}</if>
+            <if test="q.storeId != null">AND s.store_id = #{q.storeId}</if>
+            <if test="q.terminalId != null">AND s.terminal_id = #{q.terminalId}</if>
+            <if test="q.cashierId != null">AND s.create_by = #{q.cashierId}</if>
+            <if test="q.memberId != null">AND s.member_id = #{q.memberId}</if>
+            <if test="q.shiftId != null">AND s.shift_id = #{q.shiftId}</if>
+            <if test="q.materialId != null">AND EXISTS (SELECT 1 FROM pos_sale_item i WHERE i.sale_id = s.id AND i.material_id = #{q.materialId})</if>
+            <if test="q.begin != null">AND s.business_date &gt;= #{q.begin}</if>
+            <if test="q.end != null">AND s.business_date &lt;= #{q.end}</if>
+        </where>
+        ORDER BY s.id DESC
+    </select>
+
+    <select id="selectDetail" resultType="com.lemon.erp.modules.pos.entity.PosSale">
+        SELECT <include refid="columns"/>, vu.nickname AS void_by_name
+        FROM pos_sale s
+        <include refid="joins"/>
+        LEFT JOIN sys_user vu ON vu.id = s.void_by
+        WHERE s.id = #{id}
+    </select>
+
+    <select id="selectIdByNo" resultType="java.lang.Long">
+        SELECT id FROM pos_sale WHERE sale_no = #{saleNo}
+    </select>
+
+    <select id="selectStockLines" resultType="java.util.Map">
+        SELECT i.material_id AS "materialId", i.location_id AS "locationId", i.batch_no AS "batchNo", i.qty AS "qty"
+        FROM wms_stock_doc_item i
+        WHERE i.doc_id = #{docId}
+        ORDER BY i.id
+    </select>
+
+    <select id="selectDaySales" resultType="com.lemon.erp.modules.pos.dto.PosViews$SaleSummary">
+        SELECT COALESCE(SUM(CASE WHEN kind = 'SALE' AND status = 'COMPLETED' THEN 1 ELSE 0 END), 0) AS sale_count,
+               COALESCE(SUM(CASE WHEN kind = 'SALE' AND status = 'COMPLETED' THEN payable_amount ELSE 0 END), 0) AS sale_amount,
+               COALESCE(SUM(CASE WHEN kind = 'RETURN' THEN 1 ELSE 0 END), 0) AS return_count,
+               COALESCE(SUM(CASE WHEN kind = 'RETURN' THEN payable_amount ELSE 0 END), 0) AS return_amount,
+               COALESCE(SUM(CASE WHEN status = 'VOIDED' THEN 1 ELSE 0 END), 0) AS void_count
+        FROM pos_sale
+        WHERE store_id = #{storeId} AND business_date = #{date}
+    </select>
+
+    <select id="selectDayPays" resultType="com.lemon.erp.modules.pos.dto.PosViews$PayRow">
+        SELECT p.pay_method, p.account_id, a.name AS account_name,
+               SUM(CASE WHEN p.amount &gt; 0 THEN p.amount ELSE 0 END) AS receipt_amount,
+               SUM(CASE WHEN p.amount &lt; 0 THEN -p.amount ELSE 0 END) AS refund_amount,
+               SUM(p.amount) AS amount, COUNT(*) AS pay_count
+        FROM pos_payment p
+        LEFT JOIN fin_account a ON a.id = p.account_id
+        WHERE p.store_id = #{storeId} AND p.business_date = #{date} AND p.status = 'SUCCESS' AND p.sale_id IS NOT NULL
+        GROUP BY p.pay_method, p.account_id, a.name
+        ORDER BY p.pay_method
+    </select>
+
+    <select id="selectDayShifts" resultType="java.util.Map">
+        SELECT COUNT(*) AS "shiftCount", COALESCE(SUM(expected_cash), 0) AS "expectedCash",
+               COALESCE(SUM(counted_cash), 0) AS "countedCash", COALESCE(SUM(cash_diff), 0) AS "cashDiff"
+        FROM pos_shift
+        WHERE store_id = #{storeId} AND business_date = #{date} AND status = 'CLOSED'
+    </select>
+
+    <select id="existsReturn" resultType="boolean">
+        SELECT COUNT(*) &gt; 0 FROM pos_sale WHERE orig_sale_id = #{origSaleId}
+    </select>
+
+</mapper>

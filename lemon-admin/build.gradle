@@ -11,6 +11,7 @@ dependencies {
     implementation project(':lemon-modules:lemon-workflow')
     implementation project(':lemon-modules:lemon-dashboard')
     implementation project(':lemon-modules:lemon-store')
+    implementation project(':lemon-modules:lemon-pos')
     implementation project(':lemon-modules:lemon-dist')
     implementation project(':lemon-modules:lemon-wms')
     implementation project(':lemon-modules:lemon-scm')
@@ -43,4 +44,6 @@ tasks.named('test') {
     maxHeapSize = '2g'
     // 测试用的 AI 示例工具 / 来源（AiDemoContracts）只在测试中加载，bootTestRun 体验时不出现
     systemProperty 'lemon.ai.demo-contracts', 'true'
+    // 测试用的模拟支付通道（MockPayProvider：按金额尾数确定成功 / 失败）只在测试中加载
+    systemProperty 'lemon.pos.mock-pay', 'true'
 }

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.pos.mapper.PosSaleItemMapper">
+
+    <insert id="insertBatch">
+        INSERT INTO pos_sale_item (sale_id, line_no, material_id, unit, unit_ratio, input_qty, qty, list_price, price, price_source,
+                                   special_id, discount_rate, sale_price, amount, order_share, final_amount, tax_rate, serial_nos,
+                                   orig_item_id, returned_qty, returned_amount, remark, create_time, update_time) VALUES
+        <foreach collection="list" item="i" separator=",">
+            (#{i.saleId}, #{i.lineNo}, #{i.materialId}, #{i.unit}, #{i.unitRatio}, #{i.inputQty}, #{i.qty}, #{i.listPrice}, #{i.price},
+             #{i.priceSource}, #{i.specialId}, #{i.discountRate}, #{i.salePrice}, #{i.amount}, #{i.orderShare}, #{i.finalAmount},
+             #{i.taxRate}, #{i.serialNos}, #{i.origItemId}, 0, 0, #{i.remark}, NOW(), NOW())
+        </foreach>
+    </insert>
+
+    <select id="selectBySaleId" resultType="com.lemon.erp.modules.pos.entity.PosSaleItem">
+        SELECT i.*, m.code AS material_code, m.name AS material_name, m.spec, m.barcode, sp.name AS special_name
+        FROM pos_sale_item i
+        JOIN wms_material m ON m.id = i.material_id
+        LEFT JOIN pos_special sp ON sp.id = i.special_id
+        WHERE i.sale_id = #{saleId}
+        ORDER BY i.line_no
+    </select>
+
+    <update id="addReturned">
+        UPDATE pos_sale_item SET returned_qty = returned_qty + #{qty}, returned_amount = returned_amount + #{amount}, update_time = NOW()
+        WHERE id = #{id} AND input_qty - returned_qty &gt;= #{qty}
+    </update>
+
+</mapper>

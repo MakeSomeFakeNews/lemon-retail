@@ -26,7 +26,9 @@ export const SOURCE_DOCS = {
     perm: (d) => (d.billKind === BillKind.AP ? 'scm:purchase:list' : 'scm:sales:list'),
     path: (d) => (d.billKind === BillKind.AP ? '/scm/purchase' : '/scm/sales')
   },
-  [BillSource.OFFSET]: { perm: 'fin:offset:list', path: '/fin/offset' }
+  [BillSource.OFFSET]: { perm: 'fin:offset:list', path: '/fin/offset' },
+  // 门店日结：其他收入单 / 费用支出单的来源为日结记录
+  [BillSource.POS_DAILY_CLOSE]: { perm: 'pos:dailyClose:list', path: '/pos/daily-close' }
 }
 
 const resolve = (v, doc) => (typeof v === 'function' ? v(doc) : v)

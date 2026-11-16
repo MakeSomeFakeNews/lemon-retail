@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.pos.mapper.PosTerminalMapper">
+
+    <sql id="columns">
+        t.*, st.name AS store_name, w.name AS warehouse_name, a.name AS cash_account_name,
+        sh.shift_no AS open_shift_no, u.nickname AS open_cashier_name
+    </sql>
+
+    <sql id="joins">
+        LEFT JOIN store_info st ON st.id = t.store_id
+        LEFT JOIN wms_warehouse w ON w.id = t.warehouse_id
+        LEFT JOIN fin_account a ON a.id = t.cash_account_id
+        LEFT JOIN pos_shift sh ON sh.terminal_id = t.id AND sh.status = 'OPEN'
+        LEFT JOIN sys_user u ON u.id = sh.cashier_id
+    </sql>
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.pos.entity.PosTerminal">
+        SELECT <include refid="columns"/>
+        FROM pos_terminal t
+        <include refid="joins"/>
+        <where>
+            <if test="keyword != null and keyword != ''">
+                (t.code LIKE CONCAT('%', #{keyword}, '%') OR t.name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="storeId != null">AND t.store_id = #{storeId}</if>
+            <if test="status != null">AND t.status = #{status}</if>
+        </where>
+        ORDER BY t.store_id, t.sort, t.id
+    </select>
+
+    <select id="selectDetail" resultType="com.lemon.erp.modules.pos.entity.PosTerminal">
+        SELECT <include refid="columns"/>
+        FROM pos_terminal t
+        <include refid="joins"/>
+        WHERE t.id = #{id}
+    </select>
+
+    <select id="lockById" resultType="java.lang.Long">
+        SELECT id FROM pos_terminal WHERE id = #{id} FOR UPDATE
+    </select>
+
+    <select id="selectAvailableQty" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(s.qty - s.frozen_qty), 0)
+        FROM wms_stock s
+        WHERE s.warehouse_id = #{warehouseId} AND s.material_id = #{materialId}
+    </select>
+
+    <select id="selectAvailableQtys" resultType="java.util.Map">
+        SELECT s.material_id AS "materialId", SUM(s.qty - s.frozen_qty) AS "qty"
+        FROM wms_stock s
+        WHERE s.warehouse_id = #{warehouseId} AND s.material_id IN
+        <foreach collection="materialIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        GROUP BY s.material_id
+    </select>
+
+</mapper>

@@ -14,12 +14,12 @@
             SELECT x.material_id,
                    SUM(CASE WHEN x.d &lt; #{q.beginDate} THEN x.qty ELSE 0 END) AS open_qty,
                    SUM(CASE WHEN x.d &gt;= #{q.beginDate} AND x.kind = 'IN' AND x.biz_type = 'PURCHASE' THEN x.qty ELSE 0 END) AS purchase_in,
-                   SUM(CASE WHEN x.d &gt;= #{q.beginDate} AND x.kind = 'IN' AND x.biz_type = 'SALES_RETURN' THEN x.qty ELSE 0 END) AS sales_return,
-                   SUM(CASE WHEN x.d &gt;= #{q.beginDate} AND ((x.kind = 'IN' AND x.biz_type NOT IN ('PURCHASE', 'SALES_RETURN'))
+                   SUM(CASE WHEN x.d &gt;= #{q.beginDate} AND x.kind = 'IN' AND x.biz_type IN ('SALES_RETURN', 'RETAIL_RETURN') THEN x.qty ELSE 0 END) AS sales_return,
+                   SUM(CASE WHEN x.d &gt;= #{q.beginDate} AND ((x.kind = 'IN' AND x.biz_type NOT IN ('PURCHASE', 'SALES_RETURN', 'RETAIL_RETURN'))
                             OR (x.kind NOT IN ('IN', 'OUT') AND x.qty &gt; 0)) THEN x.qty ELSE 0 END) AS other_in,
-                   SUM(CASE WHEN x.d &gt;= #{q.beginDate} AND x.kind = 'OUT' AND x.biz_type = 'SALES' THEN -x.qty ELSE 0 END) AS sales_out,
+                   SUM(CASE WHEN x.d &gt;= #{q.beginDate} AND x.kind = 'OUT' AND x.biz_type IN ('SALES', 'RETAIL') THEN -x.qty ELSE 0 END) AS sales_out,
                    SUM(CASE WHEN x.d &gt;= #{q.beginDate} AND x.kind = 'OUT' AND x.biz_type = 'PURCHASE_RETURN' THEN -x.qty ELSE 0 END) AS purchase_return,
-                   SUM(CASE WHEN x.d &gt;= #{q.beginDate} AND ((x.kind = 'OUT' AND x.biz_type NOT IN ('SALES', 'PURCHASE_RETURN'))
+                   SUM(CASE WHEN x.d &gt;= #{q.beginDate} AND ((x.kind = 'OUT' AND x.biz_type NOT IN ('SALES', 'RETAIL', 'PURCHASE_RETURN'))
                             OR (x.kind NOT IN ('IN', 'OUT') AND x.qty &lt; 0)) THEN -x.qty ELSE 0 END) AS other_out
             FROM (
                 SELECT f.material_id, f.qty, COALESCE(CASE WHEN f.qty &gt; 0 THEN d.receive_date END, d.biz_date, c.biz_date, CAST(f.create_time AS DATE)) AS d, COALESCE(d.kind, f.biz_type) AS kind, COALESCE(d.biz_type, '') AS biz_type

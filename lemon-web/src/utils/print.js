@@ -248,7 +248,8 @@ export async function printDocs(docs, title = t('print.common.print'), type) {
   const list = [].concat(docs).map((d) => toPrintDoc(d, type))
   const [templates, format] = await Promise.all([loadTemplates().catch(() => ({})), resolveFormat(type, title, list.length)])
   if (format === null) return
-  const tpl = format ? formatConfig(format) : type && templates[type]
+  // 没有保存过模板的单据按目录中的默认纸张（如 POS 小票）
+  const tpl = format ? formatConfig(format) : (type && templates[type]) || PRINT_TYPE_MAP[type]?.defaults
   const hide = message.loading({ content: t('print.common.generating'), key: 'print', duration: 0 })
   try {
     showPdf(await printPdf(buildPrintRequest(list, title, type, templates, tpl, format?.id)), title)

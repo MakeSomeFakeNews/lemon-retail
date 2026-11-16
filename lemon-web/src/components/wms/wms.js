@@ -38,12 +38,14 @@ export const AUTO_TYPE_SOURCES = {
     PURCHASE: 'purchaseIn',
     SALES_RETURN: 'salesReturn',
     OPENING: 'opening',
-    ASSEMBLY: 'assembly'
+    ASSEMBLY: 'assembly',
+    RETAIL_RETURN: 'retailReturn'
   },
   out: {
     SALES: 'salesOut',
     PURCHASE_RETURN: 'purchaseReturn',
-    ASSEMBLY: 'assembly'
+    ASSEMBLY: 'assembly',
+    RETAIL: 'retailSale'
   }
 }
 

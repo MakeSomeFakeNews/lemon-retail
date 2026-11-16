@@ -258,6 +258,7 @@ export const BillSource = Object.freeze({
   SALES_RETURN_FREIGHT: 'SALES_RETURN_FREIGHT', // 销售退货运费
   PURCHASE_RETURN_FREIGHT: 'PURCHASE_RETURN_FREIGHT', // 采购退货运费
   TRANSFER_FEE: 'TRANSFER_FEE', // 调拨费用
+  POS_DAILY_CLOSE: 'POS_DAILY_CLOSE', // 门店日结
 })
 
 /** com.lemon.erp.modules.fin.model.BillStatus（字典 fin_bill_status） */
@@ -327,6 +328,12 @@ export const CustomFieldType = Object.freeze({
   DATE: 'DATE', // 日期
   SELECT: 'SELECT', // 下拉
   BOOL: 'BOOL', // 是否
+})
+
+/** com.lemon.erp.modules.pos.model.DailyCloseStatus（字典 pos_daily_close_status） */
+export const DailyCloseStatus = Object.freeze({
+  CLOSED: 'CLOSED',
+  REOPENED: 'REOPENED',
 })
 
 /** com.lemon.erp.modules.dashboard.model.DashboardBillKind */
@@ -549,6 +556,8 @@ export const IoCategoryCode = Object.freeze({
   SALES_FREIGHT: 'SALES_FREIGHT', // 销售运费
   FREIGHT_ADVANCE: 'FREIGHT_ADVANCE', // 代垫运费
   TRANSFER_FEE: 'TRANSFER_FEE', // 调拨费用
+  RETAIL_SALES: 'RETAIL_SALES', // 零售收入
+  RETAIL_REFUND: 'RETAIL_REFUND', // 零售退款
 })
 
 /** com.lemon.erp.modules.fin.model.IoPartnerType（字典 fin_io_partner_type） */
@@ -621,6 +630,13 @@ export const MeasureFormat = Object.freeze({
   COUNT: 'COUNT', // 计数
   PERCENT: 'PERCENT', // 百分比
   PRICE: 'PRICE', // 单价
+})
+
+/** com.lemon.erp.modules.pos.model.MemberGender（字典 pos_member_gender） */
+export const MemberGender = Object.freeze({
+  MALE: 'MALE',
+  FEMALE: 'FEMALE',
+  UNKNOWN: 'UNKNOWN',
 })
 
 /** com.lemon.erp.modules.system.model.MenuType（字典 sys_menu_type） */
@@ -755,6 +771,29 @@ export const PasswordComplexity = Object.freeze({
   LETTER_DIGIT_SYMBOL: 'LETTER_DIGIT_SYMBOL',
 })
 
+/** com.lemon.erp.modules.pos.model.PayMethod（字典 pos_pay_method） */
+export const PayMethod = Object.freeze({
+  CASH: 'CASH', // 现金
+  WECHAT: 'WECHAT', // 微信
+  ALIPAY: 'ALIPAY', // 支付宝
+  BANK_CARD: 'BANK_CARD', // 银行卡
+  STORED_VALUE: 'STORED_VALUE', // 储值
+})
+
+/** com.lemon.erp.modules.pos.model.PayProviderType（字典 pos_pay_provider） */
+export const PayProviderType = Object.freeze({
+  OFFLINE: 'OFFLINE', // 线下登记
+  MOCK: 'MOCK', // 模拟通道
+})
+
+/** com.lemon.erp.modules.pos.model.PaymentStatus（字典 pos_payment_status） */
+export const PaymentStatus = Object.freeze({
+  PENDING: 'PENDING', // 处理中
+  SUCCESS: 'SUCCESS', // 成功
+  FAILED: 'FAILED', // 失败
+  CLOSED: 'CLOSED', // 已关闭
+})
+
 /** com.lemon.erp.modules.fin.model.PeriodStatus */
 export const PeriodStatus = Object.freeze({
   OPEN: 'OPEN', // 未结账
@@ -765,6 +804,32 @@ export const PeriodStatus = Object.freeze({
 export const PlanUnit = Object.freeze({
   WEEK: 'WEEK',
   MONTH: 'MONTH',
+})
+
+/** com.lemon.erp.modules.pos.model.PosPriceSource（字典 pos_price_source） */
+export const PosPriceSource = Object.freeze({
+  SPECIAL: 'SPECIAL',
+  MEMBER: 'MEMBER',
+  SCHEME: 'SCHEME',
+  RETAIL: 'RETAIL',
+  MANUAL: 'MANUAL',
+})
+
+/** com.lemon.erp.modules.pos.model.PosReportDimension（字典 pos_report_dimension） */
+export const PosReportDimension = Object.freeze({
+  DATE: 'DATE',
+  STORE: 'STORE',
+  TERMINAL: 'TERMINAL',
+  CASHIER: 'CASHIER',
+  SHIFT: 'SHIFT',
+})
+
+/** com.lemon.erp.modules.pos.model.PosRounding */
+export const PosRounding = Object.freeze({
+  NONE: 'NONE', // 不抹零
+  JIAO: 'JIAO', // 抹分
+  YUAN: 'YUAN', // 抹角
+  ROUND_JIAO: 'ROUND_JIAO', // 四舍五入到角
 })
 
 /** com.lemon.erp.modules.scm.model.PriceAdjustStatus（字典 scm_price_adjust_status） */
@@ -831,6 +896,12 @@ export const QuickPrice = Object.freeze({
   NONE: 'NONE', // 不显示价格
 })
 
+/** com.lemon.erp.modules.pos.model.ReceiptPaper（字典 pos_receipt_paper） */
+export const ReceiptPaper = Object.freeze({
+  MM80: 'MM80',
+  MM58: 'MM58',
+})
+
 /** com.lemon.erp.framework.ref.RefType */
 export const RefType = Object.freeze({
   MATERIAL: 'MATERIAL',
@@ -877,6 +948,24 @@ export const RfmSegment = Object.freeze({
   GENERAL_DEVELOP: 'GENERAL_DEVELOP', // 一般发展
   GENERAL_KEEP: 'GENERAL_KEEP', // 一般保持
   GENERAL_RETAIN: 'GENERAL_RETAIN', // 一般挽留
+})
+
+/** com.lemon.erp.modules.pos.model.SaleChannel（字典 pos_sale_channel） */
+export const SaleChannel = Object.freeze({
+  POS: 'POS', // 门店收银
+  ALL: 'ALL', // 全部渠道
+})
+
+/** com.lemon.erp.modules.pos.model.SaleKind（字典 pos_sale_kind） */
+export const SaleKind = Object.freeze({
+  SALE: 'SALE',
+  RETURN: 'RETURN',
+})
+
+/** com.lemon.erp.modules.pos.model.SaleStatus（字典 pos_sale_status） */
+export const SaleStatus = Object.freeze({
+  COMPLETED: 'COMPLETED',
+  VOIDED: 'VOIDED',
 })
 
 /** com.lemon.erp.modules.scm.model.SalesChannel（字典 scm_channel） */
@@ -943,6 +1032,26 @@ export const SettleKind = Object.freeze({
   PAYMENT: 'PAYMENT', // 付款
 })
 
+/** com.lemon.erp.modules.pos.model.ShiftStatus（字典 pos_shift_status） */
+export const ShiftStatus = Object.freeze({
+  OPEN: 'OPEN',
+  CLOSED: 'CLOSED',
+})
+
+/** com.lemon.erp.modules.pos.model.SpecialScope（字典 pos_special_scope） */
+export const SpecialScope = Object.freeze({
+  ALL: 'ALL', // 全部门店
+  STORES: 'STORES', // 指定门店
+  REGIONS: 'REGIONS', // 指定区域
+})
+
+/** com.lemon.erp.modules.pos.model.SpecialStatus（字典 pos_special_status） */
+export const SpecialStatus = Object.freeze({
+  DRAFT: 'DRAFT',
+  ACTIVE: 'ACTIVE',
+  ENDED: 'ENDED',
+})
+
 /** com.lemon.erp.modules.wms.model.StockAlert */
 export const StockAlert = Object.freeze({
   LOW: 'LOW', // 低于安全库存
@@ -985,6 +1094,7 @@ export const StockInType = Object.freeze({
   CONSIGN_IN: 'CONSIGN_IN', // 寄售入库
   OPENING: 'OPENING', // 期初入库
   ASSEMBLY: 'ASSEMBLY', // 组装拆卸
+  RETAIL_RETURN: 'RETAIL_RETURN', // 零售退货
 })
 
 /** com.lemon.erp.modules.wms.model.StockOutType（字典 wms_out_type） */
@@ -994,6 +1104,7 @@ export const StockOutType = Object.freeze({
   OTHER: 'OTHER', // 其他出库
   SCRAP: 'SCRAP', // 报废出库
   ASSEMBLY: 'ASSEMBLY', // 组装拆卸
+  RETAIL: 'RETAIL', // 零售出库
 })
 
 /** com.lemon.erp.modules.bi.model.StockQtyFilter */

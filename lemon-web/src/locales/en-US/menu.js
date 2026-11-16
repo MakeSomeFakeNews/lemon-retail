@@ -319,6 +319,46 @@ export default {
   4261: 'Edit Price Adjustment', // 调价单修改
   4262: 'Delete Price Adjustment', // 调价单删除
   4263: 'Approve Price Adjustment', // 调价单审核
+  19: 'Retail', // 零售
+  991: 'Checkout', // 收银
+  992: 'Members & Marketing', // 会员营销
+  993: 'Daily Close & Reports', // 日结与报表
+  440: 'POS Cashier', // 收银台
+  441: 'POS Terminals', // 收银台管理
+  442: 'Shifts', // 班次记录
+  443: 'POS Sales', // POS 销售单
+  450: 'Payment Provider', // 支付通道设置
+  444: 'Members', // 会员
+  445: 'Member Levels', // 会员等级
+  446: 'Special Prices', // 特价活动
+  447: 'Store Daily Close', // 门店日结
+  448: 'Cashier Daily Report', // 收银日报
+  449: 'POS Sales Details', // POS 销售明细
+  4400: 'Change Price at POS', // 收银改价
+  4401: 'Discount at POS', // 收银折扣
+  4402: 'Unlimited Discount', // 超限折扣
+  4403: 'Sell Below Minimum Price', // 低于最低售价销售
+  4404: 'Return with Receipt', // 原单退货
+  4405: 'Return without Receipt', // 无原单退货
+  4406: 'Void Same-day Sales', // 作废当日单据
+  4410: 'Create Terminal', // 收银台新增
+  4411: 'Edit Terminal', // 收银台修改
+  4412: 'Delete Terminal', // 收银台删除
+  4420: 'Close Shift for Others', // 代交班
+  4440: 'Create Member', // 会员新增
+  4441: 'Edit Member', // 会员修改
+  4442: 'Delete Member', // 会员删除
+  4443: 'View Member Phone', // 查看会员手机号
+  4450: 'Create Member Level', // 会员等级新增
+  4451: 'Edit Member Level', // 会员等级修改
+  4452: 'Delete Member Level', // 会员等级删除
+  4460: 'Create Special Price', // 特价活动新增
+  4461: 'Edit Special Price', // 特价活动修改
+  4462: 'Delete Special Price', // 特价活动删除
+  4463: 'Start / End Special Price', // 特价活动开始 / 结束
+  4470: 'Close Day', // 门店日结
+  4471: 'Reopen Day', // 反日结
+  4500: 'Edit Payment Provider', // 支付通道修改
   20: 'Distribution', // 配送
   460: 'Store Requisitions', // 门店要货
   461: 'Delivery & Receiving', // 配送与收货
