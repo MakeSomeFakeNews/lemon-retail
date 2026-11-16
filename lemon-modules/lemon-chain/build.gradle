@@ -1,0 +1,12 @@
+plugins {
+    id 'lemon.java-conventions'
+}
+
+description = '连锁经营：加盟结算（加盟商账户、预付款与额度控制、对账单、保证金）、门店损益与总部费用分摊、门店补货建议、店长看板'
+
+dependencies {
+    // 零售前台（pos：门店看板的 POS 销售）、门店要货与配送（dist：一键生成要货单），两者都依赖 store → fin → scm → wms；
+    // 加盟应收、预收冲抵、往来对账单复用 fin，门店损益只读关联 POS、供应链、库存流水、门店往来与其他收支
+    api project(':lemon-modules:lemon-pos')
+    api project(':lemon-modules:lemon-dist')
+}

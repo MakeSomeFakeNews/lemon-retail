@@ -1,10 +1,12 @@
 package com.lemon.erp.modules.system.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.lemon.erp.common.base.BaseEntity;
 import com.lemon.erp.common.enums.EnableStatus;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -26,6 +28,11 @@ public class SysTenantPackage extends BaseEntity {
 
     @Size(max = 255, message = "{system.valid.remarkCannotExceedCharacters}")
     private String remark;
+
+    /** 门店数量上限（不含总部），为空不限；新增门店时检查（{@code TenantQuotaLookup}） */
+    @Min(value = 1, message = "{system.valid.storeLimitMustLeast}")
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Integer storeLimit;
 
     /** 套餐包含的菜单（含目录和按钮） */
     @TableField(exist = false)

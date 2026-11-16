@@ -53,7 +53,11 @@ final class SysFeatureCatalog {
         /** 会员营销 */
         MEMBER,
         /** 线上渠道（微信小店） */
-        CHANNEL
+        CHANNEL,
+        /** 加盟管理（加盟商账户、对账单、保证金、加盟结算报表） */
+        FRANCHISE,
+        /** 门店经营分析（门店损益、费用分摊、门店补货建议） */
+        STORE_ANALYSIS
     }
 
     /**
@@ -111,12 +115,17 @@ final class SysFeatureCatalog {
             f(Key.AI, "system.label.aiFeature", "system.label.analytics", "system.label.aiFeatureDesc", List.of(16L)),
             // 零售前台：收银（收银台、班次、POS 单据、支付通道）+ 日结与报表；会员营销（会员、等级、特价活动）依赖收银
             f(Key.POS, "system.label.posFeature", "system.label.retailFront", "system.label.posFeatureDesc", List.of(991L, 993L), Key.INVENTORY, Key.FUND),
-            f(Key.MEMBER, "system.label.memberFeature", "system.label.retailFront", "system.label.memberFeatureDesc", List.of(992L), Key.POS));
+            f(Key.MEMBER, "system.label.memberFeature", "system.label.retailFront", "system.label.memberFeatureDesc", List.of(992L), Key.POS),
+            // 连锁经营：加盟管理（加盟应收、预收复用应收应付，配送复用门店要货与配送）；门店损益与补货建议（经营分析、补货分组）
+            f(Key.FRANCHISE, "system.label.franchiseFeature", "system.label.chainOperations", "system.label.franchiseFeatureDesc", List.of(480L),
+                    Key.DISTRIBUTION, Key.ARAP),
+            f(Key.STORE_ANALYSIS, "system.label.storeAnalysisFeature", "system.label.chainOperations", "system.label.storeAnalysisFeatureDesc",
+                    List.of(481L, 482L), Key.DISTRIBUTION, Key.POS));
 
     static final List<Industry> INDUSTRIES = List.of(
             new Industry("RETAIL", "system.label.eCommerceRetail", "system.label.mainlyMultiChannelOrdersWarehousingShipping",
                     names(Key.PURCHASE, Key.SALES, Key.PROMOTION, Key.JXC_REPORT, Key.DISTRIBUTION, Key.CHANNEL, Key.INVENTORY, Key.WAREHOUSE_OPS, Key.GL, Key.ARAP,
-                            Key.FUND, Key.BI, Key.SCREEN, Key.POS, Key.MEMBER)),
+                            Key.FUND, Key.BI, Key.SCREEN, Key.POS, Key.MEMBER, Key.FRANCHISE, Key.STORE_ANALYSIS)),
             new Industry("TRADING", "system.label.tradingWholesale", "system.label.mainlyPurchasingWarehousingDistributionWithoutProduction",
                     names(Key.PURCHASE, Key.SALES, Key.PROMOTION, Key.COMMISSION, Key.JXC_REPORT, Key.INVENTORY,
                             Key.WAREHOUSE_OPS, Key.GL, Key.ARAP, Key.FUND, Key.ANALYSIS, Key.BI, Key.SCREEN)),

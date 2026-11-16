@@ -196,7 +196,15 @@ export default {
     deliveryPrice: '配送价',
     deliveryAmount: '配送金额',
     receivedQty: '实收数量',
-    receiver: '收货人'
+    receiver: '收货人',
+    modChain: '连锁经营',
+    franchiseStatement: '加盟对账单',
+    franchiseStore: '加盟店',
+    franchisee: '加盟商',
+    returnAmount: '退货金额',
+    paymentAmount: '收款金额',
+    otherAmount: '其他应收',
+    franchiseeSeal: '加盟商确认（盖章）'
   },
   paper: {
     size: '{name}（{size}）',

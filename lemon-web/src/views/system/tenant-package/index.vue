@@ -53,6 +53,11 @@
               </a-radio-group>
             </a-form-item>
           </a-col>
+          <a-col :xs="24" :sm="12">
+            <a-form-item :label="$t('system.tenantPackage.storeLimit')" name="storeLimit" :extra="$t('system.tenantPackage.storeLimitTip')">
+              <a-input-number v-model:value="form.storeLimit" :min="1" :precision="0" :placeholder="$t('system.tenantPackage.unlimited')" class="full" />
+            </a-form-item>
+          </a-col>
           <a-col :span="24">
             <a-form-item :label="$t('common.field.remark')" name="remark"><a-textarea v-model:value="form.remark" :rows="2" :maxlength="255" /></a-form-item>
           </a-col>
@@ -105,6 +110,7 @@ const { t } = useI18n()
 const columns = [
   { title: t('system.tenantPackage.name'), dataIndex: 'name', width: 200 },
   { title: t('system.tenantPackage.tenantCount'), dataIndex: 'tenantCount', width: 90, align: 'right' },
+  { title: t('system.tenantPackage.storeLimit'), dataIndex: 'storeLimit', width: 110, align: 'right', customRender: ({ text }) => text ?? t('system.tenantPackage.unlimited') },
   { title: t('common.field.remark'), dataIndex: 'remark', ellipsis: true },
   { title: t('common.field.createTime'), dataIndex: 'createTime', width: 170 },
   { title: t('common.field.status'), key: 'status', width: 90 },
@@ -137,12 +143,12 @@ const rules = {
   menuIds: [{ validator: (_, v) => (v?.length ? Promise.resolve() : Promise.reject(t('system.tenantPackage.selectMenus'))) }]
 }
 const drawer = useFormDrawer({
-  emptyForm: () => ({ id: undefined, name: '', status: STATUS_ENABLED, remark: '', menuIds: [] }),
+  emptyForm: () => ({ id: undefined, name: '', status: STATUS_ENABLED, storeLimit: null, remark: '', menuIds: [] }),
   beforeOpen: loadMenuTree,
   fetch: (record) => getTenantPackage(record.id),
   create: addTenantPackage,
   update: updateTenantPackage,
-  toPayload: ({ name, status, remark, menuIds }) => ({ name, status, remark, menuIds }),
+  toPayload: ({ name, status, storeLimit, remark, menuIds }) => ({ name, status, storeLimit: storeLimit ?? null, remark, menuIds }),
   onSuccess: load
 })
 const { formRef, form } = drawer
@@ -153,6 +159,9 @@ const remove = useAction(deleteTenantPackage, { successKey: 'common.msg.deleteSu
 <style scoped>
 .search {
   width: 200px;
+}
+.full {
+  width: 100%;
 }
 .picker {
   margin-bottom: 16px;

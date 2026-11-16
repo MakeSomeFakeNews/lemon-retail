@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.chain.mapper.ChainAllocRecordMapper">
+
+    <insert id="insertBatch">
+        INSERT INTO chain_alloc_record (run_id, period, store_id, basis_value, ratio, amount) VALUES
+        <foreach collection="list" item="r" separator=",">
+            (#{r.runId}, #{r.period}, #{r.storeId}, #{r.basisValue}, #{r.ratio}, #{r.amount})
+        </foreach>
+    </insert>
+
+    <select id="selectByRun" resultType="com.lemon.erp.modules.chain.entity.ChainAllocRecord">
+        SELECT r.*, s.code AS store_code, s.name AS store_name
+        FROM chain_alloc_record r
+        LEFT JOIN store_info s ON s.id = r.store_id
+        WHERE r.run_id = #{runId}
+        ORDER BY s.sort, r.store_id
+    </select>
+
+</mapper>

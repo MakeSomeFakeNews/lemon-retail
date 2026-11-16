@@ -59,6 +59,7 @@ public class DistRequisitionService {
     private final DistRequisitionMapper requisitionMapper;
     private final DistRequisitionItemMapper itemMapper;
     private final DistSupport support;
+    private final DistStockMoves moves;
     private final DocNoService docNoService;
     private final ApprovalSupport approvalSupport;
     private final BizDateLocks dateLocks;
@@ -167,6 +168,9 @@ public class DistRequisitionService {
         if (items.isEmpty()) {
             throw new BizException("dist.valid.itemsRequired");
         }
+        // 加盟店：按配送价估算的要货金额检查预付余额 / 信用额度（连锁经营模块，禁止时不能提交）
+        moves.checkFranchiseCredit(support.store(r.getStoreId()), items.stream()
+                .map(i -> new DistStockMoves.PricedQty(i.getMaterialId(), i.getQty(), null)).toList(), DOC_NAME);
         approvalSupport.submit(FLOW, id, () -> Map.of("reqNo", r.getReqNo(), "storeName", support.store(r.getStoreId()).getName(),
                         "totalQty", r.getTotalQty(), "itemCount", items.size()),
                 () -> toSubmitted(id, RequisitionStatus.DRAFT),

@@ -196,7 +196,15 @@ export default {
     deliveryPrice: 'Delivery Price',
     deliveryAmount: 'Delivery Amount',
     receivedQty: 'Received Qty',
-    receiver: 'Receiver'
+    receiver: 'Receiver',
+    modChain: 'Chain Operations',
+    franchiseStatement: 'Franchise Statement',
+    franchiseStore: 'Franchise Store',
+    franchisee: 'Franchisee',
+    returnAmount: 'Return Amount',
+    paymentAmount: 'Payment Amount',
+    otherAmount: 'Other Receivables',
+    franchiseeSeal: 'Franchisee Confirmation (Seal)'
   },
   paper: {
     size: '{name} ({size})',

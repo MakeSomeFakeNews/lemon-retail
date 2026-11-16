@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 门店损益、补货建议、店长看板：只读关联 POS（pos_sale）、供应链出入库（scm_trade_doc）、库存流水与库存、门店往来（dist_store_ledger）、
+     要货与在途、其他收支（fin_io_doc）、员工（sys_user）。月份为 年 × 100 + 月（MySQL 与 H2 都支持 YEAR / MONTH），
+     门店损益口径见 StorePnlService -->
+<mapper namespace="com.lemon.erp.modules.chain.mapper.ChainReportMapper">
+
+    <!-- POS 零售净额：不含税 = 实收 × 100 ÷ (100 + 税率)，退货为负，已作废的销售单不计（作废生成的退回入库也不计） -->
+    <select id="selectRetail" resultType="com.lemon.erp.modules.chain.dto.ChainViews$StoreMonthAmount">
+        SELECT s.store_id, YEAR(s.business_date) * 100 + MONTH(s.business_date) AS ym,
+               SUM(CASE WHEN s.kind = 'SALE' THEN 1 ELSE -1 END * i.final_amount * 100 / (100 + i.tax_rate)) AS amount
+        FROM pos_sale s
+        JOIN pos_sale_item i ON i.sale_id = s.id
+        WHERE s.status = 'COMPLETED' AND s.business_date &gt;= #{begin} AND s.business_date &lt;= #{end}
+        GROUP BY s.store_id, YEAR(s.business_date) * 100 + MONTH(s.business_date)
+    </select>
+
+    <!-- POS 零售成本：零售出库（流水为负数）/ 零售退货入库的实际成本，取反 -->
+    <select id="selectRetailCost" resultType="com.lemon.erp.modules.chain.dto.ChainViews$StoreMonthAmount">
+        SELECT s.store_id, YEAR(s.business_date) * 100 + MONTH(s.business_date) AS ym, -SUM(f.cost_amount) AS amount
+        FROM pos_sale s
+        JOIN wms_stock_flow f ON f.doc_id = s.wms_doc_id AND f.biz_type IN ('IN', 'OUT')
+        WHERE s.status = 'COMPLETED' AND f.cost_amount IS NOT NULL
+          AND s.business_date &gt;= #{begin} AND s.business_date &lt;= #{end}
+        GROUP BY s.store_id, YEAR(s.business_date) * 100 + MONTH(s.business_date)
+    </select>
+
+    <!-- 批发：销售出库 − 销售退货（不含税：价税合计 − 税额），按单据仓库的门店 -->
+    <select id="selectWholesale" resultType="com.lemon.erp.modules.chain.dto.ChainViews$StoreMonthAmount">
+        SELECT w.store_id, YEAR(d.biz_date) * 100 + MONTH(d.biz_date) AS ym,
+               SUM(CASE WHEN d.kind = 'SALES_OUT' THEN d.total_amount - d.tax_amount ELSE d.tax_amount - d.total_amount END) AS amount
+        FROM scm_trade_doc d
+        JOIN wms_warehouse w ON w.id = d.warehouse_id
+        WHERE d.kind IN ('SALES_OUT', 'SALES_RETURN') AND d.biz_date &gt;= #{begin} AND d.biz_date &lt;= #{end}
+        GROUP BY w.store_id, YEAR(d.biz_date) * 100 + MONTH(d.biz_date)
+    </select>
+
+    <!-- 批发成本：销售出库 / 退货对应仓库单据的库存流水实际成本，按流水仓库的门店 -->
+    <select id="selectWholesaleCost" resultType="com.lemon.erp.modules.chain.dto.ChainViews$StoreMonthAmount">
+        SELECT w.store_id, YEAR(d.biz_date) * 100 + MONTH(d.biz_date) AS ym, -SUM(f.cost_amount) AS amount
+        FROM wms_stock_flow f
+        JOIN scm_trade_doc d ON d.wms_doc_id = f.doc_id
+        JOIN wms_warehouse w ON w.id = f.warehouse_id
+        WHERE f.biz_type IN ('IN', 'OUT') AND f.cost_amount IS NOT NULL
+          AND d.kind IN ('SALES_OUT', 'SALES_RETURN') AND d.biz_date &gt;= #{begin} AND d.biz_date &lt;= #{end}
+        GROUP BY w.store_id, YEAR(d.biz_date) * 100 + MONTH(d.biz_date)
+    </select>
+
+    <!-- 内部调拨差价（跨门店的差价调拨，含加盟配送；冲销为负数）：调出门店的内部调拨收入 -->
+    <select id="selectTransferIncome" resultType="com.lemon.erp.modules.chain.dto.ChainViews$StoreMonthAmount">
+        SELECT l.from_store_id AS store_id, YEAR(l.biz_date) * 100 + MONTH(l.biz_date) AS ym,
+               SUM(l.amount - COALESCE(l.cost_amount, 0)) AS amount
+        FROM dist_store_ledger l
+        WHERE l.biz_date &gt;= #{begin} AND l.biz_date &lt;= #{end}
+        GROUP BY l.from_store_id, YEAR(l.biz_date) * 100 + MONTH(l.biz_date)
+    </select>
+
+    <!-- 内部调拨差价：调入门店的内部调拨成本 -->
+    <select id="selectTransferCost" resultType="com.lemon.erp.modules.chain.dto.ChainViews$StoreMonthAmount">
+        SELECT l.to_store_id AS store_id, YEAR(l.biz_date) * 100 + MONTH(l.biz_date) AS ym,
+               SUM(l.amount - COALESCE(l.cost_amount, 0)) AS amount
+        FROM dist_store_ledger l
+        WHERE l.biz_date &gt;= #{begin} AND l.biz_date &lt;= #{end}
+        GROUP BY l.to_store_id, YEAR(l.biz_date) * 100 + MONTH(l.biz_date)
+    </select>
+
+    <!-- 其他收支（已确认）：门店 = 结算账户的门店，共用账户计入总部；门店日结生成的零售收支（POS_DAILY_CLOSE）是零售收款，不计入 -->
+    <sql id="ioWhere">
+        d.status = 'CONFIRMED' AND d.direction = #{direction}
+        AND (d.source_type IS NULL OR d.source_type &lt;&gt; 'POS_DAILY_CLOSE')
+        AND d.doc_date &gt;= #{begin} AND d.doc_date &lt;= #{end}
+    </sql>
+
+    <select id="selectIo" resultType="com.lemon.erp.modules.chain.dto.ChainViews$StoreMonthAmount">
+        SELECT COALESCE(a.store_id, #{hqId}) AS store_id, YEAR(d.doc_date) * 100 + MONTH(d.doc_date) AS ym, SUM(d.amount) AS amount
+        FROM fin_io_doc d
+        JOIN fin_account a ON a.id = d.account_id
+        WHERE <include refid="ioWhere"/>
+        GROUP BY COALESCE(a.store_id, #{hqId}), YEAR(d.doc_date) * 100 + MONTH(d.doc_date)
+    </select>
+
+    <select id="selectIoByCategory" resultType="com.lemon.erp.modules.chain.dto.ChainViews$ExpenseRow">
+        SELECT i.category_id, c.name AS category_name, COUNT(DISTINCT d.id) AS doc_count, SUM(i.amount) AS amount
+        FROM fin_io_doc d
+        JOIN fin_account a ON a.id = d.account_id
+        JOIN fin_io_doc_item i ON i.doc_id = d.id
+        LEFT JOIN fin_io_category c ON c.id = i.category_id
+        WHERE <include refid="ioWhere"/> AND COALESCE(a.store_id, #{hqId}) = #{storeId}
+        GROUP BY i.category_id, c.name
+        ORDER BY SUM(i.amount) DESC
+    </select>
+
+    <select id="selectAllocated" resultType="com.lemon.erp.modules.chain.dto.ChainViews$StoreMonthAmount">
+        SELECT r.store_id, r.period AS ym_text, SUM(r.amount) AS amount
+        FROM chain_alloc_record r
+        WHERE r.period &gt;= #{beginPeriod} AND r.period &lt;= #{endPeriod}
+        GROUP BY r.store_id, r.period
+    </select>
+
+    <select id="selectStaffCounts" resultType="com.lemon.erp.modules.chain.dto.ChainViews$StoreCount">
+        SELECT u.store_id, COUNT(*) AS cnt
+        FROM sys_user u
+        WHERE u.status = 1 AND u.store_id IS NOT NULL
+        GROUP BY u.store_id
+    </select>
+
+    <!-- 补货建议：近 N 天的销售净数量取自库存流水（销售出库、零售出库为负数，销售退货、零售退货为正数），按流水仓库 -->
+    <select id="selectReplenish" resultType="com.lemon.erp.modules.chain.dto.ChainViews$ReplenishRow">
+        SELECT g.warehouse_id, w.name AS warehouse_name, w.store_id, g.material_id, m.code AS material_code, m.name AS material_name,
+               m.spec, m.unit, g.sold_qty,
+               (SELECT COALESCE(SUM(s.qty), 0) FROM wms_stock s WHERE s.warehouse_id = g.warehouse_id AND s.material_id = g.material_id) AS stock_qty,
+               (SELECT COALESCE(SUM(ti.qty), 0) FROM wms_stock_doc_item ti JOIN wms_stock_doc td ON td.id = ti.doc_id
+                WHERE td.kind = 'TRANSFER' AND td.status = 'TRANSIT' AND td.to_warehouse_id = g.warehouse_id
+                  AND ti.material_id = g.material_id) AS transit_qty,
+               (SELECT COALESCE(SUM(CASE WHEN r.status IN ('APPROVED', 'PARTIAL') THEN COALESCE(ri.approved_qty, 0) - ri.delivered_qty
+                                         ELSE ri.qty END), 0)
+                FROM dist_requisition_item ri JOIN dist_requisition r ON r.id = ri.requisition_id
+                WHERE r.warehouse_id = g.warehouse_id AND ri.material_id = g.material_id
+                  AND r.status IN ('DRAFT', 'APPROVING', 'SUBMITTED', 'APPROVED', 'PARTIAL')) AS requisition_qty
+        FROM (SELECT f.warehouse_id, f.material_id, -SUM(f.qty) AS sold_qty
+              FROM wms_stock_flow f
+              JOIN wms_stock_doc d ON d.id = f.doc_id AND d.kind = f.biz_type
+              WHERE f.warehouse_id IN <foreach collection="warehouseIds" item="wid" open="(" separator="," close=")">#{wid}</foreach>
+                AND ((d.kind = 'OUT' AND d.biz_type IN ('SALES', 'RETAIL')) OR (d.kind = 'IN' AND d.biz_type IN ('SALES_RETURN', 'RETAIL_RETURN')))
+                AND d.biz_date &gt;= #{begin} AND d.biz_date &lt;= #{end}
+              GROUP BY f.warehouse_id, f.material_id) g
+        JOIN wms_warehouse w ON w.id = g.warehouse_id
+        JOIN wms_material m ON m.id = g.material_id
+        WHERE g.sold_qty &gt; 0
+        <if test="keyword != null and keyword != ''">
+            AND (m.code LIKE CONCAT('%', #{keyword}, '%') OR m.name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY g.warehouse_id, m.code
+    </select>
+
+    <!-- 店长看板：含税实收净额（退货为负）、不含税净额、销售单数、退货单数（不含作废） -->
+    <select id="selectDayFigures" resultType="com.lemon.erp.modules.chain.dto.ChainViews$DayFigures">
+        SELECT COALESCE(SUM(CASE WHEN s.kind = 'SALE' THEN s.payable_amount ELSE -s.payable_amount END), 0) AS sales,
+               COALESCE(SUM(CASE WHEN s.kind = 'SALE' THEN 1 ELSE 0 END), 0) AS orders,
+               COALESCE(SUM(CASE WHEN s.kind = 'SALE' THEN 0 ELSE 1 END), 0) AS returns,
+               COALESCE((SELECT SUM(CASE WHEN x.kind = 'SALE' THEN 1 ELSE -1 END * i.final_amount * 100 / (100 + i.tax_rate))
+                         FROM pos_sale x JOIN pos_sale_item i ON i.sale_id = x.id
+                         WHERE x.store_id = #{storeId} AND x.business_date = #{date} AND x.status = 'COMPLETED'), 0) AS net_sales
+        FROM pos_sale s
+        WHERE s.store_id = #{storeId} AND s.business_date = #{date} AND s.status = 'COMPLETED'
+    </select>
+
+    <select id="selectDayCost" resultType="java.math.BigDecimal">
+        SELECT -SUM(f.cost_amount)
+        FROM pos_sale s
+        JOIN wms_stock_flow f ON f.doc_id = s.wms_doc_id AND f.biz_type IN ('IN', 'OUT')
+        WHERE s.store_id = #{storeId} AND s.business_date = #{date} AND s.status = 'COMPLETED' AND f.cost_amount IS NOT NULL
+    </select>
+
+    <select id="selectTopItems" resultType="com.lemon.erp.modules.chain.dto.ChainViews$TopItem">
+        SELECT g.material_id, m.code AS material_code, m.name AS material_name, m.unit, g.qty, g.amount
+        FROM (SELECT i.material_id,
+                     SUM(CASE WHEN s.kind = 'SALE' THEN i.qty ELSE -i.qty END) AS qty,
+                     SUM(CASE WHEN s.kind = 'SALE' THEN i.final_amount ELSE -i.final_amount END) AS amount
+              FROM pos_sale s
+              JOIN pos_sale_item i ON i.sale_id = s.id
+              WHERE s.store_id = #{storeId} AND s.business_date = #{date} AND s.status = 'COMPLETED'
+              GROUP BY i.material_id) g
+        JOIN wms_material m ON m.id = g.material_id
+        WHERE g.qty &gt; 0
+        ORDER BY g.amount DESC, g.qty DESC
+        LIMIT 10
+    </select>
+
+    <select id="countPendingReceive" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM dist_delivery d WHERE d.to_store_id = #{storeId} AND d.status = 'SHIPPED'
+    </select>
+
+    <select id="countDraftRequisitions" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM dist_requisition r WHERE r.store_id = #{storeId} AND r.status = 'DRAFT'
+    </select>
+
+</mapper>

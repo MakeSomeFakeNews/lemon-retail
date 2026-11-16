@@ -104,6 +104,14 @@ DROP TABLE IF EXISTS pos_sale;
 DROP TABLE IF EXISTS pos_shift;
 DROP TABLE IF EXISTS pos_pay_account;
 DROP TABLE IF EXISTS pos_terminal;
+DROP TABLE IF EXISTS chain_replenish_param;
+DROP TABLE IF EXISTS chain_alloc_record;
+DROP TABLE IF EXISTS chain_alloc_run;
+DROP TABLE IF EXISTS chain_alloc_rule;
+DROP TABLE IF EXISTS chain_franchise_deposit;
+DROP TABLE IF EXISTS chain_franchise_statement;
+DROP TABLE IF EXISTS chain_franchise_ledger;
+DROP TABLE IF EXISTS chain_franchise_account;
 DROP TABLE IF EXISTS dist_date_lock;
 DROP TABLE IF EXISTS dist_store_ledger;
 DROP TABLE IF EXISTS dist_discrepancy;
@@ -168,6 +176,7 @@ CREATE TABLE sys_tenant_package (
     id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
     name        VARCHAR(64)  NOT NULL COMMENT '套餐名称',
     status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态 1启用 0停用',
+    store_limit INT                   DEFAULT NULL COMMENT '门店数量上限（不含总部），为空不限',
     remark      VARCHAR(255)          DEFAULT NULL COMMENT '备注',
     create_time DATETIME              DEFAULT NULL COMMENT '创建时间',
     update_time DATETIME              DEFAULT NULL COMMENT '更新时间',
@@ -1419,6 +1428,139 @@ CREATE TABLE dist_date_lock (
     PRIMARY KEY (id),
     UNIQUE KEY uk_dist_date_lock (store_id, tenant_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '日期锁定（结账日）：全公司一条（store_id = 0），门店可另设（两者都检查）';
+
+-- ---------------------------------------------------------------- 连锁经营：加盟结算（账户、往来、对账单、保证金）、总部费用分摊、门店补货参数
+
+CREATE TABLE chain_franchise_account (
+    id           BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id    BIGINT        NOT NULL DEFAULT 1 COMMENT '租户ID',
+    store_id     BIGINT        NOT NULL COMMENT '加盟店',
+    customer_id  BIGINT        NOT NULL COMMENT '加盟商对应的客户（首次使用时自动创建）：加盟应收、预收、收款复用财务',
+    credit_limit DECIMAL(18, 2)         DEFAULT NULL COMMENT '信用额度（月结），为空不限',
+    remark       VARCHAR(255)           DEFAULT NULL COMMENT '备注',
+    create_time  DATETIME               DEFAULT NULL COMMENT '创建时间',
+    update_time  DATETIME               DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_chain_franchise_store (store_id, tenant_id),
+    KEY idx_chain_franchise_customer (customer_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '加盟商账户：每个加盟店一个，关联供应链客户';
+
+CREATE TABLE chain_franchise_ledger (
+    id          BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id   BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    store_id    BIGINT         NOT NULL COMMENT '加盟店',
+    kind        VARCHAR(16)    NOT NULL COMMENT '种类(字典 chain_ledger_kind) DELIVERY加盟配送 RETURN加盟退货',
+    transfer_id BIGINT         NOT NULL COMMENT '调拨单（冲销时为红字单据）',
+    transfer_no VARCHAR(32)    NOT NULL COMMENT '调拨单号',
+    source_no   VARCHAR(32)             DEFAULT NULL COMMENT '来源单号（配送单 / 退仓单）',
+    biz_date    DATE           NOT NULL COMMENT '业务日期',
+    amount      DECIMAL(18, 2) NOT NULL COMMENT '应收金额：配送为正数，退回为负数',
+    bill_id     BIGINT                  DEFAULT NULL COMMENT '生成的应收单',
+    bill_no     VARCHAR(32)             DEFAULT NULL COMMENT '应收单号',
+    create_time DATETIME                DEFAULT NULL COMMENT '创建时间',
+    PRIMARY KEY (id),
+    KEY idx_chain_ledger_store (store_id, biz_date),
+    KEY idx_chain_ledger_transfer (transfer_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '加盟往来：配送给加盟店 / 加盟店退回的调拨生成的加盟应收，只追加';
+
+CREATE TABLE chain_franchise_statement (
+    id              BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id       BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    statement_no    VARCHAR(32)    NOT NULL COMMENT '对账单号（编码规则 JMDZ）',
+    store_id        BIGINT         NOT NULL COMMENT '加盟店',
+    customer_id     BIGINT         NOT NULL COMMENT '加盟商客户',
+    period          VARCHAR(7)     NOT NULL COMMENT '对账月份 yyyy-MM',
+    begin_date      DATE           NOT NULL COMMENT '开始日期',
+    end_date        DATE           NOT NULL COMMENT '结束日期',
+    opening         DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '期初余额',
+    delivery_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '配送',
+    return_amount   DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '退货（正数，冲减）',
+    payment_amount  DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '收款（收款、预收、对冲，正数，冲减）',
+    other_amount    DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '其他应收（带符号）',
+    closing         DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '期末余额',
+    status          VARCHAR(16)    NOT NULL DEFAULT 'DRAFT' COMMENT '状态(字典 chain_statement_status) DRAFT待确认 CONFIRMED已确认',
+    confirm_by      BIGINT                  DEFAULT NULL COMMENT '确认人',
+    confirm_time    DATETIME                DEFAULT NULL COMMENT '确认时间',
+    remark          VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    create_by       BIGINT                  DEFAULT NULL COMMENT '制单人',
+    create_time     DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time     DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_chain_statement_no (statement_no, tenant_id),
+    UNIQUE KEY uk_chain_statement_period (store_id, period, tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '加盟对账单（月结）：期初 + 配送 − 退货 + 其他 − 收款 = 期末，取自财务往来对账单';
+
+CREATE TABLE chain_franchise_deposit (
+    id          BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id   BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    deposit_no  VARCHAR(32)    NOT NULL COMMENT '单号（编码规则 BZJ）',
+    store_id    BIGINT         NOT NULL COMMENT '加盟店',
+    kind        VARCHAR(16)    NOT NULL COMMENT '种类(字典 chain_deposit_kind) RECEIVE收取 REFUND退还',
+    biz_date    DATE           NOT NULL COMMENT '日期',
+    amount      DECIMAL(18, 2) NOT NULL COMMENT '金额',
+    account_id  BIGINT                  DEFAULT NULL COMMENT '结算账户（只做记录）',
+    remark      VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    create_by   BIGINT                  DEFAULT NULL COMMENT '登记人',
+    create_time DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_chain_deposit_no (deposit_no, tenant_id),
+    KEY idx_chain_deposit_store (store_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '加盟保证金收退记录（台账，不进入加盟应收）';
+
+CREATE TABLE chain_alloc_rule (
+    id                BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id         BIGINT      NOT NULL DEFAULT 1 COMMENT '租户ID',
+    basis             VARCHAR(16) NOT NULL DEFAULT 'SALES' COMMENT '分摊依据(字典 chain_alloc_basis) SALES按销售额 AREA按面积 EQUAL平均',
+    include_dc        TINYINT     NOT NULL DEFAULT 0 COMMENT '配送中心参与分摊 1是',
+    include_franchise TINYINT     NOT NULL DEFAULT 0 COMMENT '加盟店参与分摊 1是',
+    region_id         BIGINT               DEFAULT NULL COMMENT '参与分摊的区域（含下级），为空为全部门店',
+    remark            VARCHAR(255)         DEFAULT NULL COMMENT '备注',
+    create_time       DATETIME             DEFAULT NULL COMMENT '创建时间',
+    update_time       DATETIME             DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_chain_alloc_rule (tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '总部费用分摊设置（每个租户一条）';
+
+CREATE TABLE chain_alloc_run (
+    id          BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id   BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    period      VARCHAR(7)     NOT NULL COMMENT '月份 yyyy-MM',
+    basis       VARCHAR(16)    NOT NULL COMMENT '分摊依据(字典 chain_alloc_basis)',
+    pool_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '待分摊的总部费用',
+    store_count INT            NOT NULL DEFAULT 0 COMMENT '参与门店数',
+    create_by   BIGINT                  DEFAULT NULL COMMENT '运行人',
+    create_time DATETIME                DEFAULT NULL COMMENT '运行时间',
+    update_time DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_chain_alloc_run (period, tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '总部费用分摊：每月一次（重新运行时替换）';
+
+CREATE TABLE chain_alloc_record (
+    id          BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id   BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    run_id      BIGINT         NOT NULL COMMENT '分摊',
+    period      VARCHAR(7)     NOT NULL COMMENT '月份 yyyy-MM',
+    store_id    BIGINT         NOT NULL COMMENT '门店',
+    basis_value DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '分摊依据的数值（销售额 / 面积 / 1）',
+    ratio       DECIMAL(9, 6)  NOT NULL DEFAULT 0 COMMENT '分摊比例',
+    amount      DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '分摊金额',
+    PRIMARY KEY (id),
+    KEY idx_chain_alloc_record_run (run_id),
+    KEY idx_chain_alloc_record_period (period, store_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '总部费用分摊结果：某月分摊给某门店的金额';
+
+CREATE TABLE chain_replenish_param (
+    id          BIGINT   NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id   BIGINT   NOT NULL DEFAULT 1 COMMENT '租户ID',
+    store_id    BIGINT   NOT NULL COMMENT '门店',
+    lead_days   INT               DEFAULT NULL COMMENT '到货天数，为空取业务参数',
+    safety_days INT               DEFAULT NULL COMMENT '安全天数，为空取业务参数',
+    create_time DATETIME          DEFAULT NULL COMMENT '创建时间',
+    update_time DATETIME          DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_chain_replenish_store (store_id, tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '门店补货参数（补货建议）';
 
 -- ---------------------------------------------------------------- 仓库管理
 
@@ -5251,3 +5393,57 @@ INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, s
 ('ch_wx_sync_trigger', '定时任务', 'SCHEDULE', 'blue', 2, 1, 1, NOW(), NOW()),
 ('ch_wx_sync_trigger', '消息推送', 'CALLBACK', 'cyan', 3, 1, 1, NOW(), NOW()),
 ('scm_order_source', '微信小店', 'WX_SHOP', 'green', 11, 1, 1, NOW(), NOW());
+
+-- ---------------------------------------------------------------- 连锁经营：加盟结算、门店损益与费用分摊、门店补货建议（菜单、字典、授权）
+-- 菜单：模块 21，分组 480 加盟管理、481 经营分析、482 补货，页面 483–499，按钮 4800–4999
+INSERT INTO sys_menu (id, parent_id, name, type, path, component, perms, icon, sort, visible, status, create_time, update_time) VALUES
+(21,  0, '连锁经营', 'M', '/chain', NULL, NULL, 'ApartmentOutlined', 6, 1, 1, NOW(), NOW()),
+(480, 21, '加盟管理', 'M', NULL, NULL, NULL, NULL, 1, 1, 1, NOW(), NOW()),
+(481, 21, '经营分析', 'M', NULL, NULL, NULL, NULL, 2, 1, 1, NOW(), NOW()),
+(482, 21, '补货', 'M', NULL, NULL, NULL, NULL, 3, 1, 1, NOW(), NOW()),
+(483, 480, '加盟商账户', 'C', 'franchise-account', 'chain/franchise/account/index', 'chain:franchise:list', 'WalletOutlined', 1, 1, 1, NOW(), NOW()),
+(484, 480, '加盟对账单', 'C', 'franchise-statement', 'chain/franchise/statement/index', 'chain:statement:list', 'ReconciliationOutlined', 2, 1, 1, NOW(), NOW()),
+(485, 480, '保证金', 'C', 'franchise-deposit', 'chain/franchise/deposit/index', 'chain:deposit:list', 'SafetyCertificateOutlined', 3, 1, 1, NOW(), NOW()),
+(486, 480, '加盟结算报表', 'C', 'franchise-report', 'chain/franchise/report/index', 'chain:franchise:report', 'FundOutlined', 4, 1, 1, NOW(), NOW()),
+(487, 481, '门店损益', 'C', 'store-pnl', 'chain/pnl/index', 'chain:pnl:list', 'LineChartOutlined', 1, 1, 1, NOW(), NOW()),
+(488, 481, '费用分摊', 'C', 'expense-alloc', 'chain/alloc/index', 'chain:alloc:list', 'PieChartOutlined', 2, 1, 1, NOW(), NOW()),
+(489, 482, '门店补货建议', 'C', 'replenish', 'chain/replenish/index', 'chain:replenish:list', 'ShoppingOutlined', 1, 1, 1, NOW(), NOW()),
+(4830, 483, '加盟商账户设置', 'F', NULL, NULL, 'chain:franchise:edit', NULL, 1, 1, 1, NOW(), NOW()),
+(4831, 483, '加盟商充值', 'F', NULL, NULL, 'chain:franchise:topup', NULL, 2, 1, 1, NOW(), NOW()),
+(4840, 484, '生成对账单', 'F', NULL, NULL, 'chain:statement:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4841, 484, '确认对账单', 'F', NULL, NULL, 'chain:statement:confirm', NULL, 2, 1, 1, NOW(), NOW()),
+(4842, 484, '删除对账单', 'F', NULL, NULL, 'chain:statement:remove', NULL, 3, 1, 1, NOW(), NOW()),
+(4850, 485, '保证金登记', 'F', NULL, NULL, 'chain:deposit:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4851, 485, '保证金删除', 'F', NULL, NULL, 'chain:deposit:remove', NULL, 2, 1, 1, NOW(), NOW()),
+(4880, 488, '分摊设置', 'F', NULL, NULL, 'chain:alloc:edit', NULL, 1, 1, 1, NOW(), NOW()),
+(4881, 488, '运行分摊', 'F', NULL, NULL, 'chain:alloc:run', NULL, 2, 1, 1, NOW(), NOW()),
+(4890, 489, '生成要货单', 'F', NULL, NULL, 'chain:replenish:requisition', NULL, 1, 1, 1, NOW(), NOW()),
+(4891, 489, '补货参数设置', 'F', NULL, NULL, 'chain:replenish:param', NULL, 2, 1, 1, NOW(), NOW());
+
+-- 普通用户只读；总经理全部；会计：加盟管理全部；店长：门店损益（本店，门店范围由用户设置）、补货建议与生成要货单
+INSERT INTO sys_role_menu (role_id, menu_id) VALUES
+(2, 21), (2, 480), (2, 481), (2, 482), (2, 483), (2, 484), (2, 485), (2, 486), (2, 487), (2, 488), (2, 489),
+(3, 21), (3, 480), (3, 481), (3, 482), (3, 483), (3, 484), (3, 485), (3, 486), (3, 487), (3, 488), (3, 489),
+(3, 4830), (3, 4831), (3, 4840), (3, 4841), (3, 4842), (3, 4850), (3, 4851), (3, 4880), (3, 4881), (3, 4890), (3, 4891),
+(9, 21), (9, 480), (9, 483), (9, 484), (9, 485), (9, 486),
+(9, 4830), (9, 4831), (9, 4840), (9, 4841), (9, 4842), (9, 4850), (9, 4851),
+(18, 21), (18, 481), (18, 482), (18, 487), (18, 489), (18, 4890);
+
+INSERT INTO sys_dict_type (id, name, type, kind, status, remark, create_time, update_time) VALUES
+(300, '加盟往来种类', 'chain_ledger_kind', 'SYSTEM', 1, '配送给加盟店生成应收、加盟店退回生成红字应收', NOW(), NOW()),
+(301, '加盟对账单状态', 'chain_statement_status', 'SYSTEM', 1, '待确认（可重新生成、删除）、已确认', NOW(), NOW()),
+(302, '保证金收退', 'chain_deposit_kind', 'SYSTEM', 1, '收取、退还', NOW(), NOW()),
+(303, '费用分摊依据', 'chain_alloc_basis', 'SYSTEM', 1, '总部费用分摊到门店的依据：按销售额、按面积、平均', NOW(), NOW());
+INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, status, builtin, create_time, update_time) VALUES
+('chain_ledger_kind', '加盟配送', 'DELIVERY', 'blue', 1, 1, 1, NOW(), NOW()),
+('chain_ledger_kind', '加盟退货', 'RETURN', 'orange', 2, 1, 1, NOW(), NOW()),
+('chain_statement_status', '待确认', 'DRAFT', 'orange', 1, 1, 1, NOW(), NOW()),
+('chain_statement_status', '已确认', 'CONFIRMED', 'green', 2, 1, 1, NOW(), NOW()),
+('chain_deposit_kind', '收取', 'RECEIVE', 'green', 1, 1, 1, NOW(), NOW()),
+('chain_deposit_kind', '退还', 'REFUND', 'red', 2, 1, 1, NOW(), NOW()),
+('chain_alloc_basis', '按销售额', 'SALES', 'blue', 1, 1, 1, NOW(), NOW()),
+('chain_alloc_basis', '按面积', 'AREA', 'cyan', 2, 1, 1, NOW(), NOW()),
+('chain_alloc_basis', '平均', 'EQUAL', 'default', 3, 1, 1, NOW(), NOW()),
+-- 加盟结算生成的应收应付来源
+('fin_bill_source', '加盟配送', 'FRANCHISE_DELIVERY', 'purple', 21, 1, 1, NOW(), NOW()),
+('fin_bill_source', '加盟退货', 'FRANCHISE_RETURN', 'purple', 22, 1, 1, NOW(), NOW());

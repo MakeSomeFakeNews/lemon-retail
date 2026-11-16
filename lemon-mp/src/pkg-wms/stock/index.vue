@@ -6,6 +6,11 @@
         <l-tag :text="filterText" color="blue" />
         <text class="m-link" @click="clearFilter">{{ t('wms.common.clear') }}</text>
       </block>
+      <!-- 店长工作台进入时只看本店仓库（warehouseId、warehouseName） -->
+      <block v-if="warehouseId">
+        <l-tag :text="warehouseName" color="green" />
+        <text class="m-link" @click="clearWarehouse">{{ t('wms.common.clear') }}</text>
+      </block>
       <text class="stock__low">{{ t('wms.stock.lowOnly') }}</text>
       <switch :checked="lowStock" style="transform: scale(0.7)" @change="changeLow" />
       <text>{{ t('wms.stock.highOnly') }}</text>
@@ -91,10 +96,12 @@ const keyword = ref('')
 const filterText = ref('')
 const lowStock = ref(false)
 const highStock = ref(false)
+const warehouseId = ref(null)
+const warehouseName = ref('')
 const expanded = reactive({})
 
 const paged = usePaged((p) =>
-  pageStockSummary({ ...p, materialId: materialId.value || undefined, keyword: keyword.value || undefined, lowStock: lowStock.value || undefined,
+  pageStockSummary({ ...p, warehouseId: warehouseId.value || undefined, materialId: materialId.value || undefined, keyword: keyword.value || undefined, lowStock: lowStock.value || undefined,
     highStock: highStock.value || undefined })
 )
 
@@ -116,9 +123,15 @@ const limitText = (s) => (s.safetyStock == null && s.maxStock == null ? '-' : `$
 onLoad((q) => {
   // 首页待办「库存低于安全库存」「库存高于库存上限」带 lowStock=1 / highStock=1（与 Web 端参数相同）
   lowStock.value = q?.lowStock === '1'
+  warehouseId.value = q?.warehouseId ? Number(q.warehouseId) : null
+  warehouseName.value = q?.warehouseName ? decodeURIComponent(q.warehouseName) : ''
   highStock.value = q?.highStock === '1'
   paged.refresh()
 })
+function clearWarehouse() {
+  warehouseId.value = null
+  paged.refresh()
+}
 onPullDownRefresh(() => reload())
 onReachBottom(() => paged.more())
 

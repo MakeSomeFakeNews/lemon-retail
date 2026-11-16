@@ -170,6 +170,13 @@ export const AlertOperator = Object.freeze({
   LE: 'LE', // 不大于
 })
 
+/** com.lemon.erp.modules.chain.model.AllocBasis（字典 chain_alloc_basis） */
+export const AllocBasis = Object.freeze({
+  SALES: 'SALES', // 按销售额
+  AREA: 'AREA', // 按营业面积
+  EQUAL: 'EQUAL', // 平均分摊
+})
+
 /** com.lemon.erp.modules.workflow.model.ApprovalAction（字典 wf_task_action） */
 export const ApprovalAction = Object.freeze({
   START: 'START', // 发起
@@ -259,6 +266,8 @@ export const BillSource = Object.freeze({
   PURCHASE_RETURN_FREIGHT: 'PURCHASE_RETURN_FREIGHT', // 采购退货运费
   TRANSFER_FEE: 'TRANSFER_FEE', // 调拨费用
   POS_DAILY_CLOSE: 'POS_DAILY_CLOSE', // 门店日结
+  FRANCHISE_DELIVERY: 'FRANCHISE_DELIVERY', // 加盟配送
+  FRANCHISE_RETURN: 'FRANCHISE_RETURN', // 加盟退货
 })
 
 /** com.lemon.erp.modules.fin.model.BillStatus（字典 fin_bill_status） */
@@ -475,10 +484,35 @@ export const FormFieldType = Object.freeze({
   SELECT: 'SELECT',
 })
 
+/** com.lemon.erp.modules.chain.model.FranchiseCreditControl */
+export const FranchiseCreditControl = Object.freeze({
+  NONE: 'NONE', // 不控制
+  WARN: 'WARN', // 提示
+  BLOCK: 'BLOCK', // 禁止
+})
+
+/** com.lemon.erp.modules.chain.model.FranchiseDepositKind（字典 chain_deposit_kind） */
+export const FranchiseDepositKind = Object.freeze({
+  RECEIVE: 'RECEIVE', // 收取
+  REFUND: 'REFUND', // 退还
+})
+
+/** com.lemon.erp.modules.chain.model.FranchiseLedgerKind（字典 chain_ledger_kind） */
+export const FranchiseLedgerKind = Object.freeze({
+  DELIVERY: 'DELIVERY', // 加盟配送
+  RETURN: 'RETURN', // 加盟退货
+})
+
 /** com.lemon.erp.modules.store.model.FranchiseSettleMode（字典 store_settle_mode） */
 export const FranchiseSettleMode = Object.freeze({
   PREPAID: 'PREPAID', // 预付货款
   CREDIT: 'CREDIT', // 月结
+})
+
+/** com.lemon.erp.modules.chain.model.FranchiseStatementStatus（字典 chain_statement_status） */
+export const FranchiseStatementStatus = Object.freeze({
+  DRAFT: 'DRAFT', // 待确认
+  CONFIRMED: 'CONFIRMED', // 已确认
 })
 
 /** com.lemon.erp.modules.scm.model.FreightBearer（字典 scm_freight_bearer） */

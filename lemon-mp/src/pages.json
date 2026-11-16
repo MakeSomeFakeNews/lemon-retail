@@ -53,6 +53,12 @@
         { "path": "dist-receive/index", "style": { "navigationBarTitleText": "门店收货", "enablePullDownRefresh": true } },
         { "path": "dist-receive/detail", "style": { "navigationBarTitleText": "收货" } }
       ]
+    },
+    {
+      "root": "pkg-store",
+      "pages": [
+        { "path": "index", "style": { "navigationBarTitleText": "店长工作台", "enablePullDownRefresh": true } }
+      ]
     }
   ],
   "preloadRule": {

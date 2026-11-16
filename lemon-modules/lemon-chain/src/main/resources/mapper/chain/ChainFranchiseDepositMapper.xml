@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.chain.mapper.ChainFranchiseDepositMapper">
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.chain.entity.ChainFranchiseDeposit">
+        SELECT p.*, s.name AS store_name, a.name AS account_name, u.nickname AS create_by_name
+        FROM chain_franchise_deposit p
+        LEFT JOIN store_info s ON s.id = p.store_id
+        LEFT JOIN fin_account a ON a.id = p.account_id
+        LEFT JOIN sys_user u ON u.id = p.create_by
+        <where>
+            <if test="storeId != null">p.store_id = #{storeId}</if>
+            <if test="kind != null and kind != ''">AND p.kind = #{kind}</if>
+            <if test="begin != null">AND p.biz_date &gt;= #{begin}</if>
+            <if test="end != null">AND p.biz_date &lt;= #{end}</if>
+            <if test="storeIds != null">
+                AND p.store_id IN <foreach collection="storeIds" item="sid" open="(" separator="," close=")">#{sid}</foreach>
+            </if>
+        </where>
+        ORDER BY p.biz_date DESC, p.id DESC
+    </select>
+
+    <select id="selectBalance" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(CASE WHEN p.kind = 'RECEIVE' THEN p.amount ELSE -p.amount END), 0)
+        FROM chain_franchise_deposit p
+        WHERE p.store_id = #{storeId}
+    </select>
+
+</mapper>

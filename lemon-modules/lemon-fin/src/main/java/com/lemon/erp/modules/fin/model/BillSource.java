@@ -32,7 +32,11 @@ public enum BillSource {
     /** 调拨费用：调拨单的配送费，来源为该调拨单（月结的承运商应付；现付的费用支出单也以此为来源类型） */
     TRANSFER_FEE,
     /** 门店日结：POS 零售收款 / 退款按结算账户汇总生成的其他收入单、费用支出单，来源为日结记录 */
-    POS_DAILY_CLOSE;
+    POS_DAILY_CLOSE,
+    /** 加盟配送：配送给加盟店（调拨确认）生成的加盟商应收，来源为调拨单（来源单号为配送单号） */
+    FRANCHISE_DELIVERY,
+    /** 加盟退货：加盟店退仓、收货少收 / 破损退回、配送冲销生成的红字应收，来源为调拨单 */
+    FRANCHISE_RETURN;
 
     /** 供应链出入库生成的单据（与 scm TradeKind 同名） */
     public static final Set<BillSource> TRADE = EnumSet.of(SALES_OUT, SALES_RETURN, PURCHASE_IN, PURCHASE_RETURN);

@@ -4,15 +4,16 @@ import approval from './approval'
 import wms from './wms'
 import dist from './dist'
 import notice from './notice'
+import store from './store'
 
 /**
  * 工作台入口。每个功能区在本目录的同名文件中登记：
  *   { key, group, title（消息键）, color, url, tab?（底部导航页）, perm?（任一权限，空为登录即可）, permAll?（还必须同时具备的权限）, links?（对应的 Web 端路由前缀）,
  *     rule?（布尔型业务参数，关闭时不显示；须是后端声明为前端可读的参数，读取前按开启处理，页面自身仍要检查） }
- * group：office 办公 / sales 销售 / warehouse 仓储。links 用于把首页待办、站内消息中的 Web 端链接转到小程序页面
+ * group：store 门店（店长）/ office 办公 / sales 销售 / warehouse 仓储。links 用于把首页待办、站内消息中的 Web 端链接转到小程序页面
  */
-export const GROUPS = ['office', 'sales', 'warehouse']
-const ALL = [...approval, ...notice, ...wms, ...dist]
+export const GROUPS = ['store', 'office', 'sales', 'warehouse']
+const ALL = [...store, ...approval, ...notice, ...wms, ...dist]
 
 export function visibleEntries() {
   return ALL.filter((e) => hasPerm(e.perm) && (e.permAll || []).every((p) => hasPerm(p)) && (!e.rule || bizRule(e.rule, true) !== false))
