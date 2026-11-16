@@ -8,6 +8,7 @@ import com.lemon.erp.common.result.PageResult;
 import com.lemon.erp.common.util.Decimals;
 import com.lemon.erp.framework.data.DetailLines;
 import com.lemon.erp.framework.data.StatusTransitions;
+import com.lemon.erp.framework.period.BizDateLocks;
 import com.lemon.erp.framework.period.BizPeriodGuard;
 import com.lemon.erp.framework.security.LoginUser;
 import com.lemon.erp.framework.security.PermissionService;
@@ -67,6 +68,7 @@ public class WmsStockDocService {
     private final StockService stockService;
     private final StockCostService costService;
     private final BizPeriodGuard periodGuard;
+    private final BizDateLocks dateLocks;
     private final ApprovalSupport approvalSupport;
     private final StockDocValidator validator;
     private final StockDocReverser reverser;
@@ -138,11 +140,12 @@ public class WmsStockDocService {
 
     private WmsStockDoc insert(StockBizType kind, StockDocRequest req, String sourceNo) {
         boolean manual = !generated(sourceNo, req);
+        dateLocks.check(req.bizDate(), req.warehouseId(), kind.getLabelKey());
         List<WmsStockDocItem> items = toItems(kind, req, manual);
         validator.validate(kind, req.bizType(), req.warehouseId(), req.toWarehouseId(), items, false);
         TransferTermsService.Terms terms = kind == TRANSFER ? transferTerms.terms(req) : null;
         if (terms != null) {
-            transferTerms.applyLinePrices(terms, req, items);
+            transferTerms.applyLinePrices(terms, req, items, !manual);
         }
         LoginUser user = SecurityUtils.getLoginUser();
         WmsStockDoc doc = new WmsStockDoc();
@@ -176,6 +179,8 @@ public class WmsStockDocService {
     @Transactional
     public void update(StockBizType kind, Long id, StockDocRequest req) {
         WmsStockDoc draft = getDraft(kind, id);
+        dateLocks.check(draft.getBizDate(), draft.getWarehouseId(), kind.getLabelKey());
+        dateLocks.check(req.bizDate(), req.warehouseId(), kind.getLabelKey());
         // 业务单据生成的草稿（目前都是保存即确认，不会出现）之外，手工单据只能是允许手工新增的类型
         if (draft.getSourceNo() == null) {
             StockDocRules.checkManualType(kind, req.bizType());
@@ -211,7 +216,10 @@ public class WmsStockDocService {
     /** 只能删除草稿 */
     @Transactional
     public void delete(StockBizType kind, List<Long> ids) {
-        ids.forEach(id -> getDraft(kind, id));
+        ids.forEach(id -> {
+            WmsStockDoc draft = getDraft(kind, id);
+            dateLocks.check(draft.getBizDate(), draft.getWarehouseId(), kind.getLabelKey());
+        });
         itemMapper.delete(Wrappers.<WmsStockDocItem>lambdaQuery().in(WmsStockDocItem::getDocId, ids));
         docMapper.deleteByIds(ids);
     }
@@ -265,14 +273,13 @@ public class WmsStockDocService {
     }
 
     private void doConfirm(StockBizType kind, WmsStockDoc doc, DocStatus from) {
-        // 调拨不影响存货成本，只受结账限制（调拨费用计入当期费用，同样受结账限制）
-        if (kind == StockBizType.TRANSFER) {
-            periodGuard.checkOpen(doc.getBizDate(), kind.getLabelKey());
-        } else {
-            periodGuard.checkOpen(doc.getBizDate(), kind.getLabelKey());
-        }
+        // 结账与日期锁定（调拨不影响存货成本，同样受限：调拨费用计入当期费用）；非在途调拨同时入库，也检查调入门店的锁定日期
         Long id = doc.getId();
         boolean transit = kind == TRANSFER && Integer.valueOf(1).equals(doc.getInTransit());
+        periodGuard.checkOpen(doc.getBizDate(), kind.getLabelKey(), doc.getWarehouseId());
+        if (kind == TRANSFER && !transit) {
+            dateLocks.check(doc.getBizDate(), doc.getToWarehouseId(), kind.getLabelKey());
+        }
         StatusTransitions.change(docMapper, WmsStockDoc::getId, id, WmsStockDoc::getStatus,
                 from, transit ? DocStatus.TRANSIT : DocStatus.DONE, w -> w
                         .set(WmsStockDoc::getConfirmBy, SecurityUtils.getUserId())
@@ -292,6 +299,7 @@ public class WmsStockDocService {
             // 调出成本价、调拨价和金额（在途调拨收货时调入流水的业务单价取这里的调拨价）；调拨费用生成费用支出单 / 承运商应付
             transferTerms.settle(doc, items);
             transferTerms.publishFee(doc, null);
+            transferTerms.publishSettled(doc, null);
         }
     }
 
@@ -316,7 +324,26 @@ public class WmsStockDocService {
      */
     @Transactional
     public void receive(Long id, LocalDate receiveDate) {
-        WmsStockDoc doc = getAccessible(TRANSFER, id);
+        doReceive(getAccessible(TRANSFER, id), receiveDate);
+    }
+
+    /**
+     * 业务单据（配送单、门店退仓、收货差异）生成的在途调拨收货：由调用方校验权限（收货门店），不按调拨单的数据权限（制单人部门）读取，
+     * 在调用方的事务中执行
+     *
+     * @param receiveDate 收货日期，为空取当天
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void receiveGenerated(Long id, LocalDate receiveDate) {
+        WmsStockDoc doc = docMapper.selectById(id);
+        if (doc == null || doc.getKind() != TRANSFER) {
+            throw new BizException("wms.error.doesNotExistAccessDenied", Messages.get(TRANSFER.getLabelKey()));
+        }
+        doReceive(doc, receiveDate);
+    }
+
+    private void doReceive(WmsStockDoc doc, LocalDate receiveDate) {
+        Long id = doc.getId();
         if (doc.getStatus() != DocStatus.TRANSIT) {
             throw new BizException("wms.error.transferOrderNotTransit", doc.getDocNo());
         }
@@ -324,7 +351,7 @@ public class WmsStockDocService {
         if (date.isBefore(doc.getBizDate())) {
             throw new BizException("wms.error.receiveDateBeforeTransferDate", date, doc.getBizDate());
         }
-        periodGuard.checkOpen(date, "wms.label.transferReceipt");
+        periodGuard.checkOpen(date, "wms.label.transferReceipt", doc.getToWarehouseId());
         StatusTransitions.change(docMapper, WmsStockDoc::getId, id, WmsStockDoc::getStatus,
                 DocStatus.TRANSIT, DocStatus.DONE, w -> w
                         .set(WmsStockDoc::getReceiveBy, SecurityUtils.getUserId())

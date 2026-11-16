@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 配送单 / 退仓单、在途查询。调拨单（wms_stock_doc）、门店、仓库只读关联 -->
+<mapper namespace="com.lemon.erp.modules.dist.mapper.DistDeliveryMapper">
+
+    <sql id="columns">
+        d.*, fs.name AS from_store_name, fw.name AS from_warehouse_name, ts.name AS to_store_name, ts.type AS to_store_type, tw.name AS to_warehouse_name,
+        t.doc_no AS transfer_no, u.nickname AS create_by_name, su.nickname AS ship_by_name, ru.nickname AS receive_by_name,
+        au.nickname AS approve_by_name
+    </sql>
+
+    <sql id="joins">
+        LEFT JOIN store_info fs ON fs.id = d.from_store_id
+        LEFT JOIN wms_warehouse fw ON fw.id = d.from_warehouse_id
+        LEFT JOIN store_info ts ON ts.id = d.to_store_id
+        LEFT JOIN wms_warehouse tw ON tw.id = d.to_warehouse_id
+        LEFT JOIN wms_stock_doc t ON t.id = d.transfer_id
+        LEFT JOIN sys_user u ON u.id = d.create_by
+        LEFT JOIN sys_user su ON su.id = d.ship_by
+        LEFT JOIN sys_user ru ON ru.id = d.receive_by
+        LEFT JOIN sys_user au ON au.id = d.approve_by
+    </sql>
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.dist.entity.DistDelivery">
+        SELECT <include refid="columns"/>,
+               (SELECT COUNT(*) FROM dist_discrepancy x WHERE x.delivery_id = d.id AND x.status = 'PENDING') AS pending_diffs
+        FROM dist_delivery d
+        <include refid="joins"/>
+        WHERE d.kind = #{kind}
+        <if test="q.keyword != null">
+            AND (d.delivery_no LIKE CONCAT('%', #{q.keyword}, '%') OR d.remark LIKE CONCAT('%', #{q.keyword}, '%'))
+        </if>
+        <if test="q.statuses != null">
+            AND d.status IN <foreach collection="q.statuses" item="st" open="(" separator="," close=")">#{st}</foreach>
+        </if>
+        <if test="q.storeId != null">AND (d.from_store_id = #{q.storeId} OR d.to_store_id = #{q.storeId})</if>
+        <if test="q.toStoreId != null">AND d.to_store_id = #{q.toStoreId}</if>
+        <if test="q.warehouseId != null">AND (d.from_warehouse_id = #{q.warehouseId} OR d.to_warehouse_id = #{q.warehouseId})</if>
+        <if test="q.begin != null">AND d.biz_date &gt;= #{q.begin}</if>
+        <if test="q.end != null">AND d.biz_date &lt;= #{q.end}</if>
+        <if test="q.materialId != null">
+            AND EXISTS (SELECT 1 FROM dist_delivery_item x WHERE x.delivery_id = d.id AND x.material_id = #{q.materialId})
+        </if>
+        ORDER BY d.id DESC
+    </select>
+
+    <select id="selectDetail" resultType="com.lemon.erp.modules.dist.entity.DistDelivery">
+        SELECT <include refid="columns"/>
+        FROM dist_delivery d
+        <include refid="joins"/>
+        WHERE d.id = #{id}
+    </select>
+
+    <select id="selectItems" resultType="com.lemon.erp.modules.dist.entity.DistDeliveryItem">
+        SELECT i.*, m.code AS material_code, m.name AS material_name, m.spec, m.unit, m.serial_enabled,
+               l.name AS location_name, r.req_no AS requisition_no
+        FROM dist_delivery_item i
+        JOIN wms_material m ON m.id = i.material_id
+        LEFT JOIN wms_location l ON l.id = i.location_id
+        LEFT JOIN dist_requisition r ON r.id = i.requisition_id
+        WHERE i.delivery_id = #{deliveryId}
+        ORDER BY i.id
+    </select>
+
+    <select id="lockById" resultType="java.lang.Long">
+        SELECT id FROM dist_delivery WHERE id = #{id} FOR UPDATE
+    </select>
+
+    <select id="selectTransferLines" resultType="com.lemon.erp.modules.dist.dto.DistViews$TransferLine">
+        SELECT id, material_id, qty, cost_price, transfer_price, transfer_amount
+        FROM wms_stock_doc_item
+        WHERE doc_id = #{transferId}
+        ORDER BY id
+    </select>
+
+    <select id="selectTransferStatus" resultType="java.lang.String">
+        SELECT status FROM wms_stock_doc WHERE id = #{transferId}
+    </select>
+
+    <sql id="transitWhere">
+        WHERE t.kind = 'TRANSFER' AND t.status = 'TRANSIT'
+        <if test="q.keyword != null">
+            AND (t.doc_no LIKE CONCAT('%', #{q.keyword}, '%') OR t.source_no LIKE CONCAT('%', #{q.keyword}, '%'))
+        </if>
+        <if test="q.storeId != null">AND (fw.store_id = #{q.storeId} OR tw.store_id = #{q.storeId})</if>
+        <if test="q.toStoreId != null">AND tw.store_id = #{q.toStoreId}</if>
+        <if test="q.warehouseId != null">AND (t.warehouse_id = #{q.warehouseId} OR t.to_warehouse_id = #{q.warehouseId})</if>
+        <if test="q.begin != null">AND t.biz_date &gt;= #{q.begin}</if>
+        <if test="q.end != null">AND t.biz_date &lt;= #{q.end}</if>
+        <if test="q.materialId != null">
+            AND EXISTS (SELECT 1 FROM wms_stock_doc_item x WHERE x.doc_id = t.id AND x.material_id = #{q.materialId})
+        </if>
+    </sql>
+
+    <select id="selectTransit" resultType="com.lemon.erp.modules.dist.dto.DistViews$TransitRow">
+        SELECT t.id AS transfer_id, t.doc_no AS transfer_no, t.source_no, t.biz_date,
+               t.warehouse_id AS from_warehouse_id, fw.name AS from_warehouse_name, fw.store_id AS from_store_id, fs.name AS from_store_name,
+               t.to_warehouse_id, tw.name AS to_warehouse_name, tw.store_id AS to_store_id, ts.name AS to_store_name,
+               t.total_qty, t.transfer_amount
+        FROM wms_stock_doc t
+        LEFT JOIN wms_warehouse fw ON fw.id = t.warehouse_id
+        LEFT JOIN store_info fs ON fs.id = fw.store_id
+        LEFT JOIN wms_warehouse tw ON tw.id = t.to_warehouse_id
+        LEFT JOIN store_info ts ON ts.id = tw.store_id
+        <include refid="transitWhere"/>
+        ORDER BY t.biz_date, t.id
+    </select>
+
+    <select id="selectTransitTotal" resultType="com.lemon.erp.modules.dist.dto.DistViews$TransitTotal">
+        SELECT COUNT(*) AS doc_count, COALESCE(SUM(t.total_qty), 0) AS total_qty, COALESCE(SUM(t.transfer_amount), 0) AS transfer_amount
+        FROM wms_stock_doc t
+        LEFT JOIN wms_warehouse fw ON fw.id = t.warehouse_id
+        LEFT JOIN wms_warehouse tw ON tw.id = t.to_warehouse_id
+        <include refid="transitWhere"/>
+    </select>
+
+</mapper>

@@ -108,6 +108,17 @@ const stock = (key, name, warehouse, transfer, type, category) => ({
   note: true
 })
 
+/** 配送单 / 门店退仓单（配送价、金额有查看权限时才有值） */
+const distDoc = (key, name) => ({
+  key,
+  module: n.modDist,
+  name,
+  fields: [n.shipStore, n.shipWarehouse, n.receiveStore, n.receiveWarehouse, n.shipDate, n.sourceNo, n.deliveryAmount],
+  columns: [...MATERIAL_COLUMNS, n.batch, num(n.quantity), num(n.deliveryPrice), num(n.deliveryAmount), num(n.receivedQty), n.remark],
+  signs: [n.prepared, n.storekeeper, n.receiver],
+  note: true
+})
+
 /** 可配置打印模板的单据：名称、表头字段、明细列、签字栏与各页面打印时一致 */
 export const PRINT_TYPES = [
   order('scm.purchaseOrder', n.purchaseOrder, n.supplier, n.receiveWarehouse, n.supplierConfirm),
@@ -137,6 +148,17 @@ export const PRINT_TYPES = [
   stock('wms.in', n.wmsIn, n.inboundWarehouse, false, n.inType, n.inCategory),
   stock('wms.out', n.wmsOut, n.outboundWarehouse, false, n.outType, n.outCategory),
   stock('wms.transfer', n.transfer, n.outWarehouse, true),
+  {
+    key: 'dist.requisition',
+    module: n.modDist,
+    name: n.requisition,
+    fields: [n.requestStore, n.receiveWarehouse, n.supplyWarehouse, n.bizDate, n.expectedDate, n.status],
+    columns: [...MATERIAL_COLUMNS, num(n.requestQty), num(n.approvedQty), n.remark],
+    signs: [n.prepared, n.approved],
+    note: true
+  },
+  distDoc('dist.delivery', n.distDelivery),
+  distDoc('dist.return', n.storeReturn),
   {
     key: 'fin.voucher',
     module: n.modFin,

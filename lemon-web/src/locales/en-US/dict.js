@@ -123,6 +123,7 @@ export default {
     WELFARE: 'Employee Welfare', // 福利领用
     RD: 'R&D Use', // 研发领用
     OFFICE: 'Office Use', // 办公领用
+    DIST_LOSS: 'Distribution Loss', // 配送差异报损
     OTHER: 'Other' // 其他
   },
   wms_out_type: {
@@ -185,7 +186,9 @@ export default {
   scm_order_source: {
     'MANUAL': 'Manual', // 手工
     'REORDER': 'Replenishment Suggestion', // 补货建议
+    'REQUISITION': 'Store Requisition', // 门店要货
     'DIRECT': 'Direct Document', // 直接开单
+    'WX_SHOP': 'WeChat Shop', // 微信小店
   },
   // 科目类别
   fin_account_category: {
@@ -545,5 +548,115 @@ export default {
     'TERMINAL': 'Terminal', // 收银台
     'CASHIER': 'Cashier', // 收银员
     'SHIFT': 'Shift', // 班次
+  },
+  // 要货单状态
+  dist_requisition_status: {
+    'DRAFT': 'Draft', // 草稿
+    'APPROVING': 'In Approval', // 审批中
+    'SUBMITTED': 'Pending Review', // 待审核
+    'APPROVED': 'Approved', // 已审核
+    'PARTIAL': 'Partially Delivered', // 部分配送
+    'DELIVERED': 'Delivered', // 已配送
+    'CLOSED': 'Closed', // 已关闭
+  },
+  // 配送单种类
+  dist_delivery_kind: {
+    'DELIVERY': 'Delivery', // 配送
+    'RETURN': 'Store Return', // 门店退仓
+  },
+  // 配送单状态
+  dist_delivery_status: {
+    'DRAFT': 'Draft', // 草稿
+    'SUBMITTED': 'Pending Review', // 待审核
+    'APPROVED': 'Approved', // 已审核
+    'SHIPPED': 'Shipped', // 已发货
+    'RECEIVED': 'Received', // 已收货
+    'DIFF': 'Received with Differences', // 收货有差异
+    'CLOSED': 'Completed', // 已完成
+  },
+  // 收货差异种类
+  dist_discrepancy_kind: {
+    'SHORT': 'Short', // 少收
+    'DAMAGED': 'Damaged', // 破损
+    'OVER': 'Over', // 多收
+  },
+  // 收货差异状态
+  dist_discrepancy_status: {
+    'PENDING': 'Pending', // 待处理
+    'HANDLED': 'Handled', // 已处理
+  },
+  // 差异处理方式
+  dist_discrepancy_handling: {
+    'RETURN_SOURCE': 'Return to Shipper', // 退回发货方
+    'SOURCE_WRITE_OFF': 'Shipper Bears', // 发货方承担
+    'TARGET_WRITE_OFF': 'Receiver Bears', // 收货方承担
+    'ACCEPT': 'Receiver Keeps', // 收货方留用
+  },
+  // 小店对接方式
+  ch_wx_shop_mode: {
+    'MOCK': 'Mock Shop', // 模拟店铺
+    'LIVE': 'WeChat Shop', // 微信小店
+  },
+  // 渠道订单状态
+  ch_wx_order_status: {
+    'UNPAID': 'Unpaid', // 待付款
+    'TO_SHIP': 'To Ship', // 待发货
+    'SHIPPED': 'Shipped', // 已发货
+    'COMPLETED': 'Completed', // 已完成
+    'CANCELLED': 'Cancelled', // 已取消
+  },
+  // 渠道订单处理状态
+  ch_wx_erp_status: {
+    'NONE': 'Not Processed', // 未处理
+    'PENDING': 'To Generate', // 待生成
+    'UNMAPPED': 'Unmapped', // 待映射
+    'ORDERED': 'Order Created', // 已生成订单
+    'OUTBOUND': 'Shipped Out', // 已出库
+    'CLOSED': 'Closed', // 已关闭
+    'FAILED': 'Failed', // 处理失败
+  },
+  // 发货回传状态
+  ch_wx_delivery_status: {
+    'NONE': 'Not Shipped', // 未发货
+    'PUSHING': 'Pushing', // 回传中
+    'PUSHED': 'Pushed', // 已回传
+    'FAILED': 'Push Failed', // 回传失败
+    'PLATFORM': 'Shipped in Shop', // 小店后台发货
+  },
+  // 售后类型
+  ch_wx_aftersale_type: {
+    'REFUND': 'Refund Only', // 仅退款
+    'RETURN': 'Return & Refund', // 退货退款
+  },
+  // 售后状态
+  ch_wx_aftersale_status: {
+    'PENDING': 'Pending', // 待处理
+    'REJECTED': 'Rejected', // 已拒绝
+    'WAIT_RETURN': 'Awaiting Return', // 待买家退货
+    'WAIT_RECEIPT': 'Awaiting Receipt', // 待商家收货
+    'REFUNDING': 'Refunding', // 退款中
+    'REFUNDED': 'Refunded', // 已退款
+    'REFUND_FAILED': 'Refund Failed', // 退款失败
+    'CANCELLED': 'Closed', // 已关闭
+  },
+  // 售后处理状态
+  ch_wx_aftersale_erp_status: {
+    'NONE': 'Not Processed', // 未处理
+    'DONE': 'Processed', // 已处理
+    'SKIPPED': 'No Action Needed', // 无需处理
+    'FAILED': 'Failed', // 处理失败
+  },
+  // 同步类型
+  ch_wx_sync_type: {
+    'PRODUCT': 'Products', // 商品
+    'STOCK': 'Stock', // 库存
+    'ORDER': 'Orders', // 订单
+    'AFTERSALE': 'After-sales', // 售后
+  },
+  // 同步触发方式
+  ch_wx_sync_trigger: {
+    'MANUAL': 'Manual', // 手工
+    'SCHEDULE': 'Scheduled', // 定时任务
+    'CALLBACK': 'Push Message', // 消息推送
   },
 }

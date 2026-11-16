@@ -12,6 +12,8 @@
 
 - **门店**：区域（多级）、门店资料（总部 / 直营店 / 加盟店 / 配送中心，状态筹备 / 营业 / 停业 / 闭店，上级配送门店、价格方案、默认仓库与结算账户、加盟信息）；仓库、结算账户、员工归属门店，单据的门店就是其仓库的门店；用户的门店范围（全部门店 / 所属门店 + 指定门店）限定能看到、能使用的门店数据；门店价格方案与调价单（见「门店」）
 - **零售前台**：收银台（门店、出库仓库、现金账户、小票纸宽）与门店收款账户；班次（备用金、交班对账、现金差额）；全屏键盘收银（扫码、取价顺序 特价 → 会员价 → 门店价 → 总部价、改价折扣权限与上限、抹零、挂单取单、多方式支付找零）；聚合支付（可插拔通道，线下登记）；原单 / 无原单退货（原路退款）、当日作废；会员与等级、特价活动（适用门店 / 区域、会员限定、限购）；门店日结（按结算账户生成其他收入单，日结后锁定当日单据）；收银日报、POS 销售明细；小票、交班单打印（见「零售前台（POS 与会员）」）
+- **门店要货与配送**：门店要货单（显示现存、在途、建议量，可接入审批）、要货审核（调整批准数量）与要货汇总（缺货按供应商生成采购订单）、配送单（在途调拨，加盟店按配送价、其他按成本）、门店收货（实收差异生成收货差异，总部按责任方退回 / 报损处理）、门店退仓、在途查询（在途对账）、门店往来（跨店差价调拨）、门店对比报表；日期锁定（全公司 / 门店，锁定日期前的单据不能新增、修改、确认、作废）（见「门店要货与配送」）
+- **线上渠道**：微信小店（多店铺，绑定门店与发货仓库）：商品同步与 SKU ↔ 物料映射（按编码 / 条码自动匹配）、库存推送（定时 / 手工，扣除安全库存与待发数量）、订单同步（增量拉取 + 消息推送）→ 自动生成并审核销售订单 → 在 ERP 发货（销售出库 + 回传运单号）或在小店后台发货（自动出库）、售后（同意 / 拒绝 / 确认收货，发货前退款关闭待发数量，退货退款生成销售退货）、同步日志；未开通小店时可用模拟店铺体验（见「线上渠道（微信小店）」）
 - **供应链管理**：供应商（供货价格与阶梯价、默认供应商）、客户（信用额度、账期、价格等级）；采购 / 销售订单（审核可接入审批流程、订单变更）→ 采购入库 / 退货、销售出库 / 退货（自动生成仓库单据、回写订单进度），也可不选订单直接开单；补货建议（再订货点，一键按供应商生成采购订单）；价目表、客户执行价、促销（折扣 / 满减 / 买赠）、整单优惠与抹零、销售提成；发货通知、拣货、装箱（见「供应链管理」）
 - **财务管理**：会计科目、凭证（审核、记账）、期末结账（自动结转损益）；科目余额表、明细账、资产负债表、利润表、现金流量表（小企业会计准则格式，可追溯到凭证）；应收应付（由出入库自动生成）、收付款核销（自动核销、折让 / 抹零、多收转预收预付、冲账单、应收应付对冲）、账龄分析；出纳日记账与资金日报、其他收入 / 费用支出单（收支类别）、账户调拨；销售毛利、库龄分析。业务单据一键生成凭证（见「财务管理」）
 - **商务智能**：数据仓库（销售 / 采购 / 库存快照 / 财务事实表，定时与手动同步）；多维分析（行列维度透视、筛选、下钻、图表）；自定义报表与仪表盘（可共享）；经营驾驶舱；数据大屏（仓储物流、销售经营，投屏链接免登录）；决策支持（销售预测、ABC 分析、呆滞物料、预警规则）（见「商务智能」）
@@ -150,7 +152,7 @@ npm run dev
 - **当前租户**：`framework/tenant/TenantContext`。已登录请求由 `JwtAuthenticationFilter` 按会话设置，登录接口按填写的租户名称设置，`@Async` 线程由 `TenantTaskDecorator` 传递，定时任务由调度器按租户逐个执行（日志汇总各租户结果）。没有租户上下文时访问租户表直接报错，避免漏加条件。需要切换时用 `TenantContext.callAs(tenantId, ...)`。
 - **平台租户**（ID 1，`init.sql` 中的「柠檬科技」）：不受套餐限制，管理租户和套餐；菜单、字典、参数设置、租户、服务监控、缓存监控、定时任务是平台专属功能（`PlatformFeatures`），不能加入套餐，其他租户即使被分配也不生效。超级管理员 = 平台租户中的 `admin` 角色。
 - **租户套餐**：限定租户可用的菜单。其他租户的 `admin` 角色是租户管理员，菜单与套餐一致、随套餐修改自动同步；其他角色的权限也以套餐为上限。
-- **功能模块与行业模板**（`SysFeatureCatalog`）：把菜单归为 15 个功能模块（采购、销售、促销、库存、总账、应收应付、资金费用、进销存报表、商务智能等，基础平台必选），模块按菜单 ID 定义（含其下全部菜单），声明依赖的模块；行业模板（连锁零售、商贸批发、全部功能）是模块的组合。新建租户可「按行业模板」开通：选择行业后勾选的模块可再调整，保存时使用菜单完全相同的已有套餐，没有时按行业名称新建套餐（`SysFeatureService.resolvePackage`）；编辑套餐时也可按模块勾选，再在菜单树中细调（前端 `components/system/FeaturePicker`）。**新增页面放在已有分组下会自动归入对应模块，放在新位置时需要在 `SysFeatureCatalog` 中登记**，`TenantTests.industryTemplate` 检查每个页面都属于某个模块。
+- **功能模块与行业模板**（`SysFeatureCatalog`）：把菜单归为 16 个功能模块（采购、销售、促销、库存、总账、应收应付、资金费用、进销存报表、线上渠道、商务智能等，基础平台必选），模块按菜单 ID 定义（含其下全部菜单），声明依赖的模块；行业模板（连锁零售（含线上渠道）、商贸批发、全部功能）是模块的组合。新建租户可「按行业模板」开通：选择行业后勾选的模块可再调整，保存时使用菜单完全相同的已有套餐，没有时按行业名称新建套餐（`SysFeatureService.resolvePackage`）；编辑套餐时也可按模块勾选，再在菜单树中细调（前端 `components/system/FeaturePicker`）。**新增页面放在已有分组下会自动归入对应模块，放在新位置时需要在 `SysFeatureCatalog` 中登记**，`TenantTests.industryTemplate` 检查每个页面都属于某个模块。
 - **新建租户**：开通根部门、租户管理员账号（首次登录需改密码）、复制平台的内置岗位角色（菜单取与套餐的交集），再由各模块的 `TenantInitializer` 从平台复制基础数据：会计科目和币种、班次、预警规则、流程模型（未发布的草稿，审批角色换成新租户中的角色）。
 - **租户生命周期**：停用或到期后无法登录，已登录的会话立即失效；删除只删除租户记录（业务数据保留）；账号数量达到上限后不能再新增用户或录用开通账号。
 - **工作流**：流程定义按租户部署（`tenantId`），同一流程标识在各租户独立编号版本；流程实例查询都带租户条件。
@@ -263,6 +265,7 @@ public void onOrderApproved(FlowFinishedEvent e) {
 | `wms_check` | 有差异的盘点单确认（流程变量 `gainQty`、`lossQty`、`diffLines`） | 调整库存 |
 | `scm_order_change` | 已审核订单的变更单（流程变量 `kind`、`amountDelta` 金额变化） | 变更生效，订单版本加 1 |
 | `wms_stock_doc` | 手工出入库单、调拨单的确认（流程变量 `kind`、`bizType`、`totalQty`） | 更新库存 |
+| `dist_requisition` | 门店要货单的提交（流程变量 `reqNo`、`storeName`、`totalQty`、`itemCount`） | 待总部审核；驳回回到草稿 |
 
 另外内置了四个可在「发起申请」中直接发起的通用流程（带表单，未发布）：出差申请（≥ 5 天或费用 ≥ 1 万元时上级主管审批）、用印申请（公章、合同专用章需总经理审批）、物品领用（抄送仓库）、通用审批（部门主管 → 上级主管）。
 
@@ -325,6 +328,128 @@ public void onOrderApproved(FlowFinishedEvent e) {
 | 收银台页面 | 全屏、键盘优先（1366 宽可用）：扫码框始终获得焦点，扫码枪输入后回车加入购物车（同商品同单位累加，支持「数量*条码」）；每次修改后试算（`POST /pos/sale/preview`）；功能键 F2 数量、F3 会员、F4 挂单、F5 取单、F6 删除行、F7 改价 / 折扣、F8 整单优惠、F9 退货、F12 结算（扫码框为空时回车也结算），结算弹窗中数字键切换支付方式。扫码接口 `GET /pos/lookup?terminalId=&code=&memberId=` 一次返回物料、单位、换算率、取价、价格来源、限购、最低售价、本仓库可用库存（索引查询，目标 300ms 内） |
 
 权限：收银台 `pos:cashier:list`，收银操作按钮 `pos:sale:price` / `discount` / `discountAny` / `belowMin` / `return` / `noReceiptReturn` / `void`；收银台管理 `pos:terminal:list/add/edit/remove`；班次 `pos:shift:list`、代交班 `pos:shift:close`；POS 单据 `pos:sale:list`；会员 `pos:member:list/add/edit/remove`、查看手机号 `pos:member:sensitive`；会员等级 `pos:memberLevel:*`；特价活动 `pos:special:list/add/edit/remove`、开始 / 结束 `pos:special:audit`；门店日结 `pos:dailyClose:list/close/reopen`；报表 `pos:report:cashier` / `pos:report:detail`；支付通道 `pos:payConfig:list/edit`。内置角色：店长（`store_manager`，数据权限全部、用户的门店范围设为本店：零售全部功能（不含支付通道、反日结、会员删除）、库存作业、门店资料只读）、收银员（`cashier_pos`：收银台、收银折扣、原单退货）；普通用户只读（不含收银台、支付通道），总经理全部。功能模块「零售收银」（分组 991、993）、「会员营销」（992），连锁零售行业模板包含两者。业务参数：`pos.discount.maxRate`、`pos.rounding`。编码规则：LS、LT、ZF（支付单号，8 位当天流水）、BC、SYT、HY。
+
+## 门店要货与配送
+
+代码在 `modules/dist`（依赖 store → fin → scm → wms），前端 `views/dist`、`components/dist`，小程序 `pkg-wms/requisition`、`pkg-wms/dist-receive`。单据的门店由仓库决定（表上冗余 `store_id` 便于显示），**库存移动全部经 wms 的调拨 / 出库单**（生成即确认，`source_no` 为配送单号），本模块不重复库存逻辑。
+
+```
+门店要货单（YH）─提交（可选审批 dist_requisition）─▶ 待审核 ─总部审核（可改批准数量）─▶ 已审核
+      │                                                         │ 驳回 → 草稿（记录原因）
+      ▼                                                         ▼
+ 要货汇总（供货仓库 + 物料：待配送、可用、缺货）──缺货──▶ 采购订单草稿（按供应商拆分，来源「门店要货」）
+      │ 勾选要货单
+      ▼
+ 配送单（PS）草稿 ─发货─▶ 在途调拨（配送中心调出）─门店收货─▶ 调入门店仓库
+                                                    └─实收 ≠ 发货 ─▶ 收货差异（总部处理）
+ 门店退仓单（TC）：门店草稿 ─提交─▶ 待审核 ─总部审核─▶ 门店发货（在途调拨：门店调出）─▶ 配送中心收货（差异同上）
+```
+
+| 单据 / 功能 | 状态与规则 |
+| --- | --- |
+| 要货单 `dist_requisition` | 收货仓库决定要货门店（只能为可管辖、可开单的门店要货）；供货仓库为空时取门店上级配送门店（`supply_store_id`）的默认仓库，必须属于总部或配送中心。状态（`RequisitionStatus`）：草稿 → 审批中（发布了「门店要货审批」流程时，流程变量 `reqNo`、`storeName`、`totalQty`、`itemCount`）→ 待审核 → 已审核 → 部分配送 / 已配送；已审核、部分配送可关闭（剩余不再配送）；审批驳回、总部驳回回到草稿。审核（`dist:requisition:audit`，须可管辖供货门店）逐行填批准数量（默认 = 要货数量，合计须 > 0）。明细显示收货仓库现存、在途（调入该仓库的在途调拨）、供货仓库可用（现存 − 冻结）；建议量 = 仓库下限（分仓库预警的设置，没有时取物料安全库存）− 现存 − 在途（`GET /dist/requisition/suggest`） |
+| 要货汇总 | `GET /dist/requisition/summary`：已审核、部分配送的要货单中「批准 − 已配送」按 供货仓库 + 物料 汇总，对照供货仓库可用库存得出缺货和默认供应商；勾选要货单生成配送单（`POST /dist/requisition/to-delivery`，按 供货仓库 + 收货仓库 分组，每组一张草稿）；缺货生成采购订单（`POST /dist/requisition/to-purchase`，`dist:summary:purchase`，复用补货建议的 `ScmReorderService.toOrders`，收货仓库为供货仓库，订单来源 `OrderSource.REQUISITION`） |
+| 配送单 `dist_delivery`（`kind = DELIVERY`） | 发货仓库为总部 / 配送中心的仓库。明细可关联要货单明细：数量不超过批准剩余数量（`dist:delivery:overQty` 除外，保存和发货时都校验），发货时回写要货单已配送数量（行锁）并更新状态。**发货**（`dist:delivery:ship`）：生成在途调拨（`DistStockMoves.transfer`，发货仓库调出、货物在途），明细的配送价、配送金额、调出成本价取调拨单确认后的调拨价 |
+| 配送价规则 | 配送给**加盟店**时按差价调拨：调拨价 = 明细上指定的价格（需要 `dist:delivery:price`）→ 加盟店「配送价方案」（`store_info.delivery_scheme_id`）的方案价（零售价列）→ 调出成本价；**直营店、配送中心之间和门店退仓**按同价调拨（调拨价 = 调出成本）。成本按全公司移动加权平均，调拨价只是内部结算价，不改变库存成本（与仓库的「同价 / 差价调拨」一致）；配送金额保存在配送单上，作为 M4 加盟商结算的依据。没有 `wms:stock:cost` 时不返回调出成本价，非加盟配送的配送价（即成本）也不返回 |
+| 门店收货 | 收货人须可管辖收货门店（`dist:receive:confirm`；退仓由配送中心收货 `dist:return:receive`）。收货日期默认当天、不早于发货日期。**部分收货的做法：整单调入再调整**——wms 的在途调拨只能整单收货，这里先整单调入收货仓库（`WmsStockDocService.receiveGenerated`，不按调拨单的制单人数据权限，由配送模块校验门店），实收少于发货的数量（少收 / 破损）立即生成一张反向的在途调拨（收货仓库 → 发货仓库原库位，同样的定价方式），收货方的库存始终等于实收；多于发货的（多收）只登记、不入账。有差异时配送单为「收货有差异」，否则「已收货」。序列号物料须按发货数量收货（差异走退仓） |
+| 收货差异 `dist_discrepancy` | 总部判定责任方后处理（`dist:discrepancy:handle`，当天生成仓库单据）：少收 / 破损——**退回发货方**（发货仓库收下差异调拨）、**发货方承担**（收下后在发货仓库其他出库报损）、**收货方承担**（收下后调给收货仓库，再在收货仓库报损）；多收——**收货方留用**（发货仓库调给收货仓库补记库存）、**退回发货方**（原路退回，不入账）。报损的出库类别默认业务字典 `wms_out_category` 的内置取值「配送差异报损」`DIST_LOSS`，可改选。全部差异处理后配送单变为「已完成」 |
+| 门店退仓（`kind = RETURN`） | 门店开单（收货仓库为空取上级配送门店的默认仓库，必须属于总部 / 配送中心）→ 提交（`dist:return:edit`）→ 总部审核或驳回（`dist:return:audit`，须可管辖收货方）→ 门店发货（`dist:return:ship`，同价在途调拨）→ 配送中心收货（差异处理同配送单，发货方 / 收货方对调） |
+| 在途对账 | 在途 = 未收货的配送 / 退仓调拨 + 待处理的少收差异调拨 + 手工在途调拨，全部是 `wms_stock_doc` 中状态为 TRANSIT 的调拨单；「在途查询」（`GET /dist/transit`、`/dist/transit/total`）逐单列出调出 / 调入门店、在途天数、数量、调拨金额，可按门店、物料、来源单号筛选，差异处理完后对应的在途归零 |
+| 门店往来 `dist_store_ledger` | wms 在调拨单确认（调出）和冲销后发布 `TransferSettledEvent`（与确认同一事务）；配送模块对**跨门店的差价调拨**（手工差价调拨、加盟配送、加盟配送的差异调拨）按调拨金额记一笔「调出门店应收、调入门店应付」，冲销记负数；平价调拨不产生往来。只用于内部对账与考核，不生成凭证（`GET /dist/ledger`、`/dist/ledger/summary`） |
+| 调拨两步（§12.5） | 沿用仓库的调拨单：勾选「在途」即两步（调出确认 → 调入收货）、同价 / 差价调拨、调拨费用；跨店调拨审批用已有的「出入库审批」流程 `wms_stock_doc`（变量 `kind` = TRANSFER）；列表的调出 / 调入仓库都按门店范围可见（`warehouse_id,to_warehouse_id`） |
+| 门店对比 | `GET /dist/report/store-compare?begin&end&regionId&storeId`（`dist:report:compare`，日期范围不超过 366 天，与用户门店范围取交集）：销售额、退货额、销售净额（不含税）、销售成本（销售出库 / 退货的库存流水实际成本）、毛利与毛利率、采购入库净额、配送入库金额（按收货日期）、当前库存金额（库存 × 实时均价）、库存周转（销售成本 ÷ 库存金额）、要货满足率（已配送 ÷ 批准，按要货日期）、配送及时率（收货日期不晚于期望到货日期的配送单占比）。POS 零售上线后并入销售数据 |
+
+**日期锁定**（§14 规则 7、FI-11）：「系统管理 → 日期锁定」（`dist:dateLock:list` / `dist:dateLock:edit`，实现在配送模块 `DistDateLockService`，表 `dist_date_lock`）。每个租户一条全公司的锁定日期（`store_id = 0`，只有全部门店范围的用户能设置），门店可另设（两者都检查）。业务日期**不晚于**锁定日期的单据不能新增、修改、确认、作废。机制：framework 定义 `BizDateLockChecker`（配送模块实现）与聚合组件 `BizDateLocks`；`BizPeriodGuard` 增加带仓库的 `checkOpen(date, docName, warehouseId)`，财务的 `FinBizPeriodGuard` 在会计期间结账检查之前先检查日期锁定，所以**所有已有的期间检查自动带上日期锁定**（仓库出入库 / 调拨 / 盘点确认、调拨收货、冲销，供应链出入库与退货生成的仓库单据，财务的收付款、应收应付、费用、资金调拨等）；只保存草稿的操作（仓库单据、盘点单、要货单、配送单的新增 / 修改 / 删除）直接调用 `BizDateLocks.check`；冲销还检查原单的业务日期。没有设置时不限制。
+
+**权限**：要货单 `dist:requisition:list/add/edit/remove/submit`；要货审核页面 `dist:audit:list`，审核 / 驳回 `dist:requisition:audit`、关闭 `dist:requisition:close`、缺货生成采购 `dist:summary:purchase`；配送单 `dist:delivery:list/add/edit/remove/ship`，超量配送 `dist:delivery:overQty`、修改配送价 `dist:delivery:price`；门店收货 `dist:receive:list/confirm`；门店退仓 `dist:return:list/add/edit/remove/audit/ship/receive`；收货差异 `dist:discrepancy:list/handle`；在途查询 `dist:transit:list`；门店往来 `dist:ledger:list`；门店对比 `dist:report:compare`。内置角色：普通用户只读，总经理全部，仓库管理员负责配送中心一侧（要货审核与关闭、配送单与发货、退仓收货，查看要货、差异、在途）。数据权限只按门店（要货单按要货 / 供货仓库，配送单与差异按发货 / 收货仓库，往来与在途按调出 / 调入仓库），不按制单人部门过滤（总部要处理门店的单据）。菜单：模块 20「配送」，分组 460–462，页面 463–472，按钮 4630–4720；功能模块 `DISTRIBUTION`（供应链分类，零售行业模板包含）。
+
+## 线上渠道（微信小店）
+
+代码在 `modules/channel`（依赖 store → fin → scm → wms），前端 `views/channel`、`api/channel/wxShop.js`、`components/channel/WxShopSelect.vue`。菜单「线上渠道 → 微信小店」：店铺设置、商品映射、渠道订单、售后单、同步日志。
+
+### 架构
+
+```
+modules/channel
+├── client                  小店接口的抽象（业务代码只用这里的模型，金额为元、时间为本地时间）
+│   ├── WxShopClient        接口 + 模型（商品 / SKU、订单 / 明细 / 收货 / 发货、售后、快递公司、分页）
+│   ├── HttpWxShopClient    LIVE：真实接口，地址与字段名都写成常量（注释「按官方文档，待联调确认」），分 ↔ 元、秒 ↔ 时间的转换只在这里
+│   ├── MockWxShopClient    MOCK：内存中的模拟店铺（每个店铺一份商品、订单、售后，重启清空），并提供构造数据、模拟买家 / 小店后台操作的方法
+│   ├── WxShopClients       按店铺的对接方式选择实现
+│   └── WxCallbackCrypto    消息推送的签名（SHA-1）、AES-256-CBC 加解密、JSON / XML 消息解析（XML 用正则读取，不解析实体）
+├── service                 店铺、商品映射与库存推送、订单、售后、同步入口与定时任务、消息推送
+└── controller / entity / mapper / dto / model
+```
+
+接口调用凭证用 `/cgi-bin/stable_token`（appid + secret）获取，按店铺缓存（`wxshop:token:{店铺ID}`，登记在缓存监控中），提前 5 分钟过期，凭证失效的错误码（40001 / 40014 / 42001）自动刷新重试一次；修改、删除店铺后（提交后）清理。**调用小店接口都在事务之外**，写库用 `TransactionTemplate`，每个订单 / 售后单一个事务，一条失败不影响其他（错误记录在单据上和同步日志中）。定时任务、消息推送等没有登录用户的线程以系统身份处理（全部数据，制单人、审核人为空）。
+
+### 店铺设置（`ch_wx_shop`，权限 `channel:wxShop:list/add/edit/remove/sync`）
+
+| 设置 | 说明 |
+| --- | --- |
+| 对接方式（字典 `ch_wx_shop_mode`） | `MOCK` 模拟店铺（没有开通小店时演示、测试）/ `LIVE` 正式对接，需要 AppID、AppSecret |
+| 绑定门店、发货仓库 | 仓库必须是该门店的启用仓库（`WmsWarehouseService.checkStoreWarehouse`）。渠道订单、售后单写入时记下门店（`store_id`），按用户的门店范围过滤；已有订单的店铺不能改绑门店、不能删除（可停用） |
+| 订单客户 | 生成销售订单的客户，留空时使用 / 自动创建客户「微信小店顾客」 |
+| 密钥 | AppSecret、推送 Token、EncodingAESKey 只写不读（返回 `appSecretSet` 等标记），修改时留空表示不变，`clearPushSecrets` 清除推送密钥 |
+| 退货地址 ID | 同意退货退款时传给小店（小店后台的地址编号） |
+| 同步设置 | 定时同步订单和售后（默认开）、付款后自动生成销售订单（默认开，关闭时为「待生成」手工生成）、定时推送库存（默认关）、推送间隔（5～1440 分钟）、安全库存 |
+
+「测试连接」获取接口调用凭证并读取商品列表（返回商品总数）。表单中显示消息推送地址（访问地址 + `/api/channel/wx-shop/callback/{店铺ID}`），在小店后台「消息推送」中登记。模拟店铺可以「生成模拟商品」（取前 5 个启用物料，编码作为商家编码、零售价作为售价）和「生成模拟订单」（`POST /channel/wx-shop/{id}/mock/orders`，用已映射的商品下单并付款后立即同步；不是模拟店铺时拒绝）。
+
+### 商品映射（`ch_wx_product`，权限 `channel:wxProduct:list/edit`）
+
+- 同步商品：分页拉取全部商品及 SKU，新增或更新（标题、规格、商家编码 `out_sku_id`、SKU 编码、售价、线上库存）；全部拉取成功后，这次没有出现的 SKU 标记为线上已删除（不推送库存，默认不显示）。
+- **自动匹配**：未映射且不是手工映射的 SKU，先按商家编码、再按 SKU 编码，依次匹配物料编码、物料条码、包装条码（`WmsMaterialService.byBarcode`；包装条码时换算率取包装的换算率），多规格款式（模板）不参与。同步商品后自动执行，也可手工「自动匹配」。
+- 手工映射：选择物料和换算率（1 件 SKU = 多少基本单位），之后自动匹配不再覆盖；取消映射后恢复自动匹配。有映射的物料不能删除（`WxReferenceChecker`，店铺绑定的门店、仓库、客户同理）。
+- 价格以 ERP 为准还是以小店为准由运营决定：列表显示小店售价和物料零售价供对比。**按 ERP 零售价改小店价格没有实现**：小店改价要通过商品更新接口提交整个商品并重新审核，风险较大，留待联调后评估。
+
+### 库存推送
+
+已映射 SKU 的可售数量 = ⌊(发货仓库的空闲库存（可用 − 已预留，`StockReservationService.free`）− 已付款未出库的渠道订单占用 − 安全库存) ÷ 换算率⌋，不小于 0，按 SKU 全量设置（`stock/update`，diff_type = 3）。「已付款未出库」包括待映射、待生成的订单（线上已经扣了库存，ERP 还没出库），按当前映射换算。定时推送时数量没有变化（且上次没有失败）的 SKU 不调用接口，手工同步全部推送；每个 SKU 记录最近推送的数量、时间和错误。同一物料映射多个 SKU 时每个 SKU 都推送全部可售数量。
+
+### 订单（`ch_wx_order` / `ch_wx_order_item`，权限 `channel:wxOrder:list/ship/sensitive`）
+
+- **同步**：从上次同步到的时间向前重叠 10 分钟（首次为最近 7 天）按线上更新时间分段（每段一天）分页拉取订单号，逐个取详情保存；全部成功才推进同步时间。最后自动重试待映射、处理失败、已在线上发货 / 取消但还没有出库 / 关闭的订单（最多 100 个）。消息推送触发单个订单的拉取。
+- **金额**：明细的实付 = 线上返回的行实付（`real_price`，待联调确认含义），没有时把（实付 − 运费）按售价金额比例分摊，最后一行取余数。运费只记录在渠道订单上，不进销售订单。
+- **敏感信息**：买家标识入库前脱敏；收货人、电话、地址列表不返回，详情默认脱敏（姓名留首字、电话留前 3 后 4、地址留前 6 个字），有 `channel:wxOrder:sensitive` 权限时显示完整信息。
+- **生成销售订单**（付款后，全部商品已映射）：客户为店铺的订单客户、仓库为发货仓库、单价 = 本行实付 ÷ (数量 × 换算率)、数量 = 件数 × 换算率、备注「微信小店订单 {订单号}」、来源 `WX_SHOP`（字典 `scm_order_source`），通过 `ScmOrderService.createExternalApproved` 生成并直接审核（不走审批、不应用促销、不校验限价和信用额度）。渠道订单生成的销售订单不能反审核。有未映射的商品时为「待映射」，映射后点「生成销售订单」（或等下次同步自动重试）。
+- **在 ERP 中发货**：待发货且已生成销售订单时，选择快递公司（小店的快递公司列表）、填写运单号 → 同一事务内生成销售出库（发货前已退款的数量不出库，有退款时出库后关闭订单的剩余数量）→ **提交后**（`@TransactionalEventListener(AFTER_COMMIT)`）调用小店的发货接口，结果在新事务中记录（回传失败可「回传发货」重试）。批次 / 序列号管理的物料出库需要指定批次 / 序列号，这里不支持（出库会失败并提示），这类商品请在 ERP 中手工出库。
+- **在小店后台发货**：同步时发现线上已发货而 ERP 没有出库，自动生成销售出库（发货回传状态为「小店后台发货」）。
+- **取消**：发货前取消（线上 250，或全部商品售后后 200）时关闭销售订单。
+
+状态映射（`WxOrderStatus.ofPlatform`，按官方文档，待联调确认）：
+
+| 小店订单状态码 | 渠道订单状态 | ERP 处理 |
+| --- | --- | --- |
+| 10 待付款 | UNPAID 待付款 | 不处理 |
+| 20 待发货、21 部分发货 | TO_SHIP 待发货 | 生成销售订单（或待映射 / 待生成） |
+| 30 待收货 | SHIPPED 已发货 | 没有出库时自动出库 |
+| 100 完成 | COMPLETED 已完成 | 同上 |
+| 200 全部售后后取消、250 未付款取消 | CANCELLED 已取消 | 关闭销售订单（还没出库时） |
+
+ERP 处理状态（字典 `ch_wx_erp_status`）：NONE 未处理、PENDING 待生成、UNMAPPED 待映射、ORDERED 已生成订单、OUTBOUND 已出库、CLOSED 已关闭、FAILED 处理失败（错误信息在订单上）。
+
+### 售后（`ch_wx_aftersale`，权限 `channel:wxAftersale:list/handle`）
+
+- 同步：按申请时间增量拉取新的售后单，并刷新本地未结束（不是已退款 / 已拒绝 / 已关闭）和处理失败的售后单；关联的订单本地没有时先同步订单。消息推送触发单个售后单的拉取。
+- 操作（调用小店接口后重新拉取）：同意（仅退款即退款；退货退款为同意退货，使用店铺的退货地址）、拒绝（填写原因）、确认收货（退货退款在买家寄回后）。
+- 退款完成（状态 REFUNDED）后在 ERP 中处理一次：ERP 还没有出库 → 退款的件数计入订单明细的「发货前退款」，不再出库，全部商品都退款时关闭销售订单；ERP 已出库的退货退款 → 生成销售退货（退款不补发）退回发货仓库；ERP 已出库的仅退款 → 只记录（「无需处理」）；线上已发货而 ERP 还没出库 → 处理失败，出库后同步时自动重试。
+- **退款金额只记录**在售后单上（资金由小店结算），不生成收款 / 退款单；销售出库、退货照常生成应收和冲减。
+
+售后状态映射（`WxAftersaleStatus.ofPlatform`，线上原始状态另存在 `platform_status`）：MERCHANT_PROCESSING → 待处理；MERCHANT_REJECT_REFUND / MERCHANT_REJECT_RETURN → 已拒绝；USER_WAIT_RETURN → 待买家退货；MERCHANT_WAIT_RECEIPT → 待商家收货；PLATFORM_REFUNDING 等 → 退款中；MERCHANT_REFUND_SUCCESS / MERCHANT_RETURN_SUCCESS → 已退款；PLATFORM_REFUND_FAIL 等 → 退款失败；USER_CANCELD / RETURN_CLOSED → 已关闭。
+
+### 消息推送
+
+地址 `/api/channel/wx-shop/callback/{店铺ID}`（免登录，`SecurityConfig` 放行）：按店铺 ID 跨租户找到店铺（`TenantContext.callIgnore`，停用的拒绝），用店铺的推送 Token 校验 `signature`；GET 为地址校验，返回 `echostr`（安全模式带 `msg_signature` 时解密后返回）；POST 为事件，消息体支持 JSON 和 XML，安全模式（有 `Encrypt`）时校验 `msg_signature` 并用 EncodingAESKey 解密（校验 AppID）。校验通过后切换到店铺所属租户，`@Async` 处理（订单事件拉取该订单，售后事件拉取该售后单，商品事件忽略），立即返回 `success`；签名不对返回 403。每次处理记一条同步日志（触发方式「消息推送」）。
+
+### 定时任务与同步日志
+
+定时任务「微信小店同步」（`channel.wxShopSync`，每 5 分钟，`WxShopSyncJob` 首次启动时登记）按租户执行：每个启用店铺按自己的设置拉取订单、售后单，到达间隔时推送库存，一个店铺失败不影响其他。每次同步（店铺 + 类型）写一条同步日志（`ch_wx_sync_log`，权限 `channel:wxSyncLog:list`）：类型、触发方式（手工 / 定时任务 / 消息推送）、条数、成功失败数、耗时、第一条失败的原因。
+
+### 模拟与待联调
+
+- 没有开通小店时用模拟店铺：商品、订单、售后的流转与真实接口一致（订单 10 → 20 → 30 → 100，取消 250，未发货全部退款 200；售后 MERCHANT_PROCESSING → 仅退款同意即退款 / 退货退款同意 → USER_WAIT_RETURN → 买家寄回 → MERCHANT_WAIT_RECEIPT → 确认收货退款）。集成测试（`WxShopTests`）直接调用 `MockWxShopClient` 构造数据。
+- `HttpWxShopClient` 按官方文档编写、没有联调，开通后需要逐一核对：接口地址（特别是快递公司列表、退货退款的确认收货是否同为 `acceptapply`）、请求 / 响应字段名、金额单位、订单行实付 `real_price` 的含义、订单列表的时间范围上限、售后列表按申请时间还是更新时间、推送事件名与消息体结构（只读取 `Event`、`order_id`、`after_sale_order_id`，不依赖具体结构）。
 
 ## 仓库管理
 
@@ -401,7 +526,7 @@ public void onOrderApproved(FlowFinishedEvent e) {
 
 ## 业务联动
 
-业务模块单向依赖：`wms ← scm ← fin ← bi / store ← pos`，下游调用上游的服务、监听上游的事件，上游不感知下游（例如财务监听供应链的 `TradeDocConfirmedEvent` 生成应收应付单）：
+业务模块单向依赖：`wms ← scm ← fin ← bi / store ← pos / channel / dist`，下游调用上游的服务、监听上游的事件，上游不感知下游（例如财务监听供应链的 `TradeDocConfirmedEvent` 生成应收应付单）：
 
 ```
 采购订单 ─审核─▶ 采购入库 / 退货 ──▶ 仓库入库 / 出库单（已确认，更新库存、批次、序列号、实时成本）
@@ -411,6 +536,8 @@ public void onOrderApproved(FlowFinishedEvent e) {
 销售订单 ─审核─▶ 发货通知（拣货、装箱）─▶ 销售出库 / 退货 ──▶ 仓库出库 / 入库单
                        └─▶ 应收单 ─▶ 收款核销 ─▶ 凭证
 补货建议（再订货点）─一键─▶ 采购订单（按供应商合并，来源 REORDER）
+门店要货 ─审核─▶ 配送单 ─发货─▶ 在途调拨 ─收货─▶ 调入（差异 ─▶ 差异调拨 / 报损）；要货汇总缺货 ─▶ 采购订单（来源 REQUISITION）
+跨门店差价调拨（含加盟配送）─TransferSettledEvent─▶ 门店往来
 
 采购入库（运费：供应商代垫 / 本公司承担）─▶ 运费按行分摊计入存货成本 + 采购运费应付单
 销售出库（运费：本公司承担 / 代垫运费；付承运商：现付 / 月结）─▶ 费用支出单（来源为出库单）或承运商应付 + 代垫运费时的客户应收
@@ -426,7 +553,7 @@ public void onOrderApproved(FlowFinishedEvent e) {
 - 收发类别（`wms_stock_doc.io_category`，可不填）：其他入库选「入库类别」（业务字典 `wms_in_category`），其他出库、报废出库选「出库类别」（`wms_out_category`），租户可在「业务字典」中新增类别，保存时按当前租户的字典校验（`DictLookup.check`）；其他类型和业务单据生成的单据为空，红字冲销单沿用原单的类别。列表可按类别筛选，打印表头含类型和类别。
 - 采购入库 / 退货、销售出库 / 退货都是**保存即确认**，不能修改删除，错误通过退货、退料冲回。
 - 财务报表类查询（毛利分析读取出入库单和库存流水成本）直接在 `fin` 的 XML 中关联上游表，不在上游模块增加只为财务服务的接口。
-- 单据号统一由 `DocNoService.next(前缀)` 生成：采购订单 CG、销售订单 XS、采购入库 CR、采购退货 CT、销售出库 XC、销售退货 XT、订单变更 BG、发货通知 FH、其他收入单 SR、费用支出单 ZC、应收 YS、应付 YF、收款 SK、付款 FK、预收 YSK、预付 YFK、账户调拨 HB、冲账单、应收应付对冲等（完整列表见「系统管理 → 编码规则」，由各模块的 `DocNoCatalog` 声明）。
+- 单据号统一由 `DocNoService.next(前缀)` 生成：采购订单 CG、销售订单 XS、采购入库 CR、采购退货 CT、销售出库 XC、销售退货 XT、订单变更 BG、发货通知 FH、其他收入单 SR、费用支出单 ZC、应收 YS、应付 YF、收款 SK、付款 FK、预收 YSK、预付 YFK、账户调拨 HB、要货单 YH、配送单 PS、门店退仓单 TC、冲账单、应收应付对冲等（完整列表见「系统管理 → 编码规则」，由各模块的 `DocNoCatalog` 声明）。
 
 ## 供应链管理
 
@@ -890,7 +1017,9 @@ lemon-retail
 │   ├── lemon-store             门店：区域、门店资料（新建门店时创建仓库、现金账户），下层模块经 framework/store 的 StoreLookup 访问
 │   ├── lemon-pos               零售前台：收银台、班次、POS 销售与退货、聚合支付、会员、特价活动、门店日结、收银报表（见「零售前台（POS 与会员）」）
 │   ├── lemon-bi                商务智能：数据仓库 ETL、多维分析、报表与仪表盘、驾驶舱、决策支持、进销存报表
-│   └── lemon-ai                智能：大模型客户端（OpenAI 兼容）、AI 设置与用量、AI 问数、AI 能力注册表（只依赖 framework）
+│   ├── lemon-ai                智能：大模型客户端（OpenAI 兼容）、AI 设置与用量、AI 问数、AI 能力注册表（只依赖 framework）
+│   ├── lemon-store             门店：区域、门店资料
+│   └── lemon-channel           线上渠道：微信小店的商品映射、库存推送、订单与售后同步（见「线上渠道（微信小店）」）
 │       （每个模块：src/main/java/.../modules/<模块>/{controller,service,mapper,entity,dto}
 │                   src/main/resources/mapper/<模块>/*.xml）
 ├── lemon-admin                 启动模块：组装全部业务模块，打包为 lemon-retail.jar
@@ -908,7 +1037,7 @@ lemon-retail
     └── init.sql                建表 + 初始数据（MySQL）
 ```
 
-模块依赖（只允许单向）：`lemon-admin → lemon-modules/* → lemon-framework → lemon-common`。业务模块之间按实际引用声明依赖：`wms ← scm ← fin ← bi / store ← pos`，`system ← monitor ← dashboard`，`workflow`、`ai` 只依赖 framework。
+模块依赖（只允许单向）：`lemon-admin → lemon-modules/* → lemon-framework → lemon-common`。业务模块之间按实际引用声明依赖：`wms ← scm ← fin ← bi / store ← pos / channel / dist`，`system ← monitor ← dashboard`，`workflow`、`ai` 只依赖 framework。
 
 跨模块访问数据：Java 代码只注入本模块的 Mapper，读写其他模块的表一律调用所属模块 Service 提供的方法（例如财务生成运费单据后调用供应链 Service 回写出入库单），上游需要的能力由 framework 定义接口、所属模块实现（例如业务模块校验负责人用 `framework/org/UserLookup`，由系统模块实现）。mapper XML 中跨模块的只读 JOIN（报表、商务智能、首页统计）允许保留，写操作必须经过所属模块的 Service。
 

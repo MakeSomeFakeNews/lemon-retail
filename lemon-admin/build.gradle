@@ -12,11 +12,13 @@ dependencies {
     implementation project(':lemon-modules:lemon-dashboard')
     implementation project(':lemon-modules:lemon-store')
     implementation project(':lemon-modules:lemon-pos')
+    implementation project(':lemon-modules:lemon-dist')
     implementation project(':lemon-modules:lemon-wms')
     implementation project(':lemon-modules:lemon-scm')
     implementation project(':lemon-modules:lemon-fin')
     implementation project(':lemon-modules:lemon-bi')
     implementation project(':lemon-modules:lemon-ai')
+    implementation project(':lemon-modules:lemon-channel')
     runtimeOnly libs.mysql.connector
 
     testImplementation libs.spring.boot.starter.webmvc.test

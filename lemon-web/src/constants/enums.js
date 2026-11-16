@@ -373,6 +373,12 @@ export const DateRange = Object.freeze({
   ALL: 'ALL', // 全部
 })
 
+/** com.lemon.erp.modules.dist.model.DeliveryKind（字典 dist_delivery_kind） */
+export const DeliveryKind = Object.freeze({
+  DELIVERY: 'DELIVERY', // 配送
+  RETURN: 'RETURN', // 门店退仓
+})
+
 /** com.lemon.erp.modules.scm.model.DeliveryStatus（字典 scm_delivery_status） */
 export const DeliveryStatus = Object.freeze({
   PENDING: 'PENDING',
@@ -385,6 +391,38 @@ export const DeliveryStatus = Object.freeze({
 export const DictKind = Object.freeze({
   SYSTEM: 'SYSTEM', // 系统字典
   BUSINESS: 'BUSINESS', // 业务字典
+})
+
+/** com.lemon.erp.modules.dist.model.DiscrepancyHandling（字典 dist_discrepancy_handling） */
+export const DiscrepancyHandling = Object.freeze({
+  RETURN_SOURCE: 'RETURN_SOURCE', // 退回发货方
+  SOURCE_WRITE_OFF: 'SOURCE_WRITE_OFF', // 发货方承担
+  TARGET_WRITE_OFF: 'TARGET_WRITE_OFF', // 收货方承担
+  ACCEPT: 'ACCEPT', // 收货方留用
+})
+
+/** com.lemon.erp.modules.dist.model.DiscrepancyKind（字典 dist_discrepancy_kind） */
+export const DiscrepancyKind = Object.freeze({
+  SHORT: 'SHORT', // 少收
+  DAMAGED: 'DAMAGED', // 破损
+  OVER: 'OVER', // 多收
+})
+
+/** com.lemon.erp.modules.dist.model.DiscrepancyStatus（字典 dist_discrepancy_status） */
+export const DiscrepancyStatus = Object.freeze({
+  PENDING: 'PENDING', // 待处理
+  HANDLED: 'HANDLED', // 已处理
+})
+
+/** com.lemon.erp.modules.dist.model.DistDeliveryStatus（字典 dist_delivery_status） */
+export const DistDeliveryStatus = Object.freeze({
+  DRAFT: 'DRAFT',
+  SUBMITTED: 'SUBMITTED', // 待审核
+  APPROVED: 'APPROVED', // 已审核
+  SHIPPED: 'SHIPPED', // 已发货
+  RECEIVED: 'RECEIVED', // 已收货
+  DIFF: 'DIFF', // 收货有差异
+  CLOSED: 'CLOSED', // 已完成
 })
 
 /** com.lemon.erp.modules.wms.model.DocStatus（字典 wms_doc_status） */
@@ -690,7 +728,9 @@ export const OrderKind = Object.freeze({
 export const OrderSource = Object.freeze({
   MANUAL: 'MANUAL', // 手工
   REORDER: 'REORDER', // 补货建议
+  REQUISITION: 'REQUISITION', // 门店要货
   DIRECT: 'DIRECT', // 直接开单
+  WX_SHOP: 'WX_SHOP', // 微信小店
 })
 
 /** com.lemon.erp.modules.scm.model.OrderStatus（字典 scm_order_status） */
@@ -874,6 +914,17 @@ export const RefType = Object.freeze({
   STORE: 'STORE', // 门店
   REGION: 'REGION', // 区域
   PRICE_SCHEME: 'PRICE_SCHEME', // 门店价格方案
+})
+
+/** com.lemon.erp.modules.dist.model.RequisitionStatus（字典 dist_requisition_status） */
+export const RequisitionStatus = Object.freeze({
+  DRAFT: 'DRAFT',
+  APPROVING: 'APPROVING', // 审批中
+  SUBMITTED: 'SUBMITTED', // 待审核
+  APPROVED: 'APPROVED', // 已审核
+  PARTIAL: 'PARTIAL', // 部分配送
+  DELIVERED: 'DELIVERED', // 已配送
+  CLOSED: 'CLOSED', // 已关闭
 })
 
 /** com.lemon.erp.modules.wms.model.ReservationSource */
@@ -1165,4 +1216,80 @@ export const WarehouseType = Object.freeze({
   DEFECT: 'DEFECT', // 不良品仓
   CONSIGN_OUT: 'CONSIGN_OUT', // 客户寄售仓
   CONSIGN_IN: 'CONSIGN_IN', // 供应商寄售仓
+})
+
+/** com.lemon.erp.modules.channel.model.WxAftersaleErpStatus（字典 ch_wx_aftersale_erp_status） */
+export const WxAftersaleErpStatus = Object.freeze({
+  NONE: 'NONE', // 未处理
+  DONE: 'DONE', // 已处理
+  SKIPPED: 'SKIPPED', // 无需处理
+  FAILED: 'FAILED', // 处理失败
+})
+
+/** com.lemon.erp.modules.channel.model.WxAftersaleStatus（字典 ch_wx_aftersale_status） */
+export const WxAftersaleStatus = Object.freeze({
+  PENDING: 'PENDING', // 待商家处理
+  REJECTED: 'REJECTED', // 商家已拒绝
+  WAIT_RETURN: 'WAIT_RETURN', // 待买家退货
+  WAIT_RECEIPT: 'WAIT_RECEIPT', // 待商家收货
+  REFUNDING: 'REFUNDING', // 退款中
+  REFUNDED: 'REFUNDED', // 已退款
+  REFUND_FAILED: 'REFUND_FAILED', // 退款失败
+  CANCELLED: 'CANCELLED', // 已取消 / 关闭
+})
+
+/** com.lemon.erp.modules.channel.model.WxAftersaleType（字典 ch_wx_aftersale_type） */
+export const WxAftersaleType = Object.freeze({
+  REFUND: 'REFUND',
+  RETURN: 'RETURN',
+})
+
+/** com.lemon.erp.modules.channel.model.WxDeliveryStatus（字典 ch_wx_delivery_status） */
+export const WxDeliveryStatus = Object.freeze({
+  NONE: 'NONE', // 未发货
+  PUSHING: 'PUSHING', // 回传中
+  PUSHED: 'PUSHED', // 已回传
+  FAILED: 'FAILED', // 回传失败
+  PLATFORM: 'PLATFORM', // 在小店后台发货
+})
+
+/** com.lemon.erp.modules.channel.model.WxErpStatus（字典 ch_wx_erp_status） */
+export const WxErpStatus = Object.freeze({
+  NONE: 'NONE', // 未处理
+  PENDING: 'PENDING', // 待生成
+  UNMAPPED: 'UNMAPPED', // 待映射
+  ORDERED: 'ORDERED', // 已生成销售订单
+  OUTBOUND: 'OUTBOUND', // 已出库
+  CLOSED: 'CLOSED', // 已关闭
+  FAILED: 'FAILED', // 处理失败
+})
+
+/** com.lemon.erp.modules.channel.model.WxOrderStatus（字典 ch_wx_order_status） */
+export const WxOrderStatus = Object.freeze({
+  UNPAID: 'UNPAID', // 待付款
+  TO_SHIP: 'TO_SHIP', // 待发货
+  SHIPPED: 'SHIPPED', // 已发货 / 待收货
+  COMPLETED: 'COMPLETED', // 已完成
+  CANCELLED: 'CANCELLED', // 已取消
+})
+
+/** com.lemon.erp.modules.channel.model.WxShopMode（字典 ch_wx_shop_mode） */
+export const WxShopMode = Object.freeze({
+  MOCK: 'MOCK',
+  LIVE: 'LIVE',
+})
+
+/** com.lemon.erp.modules.channel.model.WxSyncTrigger（字典 ch_wx_sync_trigger） */
+export const WxSyncTrigger = Object.freeze({
+  MANUAL: 'MANUAL', // 手工「立即同步」
+  SCHEDULE: 'SCHEDULE', // 定时任务
+  CALLBACK: 'CALLBACK', // 小店消息推送
+})
+
+/** com.lemon.erp.modules.channel.model.WxSyncType（字典 ch_wx_sync_type） */
+export const WxSyncType = Object.freeze({
+  PRODUCT: 'PRODUCT', // 商品
+  STOCK: 'STOCK', // 库存
+  ORDER: 'ORDER', // 订单
+  AFTERSALE: 'AFTERSALE', // 售后
 })

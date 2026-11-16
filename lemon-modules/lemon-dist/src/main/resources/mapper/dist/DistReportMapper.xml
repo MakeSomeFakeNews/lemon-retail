@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 门店对比：按门店（单据仓库所属门店）汇总，只读关联供应链单据、库存流水、库存与实时成本。
+     销售额 / 采购额为不含税（价税合计 − 税额），退货冲减；销售成本取销售出库 / 退货对应仓库单据的库存流水实际成本（出库为负数，取反）；
+     库存金额 = 当前库存数量 × 物料实时移动加权均价（全公司一个均价）；要货按要货日期、配送入库与及时率按收货日期统计 -->
+<mapper namespace="com.lemon.erp.modules.dist.mapper.DistReportMapper">
+
+    <select id="selectStoreCompare" resultType="com.lemon.erp.modules.dist.dto.DistViews$StoreCompareRow">
+        SELECT s.id AS store_id, s.code AS store_code, s.name AS store_name, s.type AS store_type, rg.name AS region_name,
+               COALESCE(sa.sales_amount, 0) AS sales_amount, COALESCE(sa.return_amount, 0) AS return_amount,
+               COALESCE(sc.cost, 0) AS cost,
+               COALESCE(pa.purchase_amount, 0) AS purchase_amount,
+               COALESCE(dl.delivery_amount, 0) AS delivery_amount,
+               COALESCE(st.stock_amount, 0) AS stock_amount,
+               COALESCE(rq.approved_qty, 0) AS approved_qty, COALESCE(rq.delivered_qty, 0) AS delivered_qty,
+               COALESCE(ot.delivery_count, 0) AS delivery_count, COALESCE(ot.on_time_count, 0) AS on_time_count
+        FROM store_info s
+        LEFT JOIN store_region rg ON rg.id = s.region_id
+        LEFT JOIN (SELECT w.store_id,
+                          SUM(CASE WHEN d.kind = 'SALES_OUT' THEN d.total_amount - d.tax_amount ELSE 0 END) AS sales_amount,
+                          SUM(CASE WHEN d.kind = 'SALES_RETURN' THEN d.total_amount - d.tax_amount ELSE 0 END) AS return_amount
+                   FROM scm_trade_doc d
+                   JOIN wms_warehouse w ON w.id = d.warehouse_id
+                   WHERE d.kind IN ('SALES_OUT', 'SALES_RETURN') AND d.biz_date &gt;= #{begin} AND d.biz_date &lt;= #{end}
+                   GROUP BY w.store_id) sa ON sa.store_id = s.id
+        LEFT JOIN (SELECT w.store_id, -SUM(f.cost_amount) AS cost
+                   FROM wms_stock_flow f
+                   JOIN scm_trade_doc d ON d.wms_doc_id = f.doc_id
+                   JOIN wms_warehouse w ON w.id = f.warehouse_id
+                   WHERE f.biz_type IN ('IN', 'OUT') AND f.cost_amount IS NOT NULL
+                     AND d.kind IN ('SALES_OUT', 'SALES_RETURN') AND d.biz_date &gt;= #{begin} AND d.biz_date &lt;= #{end}
+                   GROUP BY w.store_id) sc ON sc.store_id = s.id
+        LEFT JOIN (SELECT w.store_id,
+                          SUM(CASE WHEN d.kind = 'PURCHASE_IN' THEN d.total_amount - d.tax_amount ELSE d.tax_amount - d.total_amount END) AS purchase_amount
+                   FROM scm_trade_doc d
+                   JOIN wms_warehouse w ON w.id = d.warehouse_id
+                   WHERE d.kind IN ('PURCHASE_IN', 'PURCHASE_RETURN') AND d.biz_date &gt;= #{begin} AND d.biz_date &lt;= #{end}
+                   GROUP BY w.store_id) pa ON pa.store_id = s.id
+        LEFT JOIN (SELECT dd.to_store_id AS store_id, SUM(COALESCE(dd.total_amount, 0)) AS delivery_amount
+                   FROM dist_delivery dd
+                   WHERE dd.kind = 'DELIVERY' AND dd.status IN ('RECEIVED', 'DIFF', 'CLOSED')
+                     AND dd.receive_date &gt;= #{begin} AND dd.receive_date &lt;= #{end}
+                   GROUP BY dd.to_store_id) dl ON dl.store_id = s.id
+        LEFT JOIN (SELECT w.store_id, SUM(k.qty * COALESCE(c.unit_cost, m.ref_cost, 0)) AS stock_amount
+                   FROM wms_stock k
+                   JOIN wms_warehouse w ON w.id = k.warehouse_id
+                   JOIN wms_material m ON m.id = k.material_id
+                   LEFT JOIN wms_material_cost c ON c.material_id = k.material_id
+                   WHERE k.qty &lt;&gt; 0
+                   GROUP BY w.store_id) st ON st.store_id = s.id
+        LEFT JOIN (SELECT r.store_id, SUM(COALESCE(i.approved_qty, 0)) AS approved_qty, SUM(i.delivered_qty) AS delivered_qty
+                   FROM dist_requisition r
+                   JOIN dist_requisition_item i ON i.requisition_id = r.id
+                   WHERE r.status IN ('APPROVED', 'PARTIAL', 'DELIVERED', 'CLOSED')
+                     AND r.biz_date &gt;= #{begin} AND r.biz_date &lt;= #{end}
+                   GROUP BY r.store_id) rq ON rq.store_id = s.id
+        LEFT JOIN (SELECT x.store_id, COUNT(*) AS delivery_count,
+                          SUM(CASE WHEN x.receive_date &lt;= x.expected_date THEN 1 ELSE 0 END) AS on_time_count
+                   FROM (SELECT DISTINCT dd.id, r.store_id, dd.receive_date, r.expected_date
+                         FROM dist_delivery dd
+                         JOIN dist_delivery_item di ON di.delivery_id = dd.id
+                         JOIN dist_requisition r ON r.id = di.requisition_id
+                         WHERE dd.kind = 'DELIVERY' AND dd.receive_date IS NOT NULL AND r.expected_date IS NOT NULL
+                           AND dd.receive_date &gt;= #{begin} AND dd.receive_date &lt;= #{end}) x
+                   GROUP BY x.store_id) ot ON ot.store_id = s.id
+        <where>
+            <if test="storeIds != null">
+                s.id IN <foreach collection="storeIds" item="sid" open="(" separator="," close=")">#{sid}</foreach>
+            </if>
+        </where>
+        ORDER BY s.sort, s.id
+    </select>
+
+</mapper>

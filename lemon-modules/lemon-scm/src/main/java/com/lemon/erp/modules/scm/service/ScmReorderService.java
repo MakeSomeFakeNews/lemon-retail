@@ -80,6 +80,16 @@ public class ScmReorderService {
      */
     @Transactional
     public List<Long> toOrders(List<Item> items, Long warehouseId) {
+        return toOrders(items, warehouseId, OrderSource.REORDER, "补货建议生成"); // i18n-ignore 存入订单备注
+    }
+
+    /**
+     * 同 {@link #toOrders(List, Long)}，指定订单来源和备注（门店要货汇总生成缺货采购订单时使用）
+     *
+     * @param remark 订单备注（存库内容）
+     */
+    @Transactional
+    public List<Long> toOrders(List<Item> items, Long warehouseId, OrderSource source, String remark) {
         if (items == null || items.isEmpty()) {
             throw new BizException("scm.valid.selectMaterialsReplenish");
         }
@@ -101,7 +111,7 @@ public class ScmReorderService {
                 return new OrderItemRequest(i.materialId(), i.qty(), price, p == null ? null : p.getTaxRate(), null, i.remark());
             }).toList();
             orderIds.add(orderService.createDraft(OrderKind.PURCHASE, new OrderRequest(supplierId, LocalDate.now(), null, warehouseId,
-                    "补货建议生成", lines), OrderSource.REORDER)); // i18n-ignore
+                    remark, lines), source));
         });
         return orderIds;
     }

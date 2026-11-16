@@ -179,7 +179,22 @@ export default {
     netAmount: '净额',
     payCount: '笔数',
     handover: '接班人',
-    storeManager: '店长'
+    storeManager: '店长',
+    modDist: '配送',
+    requisition: '要货单',
+    distDelivery: '配送单',
+    storeReturn: '门店退仓单',
+    requestStore: '要货门店',
+    supplyWarehouse: '供货仓库',
+    expectedDate: '期望到货日期',
+    requestQty: '要货数量',
+    approvedQty: '批准数量',
+    shipStore: '发货门店',
+    receiveStore: '收货门店',
+    deliveryPrice: '配送价',
+    deliveryAmount: '配送金额',
+    receivedQty: '实收数量',
+    receiver: '收货人'
   },
   paper: {
     size: '{name}（{size}）',

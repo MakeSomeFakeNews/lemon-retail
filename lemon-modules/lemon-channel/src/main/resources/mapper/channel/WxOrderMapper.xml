@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.channel.mapper.WxOrderMapper">
+
+    <!-- 列表不返回收货信息（敏感字段） -->
+    <select id="selectPageList" resultType="com.lemon.erp.modules.channel.entity.WxOrder">
+        SELECT o.id, o.shop_id, o.store_id, o.order_id, o.status, o.platform_status, o.buyer, o.goods_amount, o.freight,
+               o.discount_amount, o.paid_amount, o.order_time, o.pay_time, o.platform_update_time, o.erp_status, o.erp_order_id,
+               o.erp_order_no, o.sales_out_id, o.sales_out_no, o.delivery_status, o.delivery_company_id, o.delivery_company_name,
+               o.waybill_no, o.ship_time, o.error_msg, o.sync_time, o.create_time, o.update_time,
+               s.name AS shop_name, st.name AS store_name,
+               (SELECT MIN(i.title) FROM ch_wx_order_item i WHERE i.wx_order_id = o.id) AS goods_summary,
+               (SELECT COUNT(*) FROM ch_wx_order_item i WHERE i.wx_order_id = o.id) AS item_count
+        FROM ch_wx_order o
+        JOIN ch_wx_shop s ON s.id = o.shop_id
+        LEFT JOIN store_info st ON st.id = o.store_id
+        <where>
+            <if test="q.shopId != null">o.shop_id = #{q.shopId}</if>
+            <if test="q.storeId != null">AND o.store_id = #{q.storeId}</if>
+            <if test="q.status != null">AND o.status = #{q.status}</if>
+            <if test="q.erpStatus != null">AND o.erp_status = #{q.erpStatus}</if>
+            <if test="q.deliveryStatus != null">AND o.delivery_status = #{q.deliveryStatus}</if>
+            <if test="q.beginDate != null">AND o.order_time &gt;= #{q.beginDate}</if>
+            <if test="q.endNext != null">AND o.order_time &lt; #{q.endNext}</if>
+            <if test="q.keyword != null and q.keyword != ''">
+                AND (o.order_id LIKE CONCAT('%', #{q.keyword}, '%') OR o.erp_order_no LIKE CONCAT('%', #{q.keyword}, '%')
+                     OR EXISTS (SELECT 1 FROM ch_wx_order_item k WHERE k.wx_order_id = o.id AND k.title LIKE CONCAT('%', #{q.keyword}, '%')))
+            </if>
+        </where>
+        ORDER BY o.order_time DESC, o.id DESC
+    </select>
+
+    <select id="selectDetail" resultType="com.lemon.erp.modules.channel.entity.WxOrder">
+        SELECT o.*, s.name AS shop_name, st.name AS store_name
+        FROM ch_wx_order o
+        JOIN ch_wx_shop s ON s.id = o.shop_id
+        LEFT JOIN store_info st ON st.id = o.store_id
+        WHERE o.id = #{id}
+    </select>
+
+    <select id="lockById" resultType="java.lang.Long">
+        SELECT id FROM ch_wx_order WHERE id = #{id} FOR UPDATE
+    </select>
+
+    <!-- 已付款未出库、未关闭的渠道订单（含待映射、待生成），按当前映射汇总基本单位数量 -->
+    <select id="selectPendingQty" resultType="java.util.Map">
+        SELECT p.material_id AS "materialId", SUM((i.qty - i.refunded_qty) * p.unit_ratio) AS "qty"
+        FROM ch_wx_order_item i
+        JOIN ch_wx_order o ON o.id = i.wx_order_id
+        JOIN ch_wx_product p ON p.shop_id = o.shop_id AND p.product_id = i.product_id AND p.sku_id = i.sku_id
+        WHERE o.shop_id = #{shopId}
+          AND o.status = 'TO_SHIP'
+          AND o.erp_status NOT IN ('OUTBOUND', 'CLOSED')
+          AND p.material_id IS NOT NULL
+        GROUP BY p.material_id
+    </select>
+</mapper>

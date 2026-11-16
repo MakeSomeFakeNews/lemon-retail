@@ -6,6 +6,7 @@ import com.lemon.erp.common.exception.BizException;
 import com.lemon.erp.common.result.PageResult;
 import com.lemon.erp.framework.data.DetailLines;
 import com.lemon.erp.framework.data.StatusTransitions;
+import com.lemon.erp.framework.period.BizDateLocks;
 import com.lemon.erp.framework.period.BizPeriodGuard;
 import com.lemon.erp.framework.security.LoginUser;
 import com.lemon.erp.framework.security.PermissionService;
@@ -89,6 +90,7 @@ public class WmsCheckService {
     private final DocNoService docNoService;
     private final StockService stockService;
     private final BizPeriodGuard periodGuard;
+    private final BizDateLocks dateLocks;
     private final ApprovalSupport approvalSupport;
     private final PermissionService permissionService;
     private final StockCostService costService;
@@ -262,6 +264,7 @@ public class WmsCheckService {
 
     @Transactional
     public Long create(CheckRequest req) {
+        dateLocks.check(req.bizDate(), req.warehouseId(), StockBizType.CHECK.getLabelKey());
         List<WmsCheckItem> items = toItems(req.items());
         validate(req.warehouseId(), items, false);
         fillBookQty(req.warehouseId(), items);
@@ -281,7 +284,9 @@ public class WmsCheckService {
 
     @Transactional
     public void update(Long id, CheckRequest req) {
-        getDraft(id);
+        WmsCheck draft = getDraft(id);
+        dateLocks.check(draft.getBizDate(), draft.getWarehouseId(), StockBizType.CHECK.getLabelKey());
+        dateLocks.check(req.bizDate(), req.warehouseId(), StockBizType.CHECK.getLabelKey());
         List<WmsCheckItem> items = toItems(req.items());
         validate(req.warehouseId(), items, false);
         fillBookQty(req.warehouseId(), items);
@@ -311,7 +316,7 @@ public class WmsCheckService {
     @Transactional
     public boolean confirm(Long id) {
         WmsCheck check = getDraft(id);
-        periodGuard.checkOpen(check.getBizDate(), StockBizType.CHECK.getLabelKey());
+        periodGuard.checkOpen(check.getBizDate(), StockBizType.CHECK.getLabelKey(), check.getWarehouseId());
         // 只有存在差异时才审批
         if (approvalSupport.isAvailable(FLOW)) {
             List<WmsCheckItem> items = itemMapper.selectList(Wrappers.<WmsCheckItem>lambdaQuery().eq(WmsCheckItem::getCheckId, id));

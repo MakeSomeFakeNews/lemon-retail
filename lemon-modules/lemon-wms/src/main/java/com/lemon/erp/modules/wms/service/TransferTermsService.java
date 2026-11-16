@@ -13,6 +13,7 @@ import com.lemon.erp.modules.wms.entity.WmsMaterial;
 import com.lemon.erp.modules.wms.entity.WmsStockDoc;
 import com.lemon.erp.modules.wms.entity.WmsStockDocItem;
 import com.lemon.erp.modules.wms.event.TransferFeeEvent;
+import com.lemon.erp.modules.wms.event.TransferSettledEvent;
 import com.lemon.erp.modules.wms.mapper.WmsMaterialMapper;
 import com.lemon.erp.modules.wms.mapper.WmsStockDocItemMapper;
 import com.lemon.erp.modules.wms.mapper.WmsStockDocMapper;
@@ -117,11 +118,18 @@ public class TransferTermsService {
      * @param items 与 req.items() 一一对应
      */
     public void applyLinePrices(Terms t, StockDocRequest req, List<WmsStockDocItem> items) {
+        applyLinePrices(t, req, items, false);
+    }
+
+    /**
+     * @param trusted 业务单据生成（如配送单按配送价）：直接取传入的调拨价，不按操作人的成本权限处理
+     */
+    public void applyLinePrices(Terms t, StockDocRequest req, List<WmsStockDocItem> items, boolean trusted) {
         if (!t.pricing().differential()) {
             items.forEach(i -> i.setTransferPrice(null));
             return;
         }
-        if (permissionService.hasPerm(WmsStockDocService.COST_PERM)) {
+        if (trusted || permissionService.hasPerm(WmsStockDocService.COST_PERM)) {
             List<StockDocItemRequest> lines = req.items();
             for (int i = 0; i < items.size(); i++) {
                 BigDecimal price = lines.get(i).transferPrice();
@@ -209,7 +217,19 @@ public class TransferTermsService {
                 .set(WmsStockDoc::getCostAmount, costTotal)
                 .set(WmsStockDoc::getTransferAmount, transferTotal)
                 .eq(WmsStockDoc::getId, doc.getId()));
+        doc.setCostAmount(costTotal);
+        doc.setTransferAmount(transferTotal);
         flowMapper.fillTransferBizPrice(doc.getId());
+    }
+
+    /**
+     * 调拨价、金额已生成（确认）或冲销后通知下游（门店往来等），与确认 / 冲销同一事务
+     *
+     * @param reversedId 冲销时为原调拨单 ID
+     */
+    public void publishSettled(WmsStockDoc doc, Long reversedId) {
+        eventPublisher.publishEvent(new TransferSettledEvent(doc.getId(), doc.getDocNo(), doc.getBizDate(), doc.getWarehouseId(),
+                doc.getToWarehouseId(), doc.getTransferPricing(), doc.getCostAmount(), doc.getTransferAmount(), doc.getSourceNo(), reversedId));
     }
 
     /** 冲销后：红字调拨流水没有业务单价的（原单为升级前的单据）记为成本单价 */

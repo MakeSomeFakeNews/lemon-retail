@@ -28,6 +28,8 @@ final class SysFeatureCatalog {
         COMMISSION,
         /** 进销存报表 */
         JXC_REPORT,
+        /** 门店要货与配送 */
+        DISTRIBUTION,
         /** 库存 */
         INVENTORY,
         /** 库存预留 */
@@ -49,7 +51,9 @@ final class SysFeatureCatalog {
         /** 零售收银（POS） */
         POS,
         /** 会员营销 */
-        MEMBER
+        MEMBER,
+        /** 线上渠道（微信小店） */
+        CHANNEL
     }
 
     /**
@@ -90,6 +94,8 @@ final class SysFeatureCatalog {
             f(Key.PROMOTION, "system.label.channelDistribution", "system.label.supplyChain", "system.label.promotionsRebatesChannelInventoryConsignmentSettlement", List.of(312L), Key.SALES),
             f(Key.COMMISSION, "system.label.salesCommission", "system.label.supplyChain", "system.label.calculateSalespersonCommissionSalesGrossProfit", List.of(344L), Key.SALES),
             f(Key.JXC_REPORT, "system.label.jxcReport", "system.label.supplyChain", "system.label.jxcReportDesc", List.of(966L), Key.SALES, Key.PURCHASE),
+            f(Key.DISTRIBUTION, "system.label.distribution", "system.label.supplyChain", "system.label.distributionDesc", List.of(20L), Key.INVENTORY, Key.PURCHASE),
+            f(Key.CHANNEL, "system.label.onlineChannel", "system.label.supplyChain", "system.label.onlineChannelDesc", List.of(18L), Key.SALES),
             // 仓储
             f(Key.INVENTORY, "system.label.inventory", "system.label.warehousing", "system.label.inboundOutboundTransfersStockCountsAssembly", List.of(911L, 912L)),
             f(Key.WAREHOUSE_OPS, "system.label.warehouseOperations", "system.label.warehousing", "system.label.stockReservationFreezingMobilePdaScanning", List.of(913L), Key.INVENTORY),
@@ -109,8 +115,8 @@ final class SysFeatureCatalog {
 
     static final List<Industry> INDUSTRIES = List.of(
             new Industry("RETAIL", "system.label.eCommerceRetail", "system.label.mainlyMultiChannelOrdersWarehousingShipping",
-                    names(Key.PURCHASE, Key.SALES, Key.PROMOTION, Key.JXC_REPORT, Key.INVENTORY, Key.WAREHOUSE_OPS, Key.GL, Key.ARAP, Key.FUND,
-                            Key.BI, Key.SCREEN, Key.POS, Key.MEMBER)),
+                    names(Key.PURCHASE, Key.SALES, Key.PROMOTION, Key.JXC_REPORT, Key.DISTRIBUTION, Key.CHANNEL, Key.INVENTORY, Key.WAREHOUSE_OPS, Key.GL, Key.ARAP,
+                            Key.FUND, Key.BI, Key.SCREEN, Key.POS, Key.MEMBER)),
             new Industry("TRADING", "system.label.tradingWholesale", "system.label.mainlyPurchasingWarehousingDistributionWithoutProduction",
                     names(Key.PURCHASE, Key.SALES, Key.PROMOTION, Key.COMMISSION, Key.JXC_REPORT, Key.INVENTORY,
                             Key.WAREHOUSE_OPS, Key.GL, Key.ARAP, Key.FUND, Key.ANALYSIS, Key.BI, Key.SCREEN)),

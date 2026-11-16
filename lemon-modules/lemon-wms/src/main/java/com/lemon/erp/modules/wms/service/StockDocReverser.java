@@ -2,6 +2,7 @@ package com.lemon.erp.modules.wms.service;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.lemon.erp.common.exception.BizException;
+import com.lemon.erp.framework.period.BizDateLocks;
 import com.lemon.erp.framework.period.BizPeriodGuard;
 import com.lemon.erp.framework.security.LoginUser;
 import com.lemon.erp.framework.security.SecurityUtils;
@@ -35,6 +36,7 @@ public class StockDocReverser {
     private final DocNoService docNoService;
     private final StockService stockService;
     private final BizPeriodGuard periodGuard;
+    private final BizDateLocks dateLocks;
     private final StockCostService costService;
     private final TransferTermsService transferTerms;
 
@@ -46,11 +48,9 @@ public class StockDocReverser {
         StockDocRules.checkReversible(doc);
         Long id = doc.getId();
         LocalDate bizDate = LocalDate.now();
-        if (kind == TRANSFER) {
-            periodGuard.checkOpen(bizDate, "wms.label.reversal");
-        } else {
-            periodGuard.checkOpen(bizDate, "wms.label.reversal");
-        }
+        // 日期锁定：锁定日期及以前的原单不能作废（冲销）；红字单据的业务日期为当天，同样受结账和日期锁定限制
+        dateLocks.check(doc.getBizDate(), doc.getWarehouseId(), "wms.label.reversal");
+        periodGuard.checkOpen(bizDate, "wms.label.reversal", doc.getWarehouseId());
         if (docMapper.update(Wrappers.<WmsStockDoc>lambdaUpdate().set(WmsStockDoc::getReversed, 1)
                 .eq(WmsStockDoc::getId, id).eq(WmsStockDoc::getReversed, 0)) == 0) {
             throw new BizException("wms.error.documentHasReversed");
@@ -96,6 +96,8 @@ public class StockDocReverser {
         if (kind == TRANSFER) {
             transferTerms.fillFlowPrices(red.getId());
             transferTerms.publishFee(red, doc.getDocNo());
+            red.setSourceNo(doc.getSourceNo());
+            transferTerms.publishSettled(red, id);
         }
         return red.getId();
     }

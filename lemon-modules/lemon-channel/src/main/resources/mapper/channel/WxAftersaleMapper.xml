@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.channel.mapper.WxAftersaleMapper">
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.channel.entity.WxAftersale">
+        SELECT a.*, s.name AS shop_name, st.name AS store_name, o.erp_status AS order_erp_status
+        FROM ch_wx_aftersale a
+        JOIN ch_wx_shop s ON s.id = a.shop_id
+        LEFT JOIN store_info st ON st.id = a.store_id
+        LEFT JOIN ch_wx_order o ON o.id = a.wx_order_id
+        <where>
+            <if test="q.shopId != null">a.shop_id = #{q.shopId}</if>
+            <if test="q.storeId != null">AND a.store_id = #{q.storeId}</if>
+            <if test="q.type != null">AND a.type = #{q.type}</if>
+            <if test="q.status != null">AND a.status = #{q.status}</if>
+            <if test="q.erpStatus != null">AND a.erp_status = #{q.erpStatus}</if>
+            <if test="q.beginDate != null">AND a.apply_time &gt;= #{q.beginDate}</if>
+            <if test="q.endNext != null">AND a.apply_time &lt; #{q.endNext}</if>
+            <if test="q.keyword != null and q.keyword != ''">
+                AND (a.aftersale_id LIKE CONCAT('%', #{q.keyword}, '%') OR a.order_id LIKE CONCAT('%', #{q.keyword}, '%')
+                     OR a.title LIKE CONCAT('%', #{q.keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY a.apply_time DESC, a.id DESC
+    </select>
+
+    <select id="selectDetail" resultType="com.lemon.erp.modules.channel.entity.WxAftersale">
+        SELECT a.*, s.name AS shop_name, st.name AS store_name, o.erp_status AS order_erp_status
+        FROM ch_wx_aftersale a
+        JOIN ch_wx_shop s ON s.id = a.shop_id
+        LEFT JOIN store_info st ON st.id = a.store_id
+        LEFT JOIN ch_wx_order o ON o.id = a.wx_order_id
+        WHERE a.id = #{id}
+    </select>
+</mapper>

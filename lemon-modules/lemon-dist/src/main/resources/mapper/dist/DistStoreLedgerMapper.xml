@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.dist.mapper.DistStoreLedgerMapper">
+
+    <sql id="where">
+        <where>
+            <if test="q.keyword != null">
+                (l.transfer_no LIKE CONCAT('%', #{q.keyword}, '%') OR l.source_no LIKE CONCAT('%', #{q.keyword}, '%'))
+            </if>
+            <if test="q.storeId != null">AND (l.from_store_id = #{q.storeId} OR l.to_store_id = #{q.storeId})</if>
+            <if test="q.toStoreId != null">AND l.to_store_id = #{q.toStoreId}</if>
+            <if test="q.begin != null">AND l.biz_date &gt;= #{q.begin}</if>
+            <if test="q.end != null">AND l.biz_date &lt;= #{q.end}</if>
+        </where>
+    </sql>
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.dist.entity.DistStoreLedger">
+        SELECT l.*, fs.name AS from_store_name, ts.name AS to_store_name, fw.name AS from_warehouse_name, tw.name AS to_warehouse_name
+        FROM dist_store_ledger l
+        LEFT JOIN store_info fs ON fs.id = l.from_store_id
+        LEFT JOIN store_info ts ON ts.id = l.to_store_id
+        LEFT JOIN wms_warehouse fw ON fw.id = l.from_warehouse_id
+        LEFT JOIN wms_warehouse tw ON tw.id = l.to_warehouse_id
+        <include refid="where"/>
+        ORDER BY l.biz_date DESC, l.id DESC
+    </select>
+
+    <select id="selectSummary" resultType="com.lemon.erp.modules.dist.dto.DistViews$LedgerSummaryRow">
+        SELECT g.from_store_id, fs.name AS from_store_name, g.to_store_id, ts.name AS to_store_name,
+               g.entry_count, g.cost_amount, g.amount
+        FROM (SELECT l.from_store_id, l.to_store_id, COUNT(*) AS entry_count,
+                     COALESCE(SUM(l.cost_amount), 0) AS cost_amount, COALESCE(SUM(l.amount), 0) AS amount
+              FROM dist_store_ledger l
+              <include refid="where"/>
+              GROUP BY l.from_store_id, l.to_store_id) g
+        LEFT JOIN store_info fs ON fs.id = g.from_store_id
+        LEFT JOIN store_info ts ON ts.id = g.to_store_id
+        ORDER BY fs.sort, g.from_store_id, ts.sort, g.to_store_id
+    </select>
+
+</mapper>

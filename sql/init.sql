@@ -2,6 +2,12 @@
 -- 默认账号：admin / admin123（超级管理员）、test / admin123（普通用户，只有查看权限，数据权限为本部门及以下）
 -- 工作流引擎的 ACT_ 开头的表由 Flowable 启动时自动创建，不在本脚本中
 
+DROP TABLE IF EXISTS ch_wx_sync_log;
+DROP TABLE IF EXISTS ch_wx_aftersale;
+DROP TABLE IF EXISTS ch_wx_order_item;
+DROP TABLE IF EXISTS ch_wx_order;
+DROP TABLE IF EXISTS ch_wx_product;
+DROP TABLE IF EXISTS ch_wx_shop;
 DROP TABLE IF EXISTS ai_report;
 DROP TABLE IF EXISTS ai_cleanse_suggestion;
 DROP TABLE IF EXISTS ai_cleanse_task;
@@ -98,6 +104,13 @@ DROP TABLE IF EXISTS pos_sale;
 DROP TABLE IF EXISTS pos_shift;
 DROP TABLE IF EXISTS pos_pay_account;
 DROP TABLE IF EXISTS pos_terminal;
+DROP TABLE IF EXISTS dist_date_lock;
+DROP TABLE IF EXISTS dist_store_ledger;
+DROP TABLE IF EXISTS dist_discrepancy;
+DROP TABLE IF EXISTS dist_delivery_item;
+DROP TABLE IF EXISTS dist_delivery;
+DROP TABLE IF EXISTS dist_requisition_item;
+DROP TABLE IF EXISTS dist_requisition;
 DROP TABLE IF EXISTS store_info;
 DROP TABLE IF EXISTS store_region;
 DROP TABLE IF EXISTS wms_stock;
@@ -1058,6 +1071,179 @@ CREATE TABLE pos_pay_config (
     UNIQUE KEY uk_pos_pay_config (tenant_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '聚合支付通道设置（每个租户一条，没有时为线下登记）';
 
+
+-- ---------------------------------------------------------------- 门店要货与配送：要货单 → 审核 → 配送单（在途调拨）→ 门店收货（差异）；门店退仓；门店往来；日期锁定
+-- 单据的门店由仓库决定（store_id 冗余保存便于显示，数据权限按仓库所属门店过滤）；库存移动全部经 wms 的调拨单（source_no 为本模块单号）
+
+CREATE TABLE dist_requisition (
+    id                  BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id           BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    req_no              VARCHAR(32)    NOT NULL COMMENT '要货单号（编码规则 YH）',
+    store_id            BIGINT         NOT NULL COMMENT '要货门店',
+    warehouse_id        BIGINT         NOT NULL COMMENT '收货仓库（要货门店的仓库）',
+    supply_store_id     BIGINT         NOT NULL COMMENT '供货门店（总部 / 配送中心，默认为要货门店的上级配送门店）',
+    supply_warehouse_id BIGINT         NOT NULL COMMENT '供货仓库（默认为供货门店的默认仓库）',
+    biz_date            DATE           NOT NULL COMMENT '要货日期',
+    expected_date       DATE                    DEFAULT NULL COMMENT '期望到货日期，用于配送及时率',
+    status              VARCHAR(16)    NOT NULL DEFAULT 'DRAFT' COMMENT '状态(字典 dist_requisition_status) DRAFT草稿 APPROVING审批中 SUBMITTED待审核 APPROVED已审核 PARTIAL部分配送 DELIVERED已配送 CLOSED已关闭',
+    total_qty           DECIMAL(18, 4) NOT NULL DEFAULT 0 COMMENT '要货数量合计',
+    approved_qty        DECIMAL(18, 4) NOT NULL DEFAULT 0 COMMENT '批准数量合计（审核后）',
+    delivered_qty       DECIMAL(18, 4) NOT NULL DEFAULT 0 COMMENT '已配送（发货）数量合计',
+    remark              VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    reject_reason       VARCHAR(255)            DEFAULT NULL COMMENT '最近一次驳回原因（审批驳回或总部驳回）',
+    close_reason        VARCHAR(255)            DEFAULT NULL COMMENT '关闭原因',
+    flow_instance_id    VARCHAR(64)             DEFAULT NULL COMMENT '审批流程实例ID',
+    submit_time         DATETIME                DEFAULT NULL COMMENT '提交时间',
+    audit_by            BIGINT                  DEFAULT NULL COMMENT '审核人',
+    audit_time          DATETIME                DEFAULT NULL COMMENT '审核时间',
+    dept_id             BIGINT                  DEFAULT NULL COMMENT '制单人部门',
+    create_by           BIGINT                  DEFAULT NULL COMMENT '制单人',
+    create_time         DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time         DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_dist_requisition_no (req_no, tenant_id),
+    KEY idx_dist_requisition_wh (warehouse_id),
+    KEY idx_dist_requisition_supply (supply_warehouse_id, status),
+    KEY idx_dist_requisition_date (biz_date)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '门店要货单';
+
+CREATE TABLE dist_requisition_item (
+    id             BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id      BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    requisition_id BIGINT         NOT NULL COMMENT '要货单',
+    material_id    BIGINT         NOT NULL COMMENT '物料',
+    qty            DECIMAL(18, 4) NOT NULL COMMENT '要货数量（基本单位）',
+    suggest_qty    DECIMAL(18, 4)          DEFAULT NULL COMMENT '建议量（安全库存 − 现存 − 在途，录入时参考）',
+    approved_qty   DECIMAL(18, 4)          DEFAULT NULL COMMENT '批准数量（审核时填写，默认等于要货数量）',
+    delivered_qty  DECIMAL(18, 4) NOT NULL DEFAULT 0 COMMENT '已配送（发货）数量',
+    remark         VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    create_time    DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time    DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_dist_requisition_item_req (requisition_id),
+    KEY idx_dist_requisition_item_material (material_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '门店要货单明细';
+
+CREATE TABLE dist_delivery (
+    id                BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id         BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    delivery_no       VARCHAR(32)    NOT NULL COMMENT '单号（配送单 PS / 退仓单 TC）',
+    kind              VARCHAR(16)    NOT NULL COMMENT '种类(字典 dist_delivery_kind) DELIVERY配送 RETURN门店退仓',
+    from_store_id     BIGINT         NOT NULL COMMENT '发货门店（配送：配送中心；退仓：门店）',
+    from_warehouse_id BIGINT         NOT NULL COMMENT '发货仓库',
+    to_store_id       BIGINT         NOT NULL COMMENT '收货门店',
+    to_warehouse_id   BIGINT         NOT NULL COMMENT '收货仓库',
+    biz_date          DATE           NOT NULL COMMENT '业务日期（发货日期）',
+    receive_date      DATE                    DEFAULT NULL COMMENT '收货日期',
+    status            VARCHAR(16)    NOT NULL DEFAULT 'DRAFT' COMMENT '状态(字典 dist_delivery_status) DRAFT草稿 SUBMITTED待审核 APPROVED已审核 SHIPPED已发货 RECEIVED已收货 DIFF收货有差异 CLOSED已完成',
+    transfer_id       BIGINT                  DEFAULT NULL COMMENT '发货时生成的在途调拨单（wms_stock_doc）',
+    total_qty         DECIMAL(18, 4) NOT NULL DEFAULT 0 COMMENT '发货数量合计',
+    received_qty      DECIMAL(18, 4)          DEFAULT NULL COMMENT '实收数量合计',
+    total_amount      DECIMAL(18, 2)          DEFAULT NULL COMMENT '配送金额（数量 × 配送价，发货时生成；加盟店结算依据）',
+    remark            VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    reject_reason     VARCHAR(255)            DEFAULT NULL COMMENT '退仓驳回原因',
+    approve_by        BIGINT                  DEFAULT NULL COMMENT '审核人（退仓）',
+    approve_time      DATETIME                DEFAULT NULL COMMENT '审核时间（退仓）',
+    ship_by           BIGINT                  DEFAULT NULL COMMENT '发货人',
+    ship_time         DATETIME                DEFAULT NULL COMMENT '发货时间',
+    receive_by        BIGINT                  DEFAULT NULL COMMENT '收货人',
+    receive_time      DATETIME                DEFAULT NULL COMMENT '收货时间',
+    dept_id           BIGINT                  DEFAULT NULL COMMENT '制单人部门',
+    create_by         BIGINT                  DEFAULT NULL COMMENT '制单人',
+    create_time       DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time       DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_dist_delivery_no (delivery_no, tenant_id),
+    KEY idx_dist_delivery_from (from_warehouse_id),
+    KEY idx_dist_delivery_to (to_warehouse_id),
+    KEY idx_dist_delivery_status (kind, status),
+    KEY idx_dist_delivery_date (biz_date)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '配送单 / 门店退仓单（在途调拨：发货调出，收货调入）';
+
+CREATE TABLE dist_delivery_item (
+    id                  BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id           BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    delivery_id         BIGINT         NOT NULL COMMENT '配送单',
+    requisition_id      BIGINT                  DEFAULT NULL COMMENT '来源要货单（配送）',
+    requisition_item_id BIGINT                  DEFAULT NULL COMMENT '来源要货单明细，发货时回写已配送数量',
+    material_id         BIGINT         NOT NULL COMMENT '物料',
+    location_id         BIGINT         NOT NULL DEFAULT 0 COMMENT '发货库位，0 为未指定',
+    batch_no            VARCHAR(64)    NOT NULL DEFAULT '' COMMENT '批次号',
+    serial_nos          TEXT COMMENT '序列号，逗号分隔（序列号物料须按发货数量收货，差异走退仓）',
+    qty                 DECIMAL(18, 4) NOT NULL COMMENT '发货数量',
+    price               DECIMAL(18, 6)          DEFAULT NULL COMMENT '配送价（内部结算价）：草稿为指定的价格（为空按规则），发货后为实际调拨价',
+    amount              DECIMAL(18, 2)          DEFAULT NULL COMMENT '配送金额 = 数量 × 配送价（发货时生成）',
+    cost_price          DECIMAL(18, 6)          DEFAULT NULL COMMENT '调出成本价（发货时生成）',
+    received_qty        DECIMAL(18, 4)          DEFAULT NULL COMMENT '实收数量（收货时填写）',
+    remark              VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    create_time         DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time         DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_dist_delivery_item_delivery (delivery_id),
+    KEY idx_dist_delivery_item_req (requisition_item_id),
+    KEY idx_dist_delivery_item_material (material_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '配送单 / 退仓单明细';
+
+CREATE TABLE dist_discrepancy (
+    id               BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id        BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    delivery_id      BIGINT         NOT NULL COMMENT '配送单 / 退仓单',
+    delivery_item_id BIGINT         NOT NULL COMMENT '配送单明细',
+    material_id      BIGINT         NOT NULL COMMENT '物料',
+    batch_no         VARCHAR(64)    NOT NULL DEFAULT '' COMMENT '批次号',
+    kind             VARCHAR(16)    NOT NULL COMMENT '差异种类(字典 dist_discrepancy_kind) SHORT少收 DAMAGED破损 OVER多收',
+    qty              DECIMAL(18, 4) NOT NULL COMMENT '差异数量（正数）',
+    price            DECIMAL(18, 6)          DEFAULT NULL COMMENT '配送价',
+    amount           DECIMAL(18, 2)          DEFAULT NULL COMMENT '差异金额 = 数量 × 配送价',
+    status           VARCHAR(16)    NOT NULL DEFAULT 'PENDING' COMMENT '状态(字典 dist_discrepancy_status) PENDING待处理 HANDLED已处理',
+    transfer_id      BIGINT                  DEFAULT NULL COMMENT '少收 / 破损：收货时生成的差异在途调拨（收货仓库 → 发货仓库）',
+    reason           VARCHAR(255)            DEFAULT NULL COMMENT '收货方填写的差异说明',
+    handling         VARCHAR(16)             DEFAULT NULL COMMENT '处理方式(字典 dist_discrepancy_handling) RETURN_SOURCE退回发货方 SOURCE_WRITE_OFF发货方承担 TARGET_WRITE_OFF收货方承担 ACCEPT收货方留用',
+    io_category      VARCHAR(32)             DEFAULT NULL COMMENT '报损出库的出库类别（字典 wms_out_category）',
+    handle_doc_nos   VARCHAR(255)            DEFAULT NULL COMMENT '处理生成的仓库单据号（逗号分隔）',
+    handle_remark    VARCHAR(255)            DEFAULT NULL COMMENT '处理说明',
+    handle_by        BIGINT                  DEFAULT NULL COMMENT '处理人',
+    handle_time      DATETIME                DEFAULT NULL COMMENT '处理时间',
+    create_by        BIGINT                  DEFAULT NULL COMMENT '登记人（收货人）',
+    create_time      DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time      DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_dist_discrepancy_delivery (delivery_id),
+    KEY idx_dist_discrepancy_status (status)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '收货差异：实收与发货不一致的明细，由总部判定责任后处理';
+
+CREATE TABLE dist_store_ledger (
+    id                BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id         BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    transfer_id       BIGINT         NOT NULL COMMENT '调拨单（冲销时为红字调拨单）',
+    transfer_no       VARCHAR(32)    NOT NULL COMMENT '调拨单号',
+    source_no         VARCHAR(64)             DEFAULT NULL COMMENT '来源单号（配送单等）',
+    biz_date          DATE           NOT NULL COMMENT '业务日期',
+    from_store_id     BIGINT         NOT NULL COMMENT '调出门店（应收方）',
+    to_store_id       BIGINT         NOT NULL COMMENT '调入门店（应付方）',
+    from_warehouse_id BIGINT         NOT NULL COMMENT '调出仓库',
+    to_warehouse_id   BIGINT         NOT NULL COMMENT '调入仓库',
+    cost_amount       DECIMAL(18, 2)          DEFAULT NULL COMMENT '调出成本金额（冲销为负数）',
+    amount            DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '往来金额 = 调拨金额（内部结算价，冲销为负数）',
+    create_time       DATETIME                DEFAULT NULL COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_dist_store_ledger_transfer (transfer_id, tenant_id),
+    KEY idx_dist_store_ledger_from (from_store_id, biz_date),
+    KEY idx_dist_store_ledger_to (to_store_id, biz_date)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '门店往来：跨门店的差价调拨（含加盟配送）按调拨金额记调出门店应收、调入门店应付（内部结算，不生成凭证）';
+
+CREATE TABLE dist_date_lock (
+    id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id   BIGINT       NOT NULL DEFAULT 1 COMMENT '租户ID',
+    store_id    BIGINT       NOT NULL DEFAULT 0 COMMENT '门店，0 为全公司',
+    lock_date   DATE         NOT NULL COMMENT '锁定日期：业务日期不晚于该日期的单据不能新增、修改、确认、作废',
+    remark      VARCHAR(255)          DEFAULT NULL COMMENT '备注',
+    update_by   BIGINT                DEFAULT NULL COMMENT '最近设置人',
+    create_time DATETIME              DEFAULT NULL COMMENT '创建时间',
+    update_time DATETIME              DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_dist_date_lock (store_id, tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '日期锁定（结账日）：全公司一条（store_id = 0），门店可另设（两者都检查）';
 
 -- ---------------------------------------------------------------- 仓库管理
 
@@ -2999,6 +3185,174 @@ CREATE TABLE ai_report (
     KEY idx_ai_report_user (user_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '智能报告（周报 / 月报）';
 
+-- ---------------------------------------------------------------- 线上渠道：微信小店（店铺设置、商品映射、渠道订单、售后单、同步日志）
+
+CREATE TABLE ch_wx_shop (
+    id                  BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id           BIGINT        NOT NULL DEFAULT 1 COMMENT '租户ID',
+    name                VARCHAR(64)   NOT NULL COMMENT '店铺名称',
+    mode                VARCHAR(16)   NOT NULL DEFAULT 'MOCK' COMMENT '对接方式(字典 ch_wx_shop_mode) MOCK模拟店铺 LIVE微信小店接口',
+    app_id              VARCHAR(64)            DEFAULT NULL COMMENT '小店 AppID',
+    app_secret          VARCHAR(128)           DEFAULT NULL COMMENT '小店 AppSecret，不返回前端',
+    push_token          VARCHAR(64)            DEFAULT NULL COMMENT '消息推送 Token（校验推送签名），不返回前端',
+    aes_key             VARCHAR(64)            DEFAULT NULL COMMENT '消息加密密钥 EncodingAESKey（安全模式，43 位），不返回前端',
+    store_id            BIGINT        NOT NULL COMMENT '绑定门店：渠道订单、售后单归属该门店（按门店的数据权限过滤）',
+    warehouse_id        BIGINT        NOT NULL COMMENT '发货仓库（绑定门店的仓库）：库存同步、出库、退货入库',
+    customer_id         BIGINT        NOT NULL COMMENT '生成销售订单的客户（scm_customer），未选择时自动创建「微信小店顾客」',
+    return_address_id   VARCHAR(64)            DEFAULT NULL COMMENT '退货地址 ID（小店后台的地址编号，同意退货时使用）',
+    stock_sync_enabled  TINYINT       NOT NULL DEFAULT 0 COMMENT '定时同步库存 1是 0否',
+    safety_stock        DECIMAL(18,4) NOT NULL DEFAULT 0 COMMENT '安全库存：推送数量 = 可用库存 − 已付款未出库的渠道订单数量 − 安全库存',
+    stock_sync_interval INT           NOT NULL DEFAULT 30 COMMENT '库存同步间隔（分钟）',
+    order_sync_enabled  TINYINT       NOT NULL DEFAULT 1 COMMENT '定时同步订单和售后单 1是 0否',
+    auto_create_order   TINYINT       NOT NULL DEFAULT 1 COMMENT '付款后自动生成并审核销售订单 1是 0否（否则手工生成）',
+    status              TINYINT       NOT NULL DEFAULT 1 COMMENT '状态(字典 sys_common_status) 1启用 0停用：停用的店铺不同步、不处理推送',
+    stock_synced_at     DATETIME               DEFAULT NULL COMMENT '最近库存同步时间',
+    order_synced_to     DATETIME               DEFAULT NULL COMMENT '订单已同步到的时间（增量拉取的起点，向前重叠 10 分钟）',
+    aftersale_synced_to DATETIME               DEFAULT NULL COMMENT '售后单已同步到的时间',
+    remark              VARCHAR(255)           DEFAULT NULL COMMENT '备注',
+    create_by           BIGINT                 DEFAULT NULL COMMENT '创建人',
+    create_time         DATETIME               DEFAULT NULL COMMENT '创建时间',
+    update_time         DATETIME               DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_ch_wx_shop_name (name, tenant_id),
+    KEY idx_ch_wx_shop_store (store_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '微信小店店铺设置（每个租户可以有多个店铺）';
+
+CREATE TABLE ch_wx_product (
+    id               BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id        BIGINT        NOT NULL DEFAULT 1 COMMENT '租户ID',
+    shop_id          BIGINT        NOT NULL COMMENT '店铺',
+    product_id       VARCHAR(64)   NOT NULL COMMENT '小店商品 ID',
+    sku_id           VARCHAR(64)   NOT NULL COMMENT '小店 SKU ID',
+    title            VARCHAR(255)           DEFAULT NULL COMMENT '商品标题',
+    sku_attrs        VARCHAR(255)           DEFAULT NULL COMMENT '规格，如 颜色:红;尺码:L',
+    out_sku_id       VARCHAR(64)            DEFAULT NULL COMMENT '商家编码（自动匹配物料编码 / 条码）',
+    sku_code         VARCHAR(64)            DEFAULT NULL COMMENT 'SKU 编码 / 条码（商家编码匹配不到时再匹配）',
+    price            DECIMAL(18,2)          DEFAULT NULL COMMENT '小店售价（元）',
+    platform_stock   BIGINT                 DEFAULT NULL COMMENT '最近拉取时的线上库存',
+    product_status   INT                    DEFAULT NULL COMMENT '线上商品状态码',
+    material_id      BIGINT                 DEFAULT NULL COMMENT '映射的物料，为空表示未映射',
+    unit_ratio       DECIMAL(18,4) NOT NULL DEFAULT 1 COMMENT '换算：1 件 SKU = 多少基本单位（按包装条码匹配时为包装的换算率）',
+    match_manual     TINYINT       NOT NULL DEFAULT 0 COMMENT '手工映射 1是 0否：手工映射的不被自动匹配覆盖',
+    pushed_stock     BIGINT                 DEFAULT NULL COMMENT '最近推送的库存',
+    stock_push_time  DATETIME               DEFAULT NULL COMMENT '最近推送库存时间',
+    stock_error      VARCHAR(255)           DEFAULT NULL COMMENT '最近推送库存的错误',
+    removed          TINYINT       NOT NULL DEFAULT 0 COMMENT '线上已删除 1是 0否（最近一次全量同步中没有该 SKU）',
+    sync_time        DATETIME               DEFAULT NULL COMMENT '最近同步时间',
+    create_time      DATETIME               DEFAULT NULL COMMENT '创建时间',
+    update_time      DATETIME               DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_ch_wx_product_sku (shop_id, product_id, sku_id, tenant_id),
+    KEY idx_ch_wx_product_material (material_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '微信小店商品映射：小店 SKU ↔ 物料';
+
+CREATE TABLE ch_wx_order (
+    id                    BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id             BIGINT        NOT NULL DEFAULT 1 COMMENT '租户ID',
+    shop_id               BIGINT        NOT NULL COMMENT '店铺',
+    store_id              BIGINT        NOT NULL COMMENT '门店（店铺绑定的门店，写入时确定），按门店的数据权限过滤',
+    order_id              VARCHAR(64)   NOT NULL COMMENT '小店订单号',
+    status                VARCHAR(16)   NOT NULL COMMENT '订单状态(字典 ch_wx_order_status) UNPAID TO_SHIP SHIPPED COMPLETED CANCELLED',
+    platform_status       INT                    DEFAULT NULL COMMENT '线上订单状态码',
+    buyer                 VARCHAR(64)            DEFAULT NULL COMMENT '买家标识（已脱敏）',
+    receiver_name         VARCHAR(64)            DEFAULT NULL COMMENT '收货人（敏感，列表不返回，详情按权限脱敏）',
+    receiver_phone        VARCHAR(32)            DEFAULT NULL COMMENT '收货电话（敏感）',
+    receiver_address      VARCHAR(255)           DEFAULT NULL COMMENT '收货地址（敏感）',
+    goods_amount          DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '商品金额',
+    freight               DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '运费',
+    discount_amount       DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '优惠金额',
+    paid_amount           DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '实付金额（含运费）',
+    order_time            DATETIME               DEFAULT NULL COMMENT '下单时间',
+    pay_time              DATETIME               DEFAULT NULL COMMENT '付款时间',
+    platform_update_time  DATETIME               DEFAULT NULL COMMENT '线上更新时间',
+    erp_status            VARCHAR(16)   NOT NULL DEFAULT 'NONE' COMMENT 'ERP 处理状态(字典 ch_wx_erp_status) NONE PENDING UNMAPPED ORDERED OUTBOUND CLOSED FAILED',
+    erp_order_id          BIGINT                 DEFAULT NULL COMMENT '生成的销售订单（scm_order）',
+    erp_order_no          VARCHAR(32)            DEFAULT NULL COMMENT '销售订单号',
+    sales_out_id          BIGINT                 DEFAULT NULL COMMENT '销售出库单（scm_trade_doc）',
+    sales_out_no          VARCHAR(32)            DEFAULT NULL COMMENT '销售出库单号',
+    delivery_status       VARCHAR(16)   NOT NULL DEFAULT 'NONE' COMMENT '发货回传(字典 ch_wx_delivery_status) NONE PUSHING PUSHED FAILED PLATFORM',
+    delivery_company_id   VARCHAR(32)            DEFAULT NULL COMMENT '快递公司编码',
+    delivery_company_name VARCHAR(64)            DEFAULT NULL COMMENT '快递公司',
+    waybill_no            VARCHAR(64)            DEFAULT NULL COMMENT '运单号',
+    ship_time             DATETIME               DEFAULT NULL COMMENT '发货时间',
+    error_msg             VARCHAR(500)           DEFAULT NULL COMMENT '最近一次处理或回传的错误',
+    sync_time             DATETIME               DEFAULT NULL COMMENT '最近同步时间',
+    create_time           DATETIME               DEFAULT NULL COMMENT '创建时间',
+    update_time           DATETIME               DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_ch_wx_order (shop_id, order_id, tenant_id),
+    KEY idx_ch_wx_order_store (store_id, order_time),
+    KEY idx_ch_wx_order_erp (erp_order_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '微信小店渠道订单';
+
+CREATE TABLE ch_wx_order_item (
+    id                BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id         BIGINT        NOT NULL DEFAULT 1 COMMENT '租户ID',
+    wx_order_id       BIGINT        NOT NULL COMMENT '渠道订单（ch_wx_order.id）',
+    product_id        VARCHAR(64)   NOT NULL COMMENT '小店商品 ID',
+    sku_id            VARCHAR(64)   NOT NULL COMMENT '小店 SKU ID',
+    title             VARCHAR(255)           DEFAULT NULL COMMENT '商品标题',
+    sku_attrs         VARCHAR(255)           DEFAULT NULL COMMENT '规格',
+    qty               INT           NOT NULL COMMENT '数量（件）',
+    sale_price        DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '售价',
+    paid_amount       DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '本行实付（订单优惠已分摊，不含运费）',
+    refunded_qty      INT           NOT NULL DEFAULT 0 COMMENT '发货前已退款的数量（不再出库）',
+    material_id       BIGINT                 DEFAULT NULL COMMENT '生成销售订单时映射的物料',
+    unit_ratio        DECIMAL(18,4)          DEFAULT NULL COMMENT '生成销售订单时的换算率',
+    erp_order_item_id BIGINT                 DEFAULT NULL COMMENT '对应的销售订单明细',
+    PRIMARY KEY (id),
+    KEY idx_ch_wx_order_item_order (wx_order_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '微信小店渠道订单明细';
+
+CREATE TABLE ch_wx_aftersale (
+    id                    BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id             BIGINT        NOT NULL DEFAULT 1 COMMENT '租户ID',
+    shop_id               BIGINT        NOT NULL COMMENT '店铺',
+    store_id              BIGINT        NOT NULL COMMENT '门店（店铺绑定的门店），按门店的数据权限过滤',
+    aftersale_id          VARCHAR(64)   NOT NULL COMMENT '小店售后单号',
+    order_id              VARCHAR(64)            DEFAULT NULL COMMENT '小店订单号',
+    wx_order_id           BIGINT                 DEFAULT NULL COMMENT '渠道订单（ch_wx_order.id）',
+    type                  VARCHAR(16)   NOT NULL COMMENT '售后类型(字典 ch_wx_aftersale_type) REFUND仅退款 RETURN退货退款',
+    status                VARCHAR(16)   NOT NULL COMMENT '售后状态(字典 ch_wx_aftersale_status)',
+    platform_status       VARCHAR(64)            DEFAULT NULL COMMENT '线上售后状态（原值）',
+    product_id            VARCHAR(64)            DEFAULT NULL COMMENT '小店商品 ID',
+    sku_id                VARCHAR(64)            DEFAULT NULL COMMENT '小店 SKU ID',
+    title                 VARCHAR(255)           DEFAULT NULL COMMENT '商品标题（取自订单明细）',
+    qty                   INT           NOT NULL DEFAULT 0 COMMENT '售后数量（件）',
+    refund_amount         DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '退款金额（只记录，退款资金在小店结算，不生成收付款）',
+    reason                VARCHAR(255)           DEFAULT NULL COMMENT '售后原因',
+    apply_time            DATETIME               DEFAULT NULL COMMENT '申请时间',
+    platform_update_time  DATETIME               DEFAULT NULL COMMENT '线上更新时间',
+    erp_status            VARCHAR(16)   NOT NULL DEFAULT 'NONE' COMMENT 'ERP 处理状态(字典 ch_wx_aftersale_erp_status) NONE DONE SKIPPED FAILED',
+    sales_return_id       BIGINT                 DEFAULT NULL COMMENT '生成的销售退货单（scm_trade_doc）',
+    sales_return_no       VARCHAR(32)            DEFAULT NULL COMMENT '销售退货单号',
+    error_msg             VARCHAR(500)           DEFAULT NULL COMMENT '最近一次处理的错误或说明',
+    sync_time             DATETIME               DEFAULT NULL COMMENT '最近同步时间',
+    create_time           DATETIME               DEFAULT NULL COMMENT '创建时间',
+    update_time           DATETIME               DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_ch_wx_aftersale (shop_id, aftersale_id, tenant_id),
+    KEY idx_ch_wx_aftersale_order (wx_order_id),
+    KEY idx_ch_wx_aftersale_store (store_id, apply_time)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '微信小店售后单';
+
+CREATE TABLE ch_wx_sync_log (
+    id            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id     BIGINT       NOT NULL DEFAULT 1 COMMENT '租户ID',
+    shop_id       BIGINT       NOT NULL COMMENT '店铺',
+    sync_type     VARCHAR(16)  NOT NULL COMMENT '同步类型(字典 ch_wx_sync_type) PRODUCT STOCK ORDER AFTERSALE',
+    sync_trigger  VARCHAR(16)  NOT NULL COMMENT '触发方式(字典 ch_wx_sync_trigger) MANUAL SCHEDULE CALLBACK',
+    total_count   INT          NOT NULL DEFAULT 0 COMMENT '处理条数',
+    success_count INT          NOT NULL DEFAULT 0 COMMENT '成功条数',
+    fail_count    INT          NOT NULL DEFAULT 0 COMMENT '失败条数',
+    success       TINYINT      NOT NULL DEFAULT 1 COMMENT '整体成功 1是 0否（接口调用失败等中断时为 0）',
+    message       VARCHAR(500)          DEFAULT NULL COMMENT '错误信息（第一条失败的原因）',
+    duration_ms   BIGINT       NOT NULL DEFAULT 0 COMMENT '耗时（毫秒）',
+    create_time   DATETIME              DEFAULT NULL COMMENT '同步时间',
+    PRIMARY KEY (id),
+    KEY idx_ch_wx_sync_log_shop (shop_id, create_time)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '微信小店同步日志';
+
 INSERT INTO sys_tenant (id, name, admin_user_id, status, remark, create_time, update_time) VALUES
 (1, '柠檬科技', 1, 1, '平台租户（运营方），不受套餐限制', NOW(), NOW());
 
@@ -3304,6 +3658,93 @@ INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, s
 INSERT INTO wf_model (model_key, name, category, sort, status, design_json, remark, create_time, update_time) VALUES
 ('scm_price_adjust', '调价单审批', 'SALES', 30, 1, '{"form": [], "flow": {"id": "start", "type": "START", "name": "发起人", "next": {"id": "leader", "type": "APPROVER", "name": "部门主管审批", "assignee": {"type": "DEPT_LEADER", "ids": [], "names": [], "level": 1}, "approveMode": "OR", "emptyAction": "TO_ADMIN", "next": null}}}', '内置流程（未发布）：部门主管审批。发布后调价单提交即进入审批，通过后到生效时间生效；流程变量 target 调价对象、itemCount 调价商品数、adjustNo 调价单号', NOW(), NOW());
 
+-- ---------------------------------------------------------------- 门店要货与配送：菜单、字典、流程
+-- 菜单：模块 20，分组 460–462，页面 463–479（日期锁定 472 放在「系统管理」下，所有租户可用），按钮 4600–4799
+
+INSERT INTO sys_menu (id, parent_id, name, type, path, component, perms, icon, sort, visible, status, create_time, update_time) VALUES
+(20,  0, '配送', 'M', '/dist', NULL, NULL, 'CarOutlined', 3, 1, 1, NOW(), NOW()),
+(460, 20, '门店要货', 'M', NULL, NULL, NULL, NULL, 1, 1, 1, NOW(), NOW()),
+(461, 20, '配送与收货', 'M', NULL, NULL, NULL, NULL, 2, 1, 1, NOW(), NOW()),
+(462, 20, '查询与报表', 'M', NULL, NULL, NULL, NULL, 3, 1, 1, NOW(), NOW()),
+(463, 460, '要货单', 'C', 'requisition', 'dist/requisition/index', 'dist:requisition:list', 'FileAddOutlined', 1, 1, 1, NOW(), NOW()),
+(464, 460, '要货审核', 'C', 'audit', 'dist/audit/index', 'dist:audit:list', 'AuditOutlined', 2, 1, 1, NOW(), NOW()),
+(465, 461, '配送单', 'C', 'delivery', 'dist/delivery/index', 'dist:delivery:list', 'CarOutlined', 1, 1, 1, NOW(), NOW()),
+(466, 461, '门店收货', 'C', 'receive', 'dist/receive/index', 'dist:receive:list', 'InboxOutlined', 2, 1, 1, NOW(), NOW()),
+(467, 461, '门店退仓', 'C', 'return', 'dist/return/index', 'dist:return:list', 'RollbackOutlined', 3, 1, 1, NOW(), NOW()),
+(468, 461, '收货差异', 'C', 'discrepancy', 'dist/discrepancy/index', 'dist:discrepancy:list', 'ExceptionOutlined', 4, 1, 1, NOW(), NOW()),
+(469, 462, '在途查询', 'C', 'transit', 'dist/transit/index', 'dist:transit:list', 'NodeExpandOutlined', 1, 1, 1, NOW(), NOW()),
+(470, 462, '门店往来', 'C', 'ledger', 'dist/ledger/index', 'dist:ledger:list', 'SwapOutlined', 2, 1, 1, NOW(), NOW()),
+(471, 462, '门店对比', 'C', 'store-compare', 'dist/compare/index', 'dist:report:compare', 'BarChartOutlined', 3, 1, 1, NOW(), NOW()),
+(472, 1, '日期锁定', 'C', 'date-lock', 'dist/date-lock/index', 'dist:dateLock:list', 'LockOutlined', 11, 1, 1, NOW(), NOW()),
+(4630, 463, '要货单新增', 'F', NULL, NULL, 'dist:requisition:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4631, 463, '要货单修改', 'F', NULL, NULL, 'dist:requisition:edit', NULL, 2, 1, 1, NOW(), NOW()),
+(4632, 463, '要货单删除', 'F', NULL, NULL, 'dist:requisition:remove', NULL, 3, 1, 1, NOW(), NOW()),
+(4633, 463, '要货单提交', 'F', NULL, NULL, 'dist:requisition:submit', NULL, 4, 1, 1, NOW(), NOW()),
+(4640, 464, '审核要货', 'F', NULL, NULL, 'dist:requisition:audit', NULL, 1, 1, 1, NOW(), NOW()),
+(4641, 464, '关闭要货', 'F', NULL, NULL, 'dist:requisition:close', NULL, 2, 1, 1, NOW(), NOW()),
+(4642, 464, '缺货生成采购订单', 'F', NULL, NULL, 'dist:summary:purchase', NULL, 3, 1, 1, NOW(), NOW()),
+(4650, 465, '配送单新增', 'F', NULL, NULL, 'dist:delivery:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4651, 465, '配送单修改', 'F', NULL, NULL, 'dist:delivery:edit', NULL, 2, 1, 1, NOW(), NOW()),
+(4652, 465, '配送单删除', 'F', NULL, NULL, 'dist:delivery:remove', NULL, 3, 1, 1, NOW(), NOW()),
+(4653, 465, '配送发货', 'F', NULL, NULL, 'dist:delivery:ship', NULL, 4, 1, 1, NOW(), NOW()),
+(4654, 465, '超量配送', 'F', NULL, NULL, 'dist:delivery:overQty', NULL, 5, 1, 1, NOW(), NOW()),
+(4655, 465, '修改配送价', 'F', NULL, NULL, 'dist:delivery:price', NULL, 6, 1, 1, NOW(), NOW()),
+(4660, 466, '确认收货', 'F', NULL, NULL, 'dist:receive:confirm', NULL, 1, 1, 1, NOW(), NOW()),
+(4670, 467, '退仓单新增', 'F', NULL, NULL, 'dist:return:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4671, 467, '退仓单修改', 'F', NULL, NULL, 'dist:return:edit', NULL, 2, 1, 1, NOW(), NOW()),
+(4672, 467, '退仓单删除', 'F', NULL, NULL, 'dist:return:remove', NULL, 3, 1, 1, NOW(), NOW()),
+(4673, 467, '退仓审核', 'F', NULL, NULL, 'dist:return:audit', NULL, 4, 1, 1, NOW(), NOW()),
+(4674, 467, '退仓发货', 'F', NULL, NULL, 'dist:return:ship', NULL, 5, 1, 1, NOW(), NOW()),
+(4675, 467, '退仓收货', 'F', NULL, NULL, 'dist:return:receive', NULL, 6, 1, 1, NOW(), NOW()),
+(4680, 468, '差异处理', 'F', NULL, NULL, 'dist:discrepancy:handle', NULL, 1, 1, 1, NOW(), NOW()),
+(4720, 472, '日期锁定设置', 'F', NULL, NULL, 'dist:dateLock:edit', NULL, 1, 1, 1, NOW(), NOW());
+
+-- 普通用户只读；总经理全部；仓库管理员负责配送中心一侧（要货审核、配送发货、退仓收货，查看要货、差异、在途）
+INSERT INTO sys_role_menu (role_id, menu_id) VALUES
+(2, 20), (2, 460), (2, 461), (2, 462), (2, 463), (2, 464), (2, 465), (2, 466), (2, 467), (2, 468), (2, 469), (2, 470), (2, 471), (2, 472),
+(3, 20), (3, 460), (3, 461), (3, 462), (3, 463), (3, 464), (3, 465), (3, 466), (3, 467), (3, 468), (3, 469), (3, 470), (3, 471), (3, 472),
+(3, 4630), (3, 4631), (3, 4632), (3, 4633), (3, 4640), (3, 4641), (3, 4642), (3, 4650), (3, 4651), (3, 4652), (3, 4653), (3, 4654), (3, 4655),
+(3, 4660), (3, 4670), (3, 4671), (3, 4672), (3, 4673), (3, 4674), (3, 4675), (3, 4680), (3, 4720),
+(6, 20), (6, 460), (6, 461), (6, 462), (6, 463), (6, 464), (6, 465), (6, 467), (6, 468), (6, 469),
+(6, 4640), (6, 4641), (6, 4650), (6, 4651), (6, 4652), (6, 4653), (6, 4675);
+
+INSERT INTO sys_dict_type (id, name, type, kind, status, remark, create_time, update_time) VALUES
+(280, '要货单状态', 'dist_requisition_status', 'SYSTEM', 1, '草稿 → 审批中（可选）→ 待审核 → 已审核 → 部分配送 / 已配送；可关闭', NOW(), NOW()),
+(281, '配送单种类', 'dist_delivery_kind', 'SYSTEM', 1, '配送（配送中心 → 门店）、门店退仓（门店 → 配送中心）', NOW(), NOW()),
+(282, '配送单状态', 'dist_delivery_status', 'SYSTEM', 1, '草稿 →（退仓：待审核 → 已审核）→ 已发货（在途）→ 已收货 / 收货有差异 → 已完成', NOW(), NOW()),
+(283, '收货差异种类', 'dist_discrepancy_kind', 'SYSTEM', 1, '少收、破损、多收', NOW(), NOW()),
+(284, '收货差异状态', 'dist_discrepancy_status', 'SYSTEM', 1, '待处理、已处理', NOW(), NOW()),
+(285, '差异处理方式', 'dist_discrepancy_handling', 'SYSTEM', 1, '退回发货方、发货方承担、收货方承担、收货方留用', NOW(), NOW());
+INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, status, builtin, create_time, update_time) VALUES
+('dist_requisition_status', '草稿', 'DRAFT', 'default', 1, 1, 1, NOW(), NOW()),
+('dist_requisition_status', '审批中', 'APPROVING', 'processing', 2, 1, 1, NOW(), NOW()),
+('dist_requisition_status', '待审核', 'SUBMITTED', 'orange', 3, 1, 1, NOW(), NOW()),
+('dist_requisition_status', '已审核', 'APPROVED', 'blue', 4, 1, 1, NOW(), NOW()),
+('dist_requisition_status', '部分配送', 'PARTIAL', 'cyan', 5, 1, 1, NOW(), NOW()),
+('dist_requisition_status', '已配送', 'DELIVERED', 'green', 6, 1, 1, NOW(), NOW()),
+('dist_requisition_status', '已关闭', 'CLOSED', 'default', 7, 1, 1, NOW(), NOW()),
+('dist_delivery_kind', '配送', 'DELIVERY', 'blue', 1, 1, 1, NOW(), NOW()),
+('dist_delivery_kind', '门店退仓', 'RETURN', 'orange', 2, 1, 1, NOW(), NOW()),
+('dist_delivery_status', '草稿', 'DRAFT', 'default', 1, 1, 1, NOW(), NOW()),
+('dist_delivery_status', '待审核', 'SUBMITTED', 'orange', 2, 1, 1, NOW(), NOW()),
+('dist_delivery_status', '已审核', 'APPROVED', 'blue', 3, 1, 1, NOW(), NOW()),
+('dist_delivery_status', '已发货', 'SHIPPED', 'processing', 4, 1, 1, NOW(), NOW()),
+('dist_delivery_status', '已收货', 'RECEIVED', 'green', 5, 1, 1, NOW(), NOW()),
+('dist_delivery_status', '收货有差异', 'DIFF', 'red', 6, 1, 1, NOW(), NOW()),
+('dist_delivery_status', '已完成', 'CLOSED', 'cyan', 7, 1, 1, NOW(), NOW()),
+('dist_discrepancy_kind', '少收', 'SHORT', 'orange', 1, 1, 1, NOW(), NOW()),
+('dist_discrepancy_kind', '破损', 'DAMAGED', 'red', 2, 1, 1, NOW(), NOW()),
+('dist_discrepancy_kind', '多收', 'OVER', 'blue', 3, 1, 1, NOW(), NOW()),
+('dist_discrepancy_status', '待处理', 'PENDING', 'orange', 1, 1, 1, NOW(), NOW()),
+('dist_discrepancy_status', '已处理', 'HANDLED', 'green', 2, 1, 1, NOW(), NOW()),
+('dist_discrepancy_handling', '退回发货方', 'RETURN_SOURCE', 'blue', 1, 1, 1, NOW(), NOW()),
+('dist_discrepancy_handling', '发货方承担', 'SOURCE_WRITE_OFF', 'orange', 2, 1, 1, NOW(), NOW()),
+('dist_discrepancy_handling', '收货方承担', 'TARGET_WRITE_OFF', 'red', 3, 1, 1, NOW(), NOW()),
+('dist_discrepancy_handling', '收货方留用', 'ACCEPT', 'green', 4, 1, 1, NOW(), NOW());
+-- 门店要货审批（内置流程，未发布）：发布后要货单提交即进入审批，通过后待总部审核
+INSERT INTO wf_model (model_key, name, category, sort, status, design_json, remark, create_time, update_time) VALUES
+('dist_requisition', '门店要货审批', 'INVENTORY', 40, 1, '{"form": [], "flow": {"id": "start", "type": "START", "name": "发起人", "next": {"id": "leader", "type": "APPROVER", "name": "部门主管审批", "assignee": {"type": "DEPT_LEADER", "ids": [], "names": [], "level": 1}, "approveMode": "OR", "emptyAction": "TO_ADMIN", "next": null}}}', '内置流程（未发布）：部门主管审批。发布后要货单提交即进入审批，通过后待总部审核，驳回回到草稿；流程变量 reqNo 要货单号、storeName 要货门店、totalQty 要货数量、itemCount 商品数', NOW(), NOW());
+
 -- ---------------------------------------------------------------- 供应链管理：菜单、字典
 
 INSERT INTO sys_menu (id, parent_id, name, type, path, component, perms, icon, sort, visible, status, create_time, update_time) VALUES
@@ -3363,7 +3804,8 @@ INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, s
 ('scm_trade_kind', '销售出库', 'SALES_OUT', 'green', 3, 1, NOW(), NOW()),
 ('scm_trade_kind', '销售退货', 'SALES_RETURN', 'red', 4, 1, NOW(), NOW()),
 ('scm_order_source', '手工', 'MANUAL', 'default', 1, 1, NOW(), NOW()),
-('scm_order_source', '补货建议', 'REORDER', 'cyan', 2, 1, NOW(), NOW());
+('scm_order_source', '补货建议', 'REORDER', 'cyan', 2, 1, NOW(), NOW()),
+('scm_order_source', '门店要货', 'REQUISITION', 'purple', 3, 1, NOW(), NOW());
 
 -- 普通用户：供应链各页面只读
 INSERT INTO sys_role_menu (role_id, menu_id) VALUES
@@ -3936,6 +4378,9 @@ INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, s
 ('wms_out_category', '研发领用', 'RD', 'purple', 4, 1, NOW(), NOW()),
 ('wms_out_category', '办公领用', 'OFFICE', 'cyan', 5, 1, NOW(), NOW()),
 ('wms_out_category', '其他', 'OTHER', 'default', 9, 1, NOW(), NOW());
+-- 配送收货差异报损（程序默认使用，内置）
+INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, status, builtin, create_time, update_time) VALUES
+('wms_out_category', '配送差异报损', 'DIST_LOSS', 'red', 8, 1, 1, NOW(), NOW());
 
 -- 凭证科目设置：自动凭证各用途使用的科目
 INSERT INTO sys_menu (id, parent_id, name, type, path, component, perms, icon, sort, visible, status, create_time, update_time) VALUES
@@ -4480,3 +4925,81 @@ INSERT INTO sys_role_menu (role_id, menu_id) VALUES
 INSERT INTO sys_role_menu (role_id, menu_id)
 SELECT g.role_id, rm.menu_id FROM (SELECT 18 AS role_id UNION ALL SELECT 19) g
 JOIN sys_role_menu rm ON rm.role_id = 13;
+
+-- ---------------------------------------------------------------- 线上渠道：微信小店（菜单、字典、授权）
+-- 订单来源增加「微信小店」（scm_order_source.WX_SHOP）：渠道订单生成并直接审核的销售订单
+-- 定时任务「微信小店同步」（channel.wxShopSync，每 5 分钟，按各店铺的设置同步库存、订单、售后）由 WxShopSyncJob 在首次启动时写入 sys_job
+INSERT INTO sys_menu (id, parent_id, name, type, path, component, perms, icon, sort, visible, status, create_time, update_time) VALUES
+(18,  0, '线上渠道', 'M', '/channel', NULL, NULL, 'GlobalOutlined', 5, 1, 1, NOW(), NOW()),
+(981, 18, '微信小店', 'M', NULL, NULL, NULL, NULL, 1, 1, 1, NOW(), NOW()),
+(430, 981, '店铺设置', 'C', 'wx-shop', 'channel/wx-shop/index', 'channel:wxShop:list', 'ShopOutlined', 1, 1, 1, NOW(), NOW()),
+(431, 981, '商品映射', 'C', 'wx-product', 'channel/wx-product/index', 'channel:wxProduct:list', 'LinkOutlined', 2, 1, 1, NOW(), NOW()),
+(432, 981, '渠道订单', 'C', 'wx-order', 'channel/wx-order/index', 'channel:wxOrder:list', 'ShoppingCartOutlined', 3, 1, 1, NOW(), NOW()),
+(433, 981, '售后单', 'C', 'wx-aftersale', 'channel/wx-aftersale/index', 'channel:wxAftersale:list', 'RollbackOutlined', 4, 1, 1, NOW(), NOW()),
+(434, 981, '同步日志', 'C', 'wx-sync-log', 'channel/wx-sync-log/index', 'channel:wxSyncLog:list', 'HistoryOutlined', 5, 1, 1, NOW(), NOW()),
+(4300, 430, '店铺新增', 'F', NULL, NULL, 'channel:wxShop:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4301, 430, '店铺修改', 'F', NULL, NULL, 'channel:wxShop:edit', NULL, 2, 1, 1, NOW(), NOW()),
+(4302, 430, '店铺删除', 'F', NULL, NULL, 'channel:wxShop:remove', NULL, 3, 1, 1, NOW(), NOW()),
+(4303, 430, '立即同步', 'F', NULL, NULL, 'channel:wxShop:sync', NULL, 4, 1, 1, NOW(), NOW()),
+(4310, 431, '商品映射修改', 'F', NULL, NULL, 'channel:wxProduct:edit', NULL, 1, 1, 1, NOW(), NOW()),
+(4320, 432, '订单发货与处理', 'F', NULL, NULL, 'channel:wxOrder:ship', NULL, 1, 1, 1, NOW(), NOW()),
+(4321, 432, '查看收货信息', 'F', NULL, NULL, 'channel:wxOrder:sensitive', NULL, 2, 1, 1, NOW(), NOW()),
+(4330, 433, '售后处理', 'F', NULL, NULL, 'channel:wxAftersale:handle', NULL, 1, 1, 1, NOW(), NOW());
+-- 普通用户只读；总经理全部
+INSERT INTO sys_role_menu (role_id, menu_id) VALUES
+(2, 18), (2, 981), (2, 430), (2, 431), (2, 432), (2, 433), (2, 434),
+(3, 18), (3, 981), (3, 430), (3, 431), (3, 432), (3, 433), (3, 434),
+(3, 4300), (3, 4301), (3, 4302), (3, 4303), (3, 4310), (3, 4320), (3, 4321), (3, 4330);
+
+INSERT INTO sys_dict_type (id, name, type, kind, status, remark, create_time, update_time) VALUES
+(250, '小店对接方式', 'ch_wx_shop_mode', 'SYSTEM', 1, '模拟店铺（未开通小店时演示、测试）或正式对接微信小店接口', NOW(), NOW()),
+(251, '渠道订单状态', 'ch_wx_order_status', 'SYSTEM', 1, '由微信小店的订单状态码映射', NOW(), NOW()),
+(252, '渠道订单处理状态', 'ch_wx_erp_status', 'SYSTEM', 1, '渠道订单在 ERP 中的处理进度：生成销售订单、出库、关闭', NOW(), NOW()),
+(253, '发货回传状态', 'ch_wx_delivery_status', 'SYSTEM', 1, 'ERP 发货后回传物流单号到小店的状态', NOW(), NOW()),
+(254, '售后类型', 'ch_wx_aftersale_type', 'SYSTEM', 1, '仅退款或退货退款', NOW(), NOW()),
+(255, '售后状态', 'ch_wx_aftersale_status', 'SYSTEM', 1, '由微信小店的售后状态映射', NOW(), NOW()),
+(256, '售后处理状态', 'ch_wx_aftersale_erp_status', 'SYSTEM', 1, '售后在 ERP 中的处理：扣减待发数量 / 关闭订单、生成销售退货', NOW(), NOW()),
+(257, '同步类型', 'ch_wx_sync_type', 'SYSTEM', 1, '微信小店同步日志的类型', NOW(), NOW()),
+(258, '同步触发方式', 'ch_wx_sync_trigger', 'SYSTEM', 1, '手工、定时任务或小店消息推送', NOW(), NOW());
+INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, status, builtin, create_time, update_time) VALUES
+('ch_wx_shop_mode', '模拟店铺', 'MOCK', 'orange', 1, 1, 1, NOW(), NOW()),
+('ch_wx_shop_mode', '微信小店', 'LIVE', 'green', 2, 1, 1, NOW(), NOW()),
+('ch_wx_order_status', '待付款', 'UNPAID', 'default', 1, 1, 1, NOW(), NOW()),
+('ch_wx_order_status', '待发货', 'TO_SHIP', 'orange', 2, 1, 1, NOW(), NOW()),
+('ch_wx_order_status', '已发货', 'SHIPPED', 'blue', 3, 1, 1, NOW(), NOW()),
+('ch_wx_order_status', '已完成', 'COMPLETED', 'green', 4, 1, 1, NOW(), NOW()),
+('ch_wx_order_status', '已取消', 'CANCELLED', 'red', 5, 1, 1, NOW(), NOW()),
+('ch_wx_erp_status', '未处理', 'NONE', 'default', 1, 1, 1, NOW(), NOW()),
+('ch_wx_erp_status', '待生成', 'PENDING', 'orange', 2, 1, 1, NOW(), NOW()),
+('ch_wx_erp_status', '待映射', 'UNMAPPED', 'volcano', 3, 1, 1, NOW(), NOW()),
+('ch_wx_erp_status', '已生成订单', 'ORDERED', 'blue', 4, 1, 1, NOW(), NOW()),
+('ch_wx_erp_status', '已出库', 'OUTBOUND', 'green', 5, 1, 1, NOW(), NOW()),
+('ch_wx_erp_status', '已关闭', 'CLOSED', 'default', 6, 1, 1, NOW(), NOW()),
+('ch_wx_erp_status', '处理失败', 'FAILED', 'red', 7, 1, 1, NOW(), NOW()),
+('ch_wx_delivery_status', '未发货', 'NONE', 'default', 1, 1, 1, NOW(), NOW()),
+('ch_wx_delivery_status', '回传中', 'PUSHING', 'processing', 2, 1, 1, NOW(), NOW()),
+('ch_wx_delivery_status', '已回传', 'PUSHED', 'green', 3, 1, 1, NOW(), NOW()),
+('ch_wx_delivery_status', '回传失败', 'FAILED', 'red', 4, 1, 1, NOW(), NOW()),
+('ch_wx_delivery_status', '小店后台发货', 'PLATFORM', 'cyan', 5, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_type', '仅退款', 'REFUND', 'orange', 1, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_type', '退货退款', 'RETURN', 'purple', 2, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '待处理', 'PENDING', 'orange', 1, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '已拒绝', 'REJECTED', 'red', 2, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '待买家退货', 'WAIT_RETURN', 'blue', 3, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '待商家收货', 'WAIT_RECEIPT', 'geekblue', 4, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '退款中', 'REFUNDING', 'processing', 5, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '已退款', 'REFUNDED', 'green', 6, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '退款失败', 'REFUND_FAILED', 'volcano', 7, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '已关闭', 'CANCELLED', 'default', 8, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_erp_status', '未处理', 'NONE', 'default', 1, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_erp_status', '已处理', 'DONE', 'green', 2, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_erp_status', '无需处理', 'SKIPPED', 'cyan', 3, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_erp_status', '处理失败', 'FAILED', 'red', 4, 1, 1, NOW(), NOW()),
+('ch_wx_sync_type', '商品', 'PRODUCT', 'blue', 1, 1, 1, NOW(), NOW()),
+('ch_wx_sync_type', '库存', 'STOCK', 'green', 2, 1, 1, NOW(), NOW()),
+('ch_wx_sync_type', '订单', 'ORDER', 'orange', 3, 1, 1, NOW(), NOW()),
+('ch_wx_sync_type', '售后', 'AFTERSALE', 'purple', 4, 1, 1, NOW(), NOW()),
+('ch_wx_sync_trigger', '手工', 'MANUAL', 'default', 1, 1, 1, NOW(), NOW()),
+('ch_wx_sync_trigger', '定时任务', 'SCHEDULE', 'blue', 2, 1, 1, NOW(), NOW()),
+('ch_wx_sync_trigger', '消息推送', 'CALLBACK', 'cyan', 3, 1, 1, NOW(), NOW()),
+('scm_order_source', '微信小店', 'WX_SHOP', 'green', 11, 1, 1, NOW(), NOW());
