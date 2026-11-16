@@ -212,6 +212,15 @@ export const PRINT_TYPES = [
     columns: [n.date, n.type, n.docNo, n.sourceSettle, num(n.increase), num(n.decrease), num(n.balance), n.remark],
     signs: [n.tabulator, n.finReview, n.customerSeal, n.supplierSeal],
     note: true
+  },
+  {
+    key: 'chain.franchiseStatement',
+    module: n.modChain,
+    name: n.franchiseStatement,
+    fields: [n.franchiseStore, n.franchisee, n.statementPeriod, n.beginBalance, n.deliveryAmount, n.returnAmount, n.paymentAmount, n.otherAmount, n.endBalance, n.status],
+    columns: [n.date, n.type, n.docNo, n.sourceSettle, num(n.increase), num(n.decrease), num(n.balance), n.remark],
+    signs: [n.tabulator, n.finReview, n.franchiseeSeal],
+    note: true
   }
 ].map((tp) => ({ ...tp, columns: (tp.columns || []).map((c) => (typeof c === 'string' ? { title: c } : c)), signs: tp.signs || [] }))
 

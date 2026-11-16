@@ -243,6 +243,8 @@ export default {
     'SALES_RETURN_FREIGHT': 'Sales Return Freight', // 销售退货运费
     'PURCHASE_RETURN_FREIGHT': 'Purchase Return Freight', // 采购退货运费
     'TRANSFER_FEE': 'Transfer Fee', // 调拨费用
+    'FRANCHISE_DELIVERY': 'Franchise Delivery', // 加盟配送
+    'FRANCHISE_RETURN': 'Franchise Return', // 加盟退货
   },
   // 运费承担
   scm_freight_bearer: {
@@ -658,5 +660,26 @@ export default {
     'MANUAL': 'Manual', // 手工
     'SCHEDULE': 'Scheduled', // 定时任务
     'CALLBACK': 'Push Message', // 消息推送
+  },
+  // 加盟往来种类
+  chain_ledger_kind: {
+    'DELIVERY': 'Franchise Delivery', // 加盟配送
+    'RETURN': 'Franchise Return', // 加盟退货
+  },
+  // 加盟对账单状态
+  chain_statement_status: {
+    'DRAFT': 'Pending Confirmation', // 待确认
+    'CONFIRMED': 'Confirmed', // 已确认
+  },
+  // 保证金收退
+  chain_deposit_kind: {
+    'RECEIVE': 'Received', // 收取
+    'REFUND': 'Refunded', // 退还
+  },
+  // 费用分摊依据
+  chain_alloc_basis: {
+    'SALES': 'By Sales', // 按销售额
+    'AREA': 'By Floor Area', // 按面积
+    'EQUAL': 'Evenly', // 平均
   },
 }

@@ -411,4 +411,27 @@ export default {
   4320: 'Ship & Process Orders', // 订单发货与处理
   4321: 'View Receiver Info', // 查看收货信息
   4330: 'Handle After-sales', // 售后处理
+  // 连锁经营
+  21: 'Chain Operations', // 连锁经营
+  480: 'Franchise', // 加盟管理
+  481: 'Business Analysis', // 经营分析
+  482: 'Replenishment', // 补货
+  483: 'Franchisee Accounts', // 加盟商账户
+  484: 'Franchise Statements', // 加盟对账单
+  485: 'Deposits', // 保证金
+  486: 'Franchise Settlement Report', // 加盟结算报表
+  487: 'Store P&L', // 门店损益
+  488: 'Expense Allocation', // 费用分摊
+  489: 'Store Replenishment', // 门店补货建议
+  4830: 'Edit Franchisee Account', // 加盟商账户设置
+  4831: 'Franchisee Top-up', // 加盟商充值
+  4840: 'Generate Statement', // 生成对账单
+  4841: 'Confirm Statement', // 确认对账单
+  4842: 'Delete Statement', // 删除对账单
+  4850: 'Record Deposit', // 保证金登记
+  4851: 'Delete Deposit', // 保证金删除
+  4880: 'Allocation Settings', // 分摊设置
+  4881: 'Run Allocation', // 运行分摊
+  4890: 'Create Requisition', // 生成要货单
+  4891: 'Replenishment Settings', // 补货参数设置
 }

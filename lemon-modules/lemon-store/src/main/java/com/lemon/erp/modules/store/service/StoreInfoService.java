@@ -11,6 +11,7 @@ import com.lemon.erp.framework.security.SecurityUtils;
 import com.lemon.erp.framework.security.datascope.DataPermission;
 import com.lemon.erp.framework.store.StoreStatus;
 import com.lemon.erp.framework.store.StoreType;
+import com.lemon.erp.framework.tenant.TenantQuotaLookup;
 import com.lemon.erp.modules.fin.service.FinAccountService;
 import com.lemon.erp.modules.scm.service.ScmPriceSchemeService;
 import com.lemon.erp.modules.store.dto.StoreOption;
@@ -19,6 +20,7 @@ import com.lemon.erp.modules.store.mapper.StoreInfoMapper;
 import com.lemon.erp.modules.wms.service.DocNoService;
 import com.lemon.erp.modules.wms.service.WmsWarehouseService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -43,6 +45,7 @@ public class StoreInfoService {
     private final FinAccountService accountService;
     private final ScmPriceSchemeService priceSchemeService;
     private final ReferenceGuard referenceGuard;
+    private final ObjectProvider<TenantQuotaLookup> quotaLookup;
 
     /**
      * 当前用户可管辖的门店
@@ -110,6 +113,8 @@ public class StoreInfoService {
         checkCodeUnique(store.getCode(), null);
         if (store.getType() == StoreType.HQ) {
             checkSingleHq(null);
+        } else {
+            checkStoreLimit();
         }
         if (store.getStatus() == null) store.setStatus(StoreStatus.OPEN);
         if (store.getSort() == null) store.setSort(0);
@@ -223,6 +228,15 @@ public class StoreInfoService {
         } else if (store.getContractStart() != null && store.getContractEnd() != null
                 && store.getContractEnd().isBefore(store.getContractStart())) {
             throw new BizException("store.error.contractDateInvalid");
+        }
+    }
+
+    /** 租户套餐的门店数量上限（不含总部，§11.2）：已有门店（含停业、闭店）达到上限时不能再新增 */
+    private void checkStoreLimit() {
+        TenantQuotaLookup quotas = quotaLookup.getIfAvailable();
+        Integer limit = quotas == null ? null : quotas.storeLimit();
+        if (limit != null && storeMapper.selectCount(Wrappers.<StoreInfo>lambdaQuery().ne(StoreInfo::getType, StoreType.HQ)) >= limit) {
+            throw new BizException("store.error.storeLimitReached", limit);
         }
     }
 

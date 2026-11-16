@@ -48,6 +48,14 @@ public class FinPartnerLedgerService {
         if (!permissionService.hasPerm(ar ? "fin:ar:list" : "fin:ap:list")) {
             throw new BizException(ar ? "fin.error.noPermissionViewReceivables" : "fin.error.noPermissionViewPayables");
         }
+        return statementOf(kind, partnerId, begin, end, withAp);
+    }
+
+    /**
+     * 往来对账单，不检查应收应付的查看权限：供其他模块按自己的权限使用（如连锁经营的加盟商对账单、往来明细，权限 chain:franchise:*）
+     */
+    public FinAnalysis.PartnerStatement statementOf(BillKind kind, Long partnerId, LocalDate begin, LocalDate end, boolean withAp) {
+        FinBillService.checkKind(kind);
         if (begin == null || end == null || end.isBefore(begin)) {
             throw new BizException("fin.error.invalidDateRange");
         }

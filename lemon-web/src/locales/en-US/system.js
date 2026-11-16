@@ -298,6 +298,9 @@ export default {
     custom: 'Custom'
   },
   tenantPackage: {
+    storeLimit: 'Store Limit',
+    storeLimitTip: 'Excluding headquarters; leave empty for unlimited. Tenants cannot add stores beyond the limit',
+    unlimited: 'Unlimited',
     name: 'Plan Name',
     add: 'Add Plan',
     edit: 'Edit Plan',

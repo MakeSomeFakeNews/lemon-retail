@@ -298,6 +298,9 @@ export default {
     custom: '自定义'
   },
   tenantPackage: {
+    storeLimit: '门店数量上限',
+    storeLimitTip: '不含总部；为空不限，达到上限后租户不能再新增门店',
+    unlimited: '不限',
     name: '套餐名称',
     add: '新增套餐',
     edit: '编辑套餐',

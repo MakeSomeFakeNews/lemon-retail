@@ -22,5 +22,6 @@ include 'lemon-framework'
     'bi',         // 商务智能
     'ai',         // 智能：大模型客户端、模型配置与用量、AI 问数（只依赖 framework）
     'channel',    // 线上渠道：微信小店的商品映射、库存同步、订单与售后同步（依赖 store）
+    'chain',      // 连锁经营：加盟结算、门店损益与费用分摊、门店补货建议、店长看板（依赖 pos、dist）
 ].each { include "lemon-modules:lemon-${it}" }
 include 'lemon-admin'

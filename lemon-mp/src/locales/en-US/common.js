@@ -8,6 +8,7 @@ export default {
     mine: 'Me'
   },
   group: {
+    store: 'Store',
     office: 'Office',
     sales: 'Sales',
     warehouse: 'Warehouse'
