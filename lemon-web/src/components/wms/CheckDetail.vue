@@ -32,9 +32,9 @@
           <a-radio-group v-model:value="filter" size="small" button-style="solid">
             <a-radio-button value="all">{{ $t('common.status.all') }}</a-radio-button>
             <a-radio-button value="diff">{{ $t('wms.checkDoc.hasDiff') }}</a-radio-button>
-            <a-radio-button v-if="detail.status === WmsDocStatus.DRAFT" value="pending">{{ $t('wms.checkDoc.notCounted') }}</a-radio-button>
+            <a-radio-button v-if="detail.status === DocStatus.DRAFT" value="pending">{{ $t('wms.checkDoc.notCounted') }}</a-radio-button>
           </a-radio-group>
-          <span v-if="detail.status === WmsDocStatus.DRAFT" class="sub-text">{{ $t('wms.checkDoc.draftBookTip') }}</span>
+          <span v-if="detail.status === DocStatus.DRAFT" class="sub-text">{{ $t('wms.checkDoc.draftBookTip') }}</span>
         </div>
 
         <a-table row-key="id" size="small" :columns="columns" :data-source="rows" :pagination="{ pageSize: 50 }" :scroll="{ x: scrollX }">
@@ -76,7 +76,7 @@
       </template>
     </a-spin>
 
-    <template v-if="detail?.status === WmsDocStatus.DRAFT && (canEdit || canConfirm)" #footer>
+    <template v-if="detail?.status === DocStatus.DRAFT && (canEdit || canConfirm)" #footer>
       <div class="drawer-footer">
         <a-button v-if="canEdit" @click="emit('edit', detail)">
           <template #icon><EditOutlined /></template>{{ $t('common.action.edit') }}
@@ -103,7 +103,7 @@ import { useUserStore } from '@/store/user'
 import { money, price, round2 } from '@/utils/number'
 import { formatQty, locationText } from './wms'
 
-import { WmsDocStatus } from '@/constants/enums'
+import { DocStatus } from '@/constants/enums'
 const props = defineProps({
   open: Boolean,
   checkId: Number

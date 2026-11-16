@@ -22,10 +22,6 @@ public class FinDocNos {
     /** 预收单、预付单 */
     public static final String ADVANCE_RECEIPT = "YSK";
     public static final String ADVANCE_PAYMENT = "YFK";
-    /** 费用报销单 */
-    public static final String EXPENSE_CLAIM = "BX";
-    /** 员工借款单 */
-    public static final String LOAN = "JK";
 
     @Bean
     @Order(5)
@@ -37,12 +33,7 @@ public class FinDocNos {
                 doc(PAYMENT, "fin.label.payment"),
                 doc(ADVANCE_RECEIPT, "fin.label.advanceReceipt"),
                 doc(ADVANCE_PAYMENT, "fin.label.advancePayment"),
-                doc(EXPENSE_CLAIM, "fin.label.expenseClaim"),
-                doc(LOAN, "fin.label.employeeLoan"),
                 doc(FinFundService.TRANSFER_NO, "fin.label.fundTransfer"),
-                doc(FinStatementService.DOC_NO, "fin.label.supplierStatement"),
-                doc(FinAssetCheckService.DOC_NO, "fin.label.assetCount"),
-                doc(FinConsumableService.DOC_NO, "fin.label.consumableRequisition"),
                 doc(FinOffsetService.DOC_NO, "fin.label.offsetDoc"),
                 doc(FinNettingService.DOC_NO, "fin.label.nettingDoc"),
                 doc(FinIoService.INCOME_NO, "fin.label.otherIncomeDoc"),

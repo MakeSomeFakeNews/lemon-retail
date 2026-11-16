@@ -21,16 +21,12 @@ import com.lemon.erp.modules.fin.dto.VoucherRequest;
 import com.lemon.erp.modules.fin.entity.FinAccount;
 import com.lemon.erp.modules.fin.entity.FinAdvanceApply;
 import com.lemon.erp.modules.fin.entity.FinBill;
-import com.lemon.erp.modules.fin.entity.FinCostRun;
-import com.lemon.erp.modules.fin.entity.FinDepreciation;
 import com.lemon.erp.modules.fin.entity.FinSettlement;
 import com.lemon.erp.modules.fin.entity.FinVoucher;
 import com.lemon.erp.modules.fin.entity.FinVoucherEntry;
 import com.lemon.erp.modules.fin.event.VoucherDeletedEvent;
 import com.lemon.erp.modules.fin.mapper.FinAdvanceApplyMapper;
 import com.lemon.erp.modules.fin.mapper.FinBillMapper;
-import com.lemon.erp.modules.fin.mapper.FinCostRunMapper;
-import com.lemon.erp.modules.fin.mapper.FinDepreciationMapper;
 import com.lemon.erp.modules.fin.mapper.FinSettlementMapper;
 import com.lemon.erp.modules.fin.mapper.FinVoucherEntryMapper;
 import com.lemon.erp.modules.fin.mapper.FinVoucherMapper;
@@ -79,8 +75,6 @@ public class FinVoucherService {
     private final FinBillMapper billMapper;
     private final FinSettlementMapper settlementMapper;
     private final FinAdvanceApplyMapper applyMapper;
-    private final FinDepreciationMapper depreciationMapper;
-    private final FinCostRunMapper costRunMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final ApprovalSupport approvalSupport;
     private final ChangeLogger changeLogger;
@@ -162,8 +156,6 @@ public class FinVoucherService {
         settlementMapper.update(Wrappers.<FinSettlement>lambdaUpdate().set(FinSettlement::getVoucherId, null).in(FinSettlement::getVoucherId, ids));
         // 收付款中冲抵预收预付的分录在收付款凭证中
         applyMapper.update(Wrappers.<FinAdvanceApply>lambdaUpdate().set(FinAdvanceApply::getVoucherId, null).in(FinAdvanceApply::getVoucherId, ids));
-        depreciationMapper.update(Wrappers.<FinDepreciation>lambdaUpdate().set(FinDepreciation::getVoucherId, null).in(FinDepreciation::getVoucherId, ids));
-        costRunMapper.update(Wrappers.<FinCostRun>lambdaUpdate().set(FinCostRun::getVoucherId, null).in(FinCostRun::getVoucherId, ids));
         eventPublisher.publishEvent(new VoucherDeletedEvent(ids));
     }
 
@@ -188,18 +180,14 @@ public class FinVoucherService {
         voucherMapper.deleteById(id);
     }
 
-    /** 预收预付、坏账、报销、借款、票据、调拨、其他收支、应收应付对冲生成的凭证与业务单据联动，不能直接删除 */
+    /** 预收预付、坏账、调拨、其他收支、应收应付对冲生成的凭证与业务单据联动，不能直接删除 */
     private static final java.util.Set<VoucherSource> UNDELETABLE_SOURCES = java.util.EnumSet.of(VoucherSource.ADVANCE,
-            VoucherSource.BAD_DEBT, VoucherSource.CLAIM, VoucherSource.LOAN,
-            VoucherSource.NOTE, VoucherSource.TRANSFER, VoucherSource.INCOME_EXPENSE, VoucherSource.NETTING);
+            VoucherSource.BAD_DEBT, VoucherSource.TRANSFER, VoucherSource.INCOME_EXPENSE, VoucherSource.NETTING);
 
     private static String sourceLabel(VoucherSource source) {
         return switch (source) {
             case ADVANCE -> "fin.label.advanceReceiptPayment";
             case BAD_DEBT -> "fin.label.badDebtWriteOff";
-            case CLAIM -> "fin.label.expenseClaim";
-            case LOAN -> "fin.label.employeeLoan";
-            case NOTE -> "fin.label.note";
             case TRANSFER -> "fin.label.fundTransfer";
             case INCOME_EXPENSE -> "fin.label.incomeExpenseDoc";
             case NETTING -> "fin.label.nettingDoc";
@@ -229,7 +217,7 @@ public class FinVoucherService {
                         .orderByAsc(FinVoucherEntry::getSeq)).stream()
                 .map(e -> new VoucherLine("冲销 " + v.getPeriod() // i18n-ignore
                          + " " + v.getVoucherNo() + " " + e.getSummary(), e.getAccountId(), e.getDeptId(),
-                        e.getDebit().negate(), e.getCredit().negate(), e.getProjectId(), e.getCustomerId(), e.getSupplierId(), e.getMaterialId()))
+                        e.getDebit().negate(), e.getCredit().negate(), e.getCustomerId(), e.getSupplierId(), e.getMaterialId()))
                 .toList();
         Long redId = insert(d, 0, lines, VoucherSource.REVERSAL, v.getVoucherNo(), VoucherStatus.DRAFT);
         voucherMapper.update(Wrappers.<FinVoucher>lambdaUpdate().set(FinVoucher::getReversalOf, id).eq(FinVoucher::getId, redId));
@@ -370,7 +358,6 @@ public class FinVoucherService {
             e.setSummary(l.summary());
             e.setAccountId(l.accountId());
             e.setDeptId(l.deptId());
-            e.setProjectId(l.projectId());
             e.setCustomerId(l.customerId());
             e.setSupplierId(l.supplierId());
             e.setMaterialId(l.materialId());
@@ -477,7 +464,7 @@ public class FinVoucherService {
     private static List<VoucherLine> toLines(List<VoucherEntryRequest> entries) {
         return entries.stream().map(e -> new VoucherLine(e.summary().trim(), e.accountId(), e.deptId(),
                 Decimals.nz(e.debit()), Decimals.nz(e.credit()),
-                e.projectId(), e.customerId(), e.supplierId(), e.materialId())).toList();
+                e.customerId(), e.supplierId(), e.materialId())).toList();
     }
 
     private void saveEntries(Long voucherId, List<FinVoucherEntry> entries) {

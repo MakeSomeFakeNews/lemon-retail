@@ -9,9 +9,8 @@ export default {
   },
   group: {
     office: 'Office',
-    sales: 'Sales & Service',
-    warehouse: 'Warehouse & Production',
-    quality: 'Equipment & Quality'
+    sales: 'Sales',
+    warehouse: 'Warehouse'
   },
   ok: 'OK',
   cancel: 'Cancel',
@@ -90,7 +89,6 @@ export default {
     statTodo: 'To approve',
     statRunning: 'In approval',
     statUnread: 'Unread',
-    statAnnual: 'Leave (days)',
     tenant: 'Tenant',
     dept: 'Department',
     phone: 'Phone',

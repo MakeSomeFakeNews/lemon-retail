@@ -107,7 +107,7 @@
             </a-form-item>
           </a-col>
           <a-col :xs="24" :sm="12">
-            <a-form-item :label="$t('scm.supplier.level')" name="level" :extra="$t('scm.supplier.levelTip')">
+            <a-form-item :label="$t('scm.supplier.level')" name="level">
               <a-select v-model:value="form.level" allow-clear :options="toOptions(dict.scm_supplier_level)" />
             </a-form-item>
           </a-col>
@@ -185,7 +185,6 @@
     </FormDrawer>
 
     <SupplierPriceDrawer v-model:open="priceOpen" :supplier="priceSupplier" />
-    <PortalAccountDrawer v-model:open="portalOpen" kind="supplier" :partner="portalSupplier" />
     <PartnerMergeModal ref="mergeRef" type="supplier" @merged="load" />
     <ImportModal
       v-model:open="importOpen"
@@ -208,7 +207,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { DollarOutlined, ImportOutlined, MergeCellsOutlined, PaperClipOutlined, PlusOutlined, UserOutlined } from '@ant-design/icons-vue'
+import { DollarOutlined, ImportOutlined, MergeCellsOutlined, PaperClipOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import DictTag from '@/components/DictTag.vue'
 import FormDrawer from '@/components/FormDrawer.vue'
 import ImportModal from '@/components/ImportModal.vue'
@@ -216,7 +215,6 @@ import RecordExtrasModal from '@/components/RecordExtrasModal.vue'
 import SearchForm from '@/components/SearchForm.vue'
 import StatusSwitch from '@/components/StatusSwitch.vue'
 import TableToolbar from '@/components/TableToolbar.vue'
-import PortalAccountDrawer from '@/components/scm/PortalAccountDrawer.vue'
 import SupplierPriceDrawer from '@/components/scm/SupplierPriceDrawer.vue'
 import PartnerMergeModal from '@/components/scm/PartnerMergeModal.vue'
 import PartnerSelect from '@/components/scm/PartnerSelect.vue'
@@ -251,12 +249,6 @@ function openExtras(record) {
   extrasOpen.value = true
 }
 // 门户账号
-const portalOpen = ref(false)
-const portalSupplier = ref()
-function openPortal(record) {
-  portalSupplier.value = record
-  portalOpen.value = true
-}
 // 供货价格
 const priceOpen = ref(false)
 const priceSupplier = ref()
@@ -354,7 +346,6 @@ const rowActions = (record) => [
   { key: 'prices', label: t('scm.supplier.prices'), icon: DollarOutlined, onClick: () => openPrices(record) },
   { type: 'delete', perm: 'scm:supplier:remove', confirm: t('scm.supplier.confirmDelete', { name: record.name }), onClick: () => remove(record.id) },
   { key: 'extras', label: t('scm.supplier.extras'), icon: PaperClipOutlined, more: true, onClick: () => openExtras(record) },
-  { key: 'portal', label: t('scm.supplier.portal'), icon: UserOutlined, perm: 'scm:supplier:portal', more: true, onClick: () => openPortal(record) },
   { key: 'merge', label: t('scm.partnerMerge.action'), icon: MergeCellsOutlined, perm: 'scm:supplier:merge', show: !record.mergedTo, more: true, onClick: () => mergeRef.value.open(record) }
 ]
 </script>

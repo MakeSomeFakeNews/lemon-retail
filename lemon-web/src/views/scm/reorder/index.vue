@@ -23,10 +23,10 @@
         :columns="columns"
         @refresh="load"
       >
-        <a-button v-perm="'scm:requisition:add'" type="primary" :disabled="!selectedKeys.length" :loading="creating" @click="createRequisition">
-          <template #icon><FileAddOutlined /></template>{{ selectedKeys.length ? $t('scm.reorder.createReqN', { n: selectedKeys.length }) : $t('scm.reorder.createReq') }}
+        <a-button v-perm="'scm:purchase:add'" type="primary" :disabled="!selectedKeys.length" :loading="creating" @click="createOrders">
+          <template #icon><FileAddOutlined /></template>{{ selectedKeys.length ? $t('scm.reorder.createOrderN', { n: selectedKeys.length }) : $t('scm.reorder.createOrder') }}
         </a-button>
-        <a-date-picker v-model:value="requiredDate" value-format="YYYY-MM-DD" :placeholder="$t('scm.reorder.requiredDatePh')" />
+        <WarehouseSelect v-model:value="warehouseId" :placeholder="$t('scm.reorder.warehousePh')" class="warehouse" />
         <span class="toolbar-switch">
           <a-switch v-model:checked="query.onlyNeeded" size="small" @change="load" /> {{ $t('scm.reorder.onlyNeeded') }}
         </span>
@@ -47,9 +47,6 @@
           <template v-if="column.key === 'material'">
             {{ record.code }} {{ record.name }}
           </template>
-          <template v-else-if="column.key === 'supplyType'">
-            <DictTag type="mes_supply_type" :value="record.supplyType" />
-          </template>
           <template v-else-if="column.key === 'point'">
             <div>{{ formatQty(record.reorderPoint) }}</div>
             <div class="sub-text">
@@ -62,7 +59,7 @@
               <a-tag color="orange" :bordered="false">{{ $t('scm.reorder.lowWarehouses', { n: record.lowWarehouses }) }}</a-tag>
             </a-tooltip>
           </template>
-          <template v-else-if="['available', 'poOpen', 'soOpen', 'woNet', 'reorderQty'].includes(column.key)">
+          <template v-else-if="['available', 'poOpen', 'soOpen', 'reorderQty'].includes(column.key)">
             {{ formatQty(record[column.key]) }}
           </template>
           <template v-else-if="column.key === 'projected'">
@@ -74,9 +71,8 @@
             <span class="sub-text"> {{ record.unit }}</span>
           </template>
           <template v-else-if="column.key === 'orderQty'">
-            <span v-if="record.supplyType === SupplyType.MAKE" class="sub-text">{{ $t('scm.reorder.makeTip') }}</span>
             <a-input-number
-              v-else-if="selectedKeys.includes(record.materialId)"
+              v-if="selectedKeys.includes(record.materialId)"
               v-model:value="record.orderQty"
               :min="0"
               :precision="4"
@@ -91,7 +87,7 @@
               v-model:value="record.orderSupplierId"
               type="supplier"
               :label="record.supplierName"
-              :placeholder="$t('scm.reorder.optional')"
+              :placeholder="$t('scm.reorder.defaultSupplier')"
               allow-clear
               class="full"
             />
@@ -112,43 +108,37 @@ import { computed, h, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal, message } from 'ant-design-vue'
 import { FileAddOutlined } from '@ant-design/icons-vue'
-import DictTag from '@/components/DictTag.vue'
 import SearchForm from '@/components/SearchForm.vue'
 import TableToolbar from '@/components/TableToolbar.vue'
 import PartnerSelect from '@/components/scm/PartnerSelect.vue'
-import { listReorder, reorderToRequisition } from '@/api/scm/planning'
+import WarehouseSelect from '@/components/wms/WarehouseSelect.vue'
+import { listReorder, reorderToOrders } from '@/api/scm/planning'
 import { formatMoney } from '@/components/scm/scm'
 import { formatQty } from '@/components/wms/wms'
 import { useColumns } from '@/composables/useColumns'
-import { useDict } from '@/composables/useDict'
-import { findDict } from '@/utils/dict'
 import { writeExcel } from '@/utils/excel'
 
-import { StockAlertMode, SupplyType } from '@/constants/enums'
+import { StockAlertMode } from '@/constants/enums'
 const { t } = useI18n()
-
 const router = useRouter()
-const dict = useDict('mes_supply_type')
 
 /** 预计库存低于再订货点（未设置时取安全库存） */
 const isShort = (r) => Number(r.projected) < Number(Number(r.reorderPoint) > 0 ? r.reorderPoint : r.safetyStock || 0)
-/** 可以生成请购单：有建议数量且不是自制件 */
-const selectable = (r) => Number(r.suggestQty) > 0 && r.supplyType !== SupplyType.MAKE
+/** 可以生成采购订单：有建议补货数量 */
+const selectable = (r) => Number(r.suggestQty) > 0
 
 const columns = [
   { title: t('scm.reorder.material'), key: 'material', width: 240, exportValue: (r) => `${r.code} ${r.name}` },
   { title: t('scm.reorder.spec'), dataIndex: 'spec', width: 120, ellipsis: true },
   { title: t('scm.reorder.unit'), dataIndex: 'unit', width: 70 },
-  { title: t('scm.reorder.supplyType'), key: 'supplyType', width: 110, exportValue: (r) => findDict(dict.mes_supply_type, r.supplyType)?.label ?? r.supplyType ?? '' },
   { title: t('scm.reorder.reorderPoint'), key: 'point', width: 130, align: 'right', exportValue: (r) => r.reorderPoint },
   { title: t('scm.reorder.reorderQty'), key: 'reorderQty', width: 110, align: 'right' },
   { title: t('scm.reorder.available'), key: 'available', width: 130, align: 'right' },
   { title: t('scm.reorder.poOpen'), key: 'poOpen', width: 150, align: 'right' },
-  { title: t('scm.reorder.woNet'), key: 'woNet', width: 100, align: 'right' },
   { title: t('scm.reorder.soOpen'), key: 'soOpen', width: 170, align: 'right' },
   { title: t('scm.reorder.projected'), key: 'projected', width: 130, align: 'right' },
   { title: t('scm.reorder.suggestQty'), key: 'suggestQty', width: 130, align: 'right' },
-  { title: t('scm.reorder.orderQty'), key: 'orderQty', width: 170, exportValue: (r) => (selectable(r) ? r.orderQty : '') },
+  { title: t('scm.reorder.orderQty'), key: 'orderQty', width: 150, exportValue: (r) => (selectable(r) ? r.orderQty ?? '' : '') },
   { title: t('scm.reorder.supplier'), key: 'supplier', width: 200, exportValue: (r) => r.supplierName || '' }
 ]
 const { checked, visibleColumns, scrollX } = useColumns(columns, 'scm-reorder')
@@ -192,9 +182,10 @@ function resetQuery() {
   load()
 }
 
-const requiredDate = ref()
+/** 选中的建议生成采购订单（草稿）：按供应商分单，没有选供应商的取物料的默认供应商 */
+const warehouseId = ref()
 const creating = ref(false)
-async function createRequisition() {
+async function createOrders() {
   const rows = list.value.filter((r) => selectedKeys.value.includes(r.materialId))
   const invalid = rows.find((r) => !(Number(r.orderQty) > 0))
   if (invalid) {
@@ -203,21 +194,17 @@ async function createRequisition() {
   }
   creating.value = true
   try {
-    const id = await reorderToRequisition({
-      items: rows.map((r) => ({
-        materialId: r.materialId,
-        qty: r.orderQty,
-        supplierId: r.orderSupplierId ?? null,
-        requiredDate: requiredDate.value || null
-      }))
+    const ids = await reorderToOrders({
+      warehouseId: warehouseId.value || null,
+      items: rows.map((r) => ({ materialId: r.materialId, qty: r.orderQty, supplierId: r.orderSupplierId ?? null }))
     })
     load()
     Modal.confirm({
       title: t('scm.reorder.created'),
-      content: h('div', t('scm.reorder.createdTip', { n: rows.length })),
-      okText: t('scm.reorder.viewReq'),
+      content: h('div', t('scm.reorder.createdTip', { n: ids.length })),
+      okText: t('scm.reorder.viewOrders'),
       cancelText: t('scm.reorder.stay'),
-      onOk: () => router.push({ path: '/scm/requisition', query: { id } })
+      onOk: () => router.push(ids.length === 1 ? { path: '/scm/purchase', query: { id: ids[0] } } : '/scm/purchase')
     })
   } finally {
     creating.value = false
@@ -259,6 +246,9 @@ async function exportList(cols) {
 }
 .full {
   width: 100%;
+}
+.warehouse {
+  width: 180px;
 }
 .sub-text {
   color: var(--app-text-3);

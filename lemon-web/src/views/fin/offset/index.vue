@@ -185,7 +185,7 @@ import { useRouteOpen } from '@/composables/useRouteOpen'
 import { toOptions } from '@/utils/dict'
 import { BillKind, OffsetStatus, VoucherStatus } from '@/constants/enums'
 
-/** 冲账单：垫付运费、销售返利、三包赔偿等抵扣往来款，复核后生成红字应收 / 应付单，收付款时与欠款冲抵 */
+/** 冲账单：垫付运费、三包赔偿等抵扣往来款，复核后生成红字应收 / 应付单，收付款时与欠款冲抵 */
 const { t } = useI18n()
 const dict = useDict('fin_offset_item', 'fin_offset_status')
 const kindOptions = [

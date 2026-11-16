@@ -21,7 +21,7 @@ import DictTag from '@/components/DictTag.vue'
 import { orderTrace } from '@/api/scm/order'
 import { formatMoney } from './scm'
 
-/** 单据追溯：订单的出入库、应收应付、收付款、发运、来料检验、生产计划、项目（按权限返回） */
+/** 单据追溯：订单的出入库、应收应付、收付款（按权限返回） */
 const props = defineProps({
   kind: { type: String, required: true },
   orderId: { type: Number, required: true }
@@ -60,48 +60,6 @@ const CONF = {
       { title: t('scm.orderTrace.settledOrder'), dataIndex: 'amount', width: 170, money: true },
       { title: t('scm.orderTrace.status'), dataIndex: 'status', width: 90, dict: 'sys_approve_status' },
       { title: t('scm.orderTrace.voucher'), dataIndex: 'voucherNo', width: 100, voucher: true }
-    ]
-  },
-  shipments: {
-    title: t('scm.orderTrace.shipments'),
-    columns: [
-      { title: t('scm.orderTrace.shipNo'), dataIndex: 'shipNo', width: 160 },
-      { title: t('scm.orderTrace.outDoc'), dataIndex: 'tradeDocNo', width: 160 },
-      { title: t('scm.orderTrace.carrier'), dataIndex: 'carrier', width: 100, dict: 'scm_carrier' },
-      { title: t('scm.orderTrace.trackingNo'), dataIndex: 'trackingNo', width: 150 },
-      { title: t('scm.orderTrace.status'), dataIndex: 'status', width: 90, dict: 'scm_shipment_status' }
-    ]
-  },
-  inspections: {
-    title: t('scm.orderTrace.inspections'),
-    columns: [
-      { title: t('scm.orderTrace.inspNo'), dataIndex: 'inspNo', width: 150 },
-      { title: t('scm.orderTrace.inDoc'), dataIndex: 'sourceNo', width: 150 },
-      { title: t('scm.orderTrace.material'), dataIndex: 'materialName', width: 160 },
-      { title: t('scm.orderTrace.inspectQty'), dataIndex: 'inspectQty', width: 90 },
-      { title: t('scm.orderTrace.result'), dataIndex: 'result', width: 100, dict: 'mes_qc_result' },
-      { title: t('scm.orderTrace.date'), dataIndex: 'inspectDate', width: 110 }
-    ]
-  },
-  plans: {
-    title: t('scm.orderTrace.plans'),
-    columns: [
-      { title: t('scm.orderTrace.planNo'), dataIndex: 'planNo', width: 150 },
-      { title: t('scm.orderTrace.product'), dataIndex: 'materialName', width: 160 },
-      { title: t('scm.orderTrace.qty'), dataIndex: 'qty', width: 90 },
-      { title: t('scm.orderTrace.dueDate'), dataIndex: 'dueDate', width: 110 },
-      { title: t('scm.orderTrace.woCount'), dataIndex: 'woCount', width: 80 },
-      { title: t('scm.orderTrace.finished'), dataIndex: 'finishedQty', width: 90 },
-      { title: t('scm.orderTrace.status'), dataIndex: 'status', width: 90, dict: 'mes_plan_status' }
-    ]
-  },
-  projects: {
-    title: t('scm.orderTrace.projects'),
-    columns: [
-      { title: t('scm.orderTrace.projectCode'), dataIndex: 'code', width: 140 },
-      { title: t('scm.orderTrace.projectName'), dataIndex: 'name', width: 200 },
-      { title: t('scm.orderTrace.progress'), dataIndex: 'progress', width: 90 },
-      { title: t('scm.orderTrace.status'), dataIndex: 'status', width: 100, dict: 'pm_project_status' }
     ]
   }
 }

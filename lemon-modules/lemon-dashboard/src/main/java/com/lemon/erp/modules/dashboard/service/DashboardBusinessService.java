@@ -26,7 +26,6 @@ import java.util.function.Supplier;
 public class DashboardBusinessService {
 
     private static final DataPermissionRule ORDER_RULE = new DataPermissionRule("scm_order", "dept_id", "create_by");
-    private static final DataPermissionRule WO_RULE = new DataPermissionRule("mes_work_order", "dept_id", "create_by");
 
     private final DashboardMapper dashboardMapper;
     private final PermissionService permissionService;
@@ -72,10 +71,6 @@ public class DashboardBusinessService {
         if (permissionService.hasPerm("scm:sales:list")) {
             cards.add(new Card("toShip", Messages.get("dashboard.text.ordersShip"), CardKind.COUNT,
                     BigDecimal.valueOf(scoped(ORDER_RULE, () -> dashboardMapper.countOpenOrders(DashboardOrderKind.SALES))), null, "/scm/sales"));
-        }
-        if (permissionService.hasPerm("mes:wo:list")) {
-            cards.add(new Card("wip", Messages.get("dashboard.text.workOrdersProgress"), CardKind.COUNT,
-                    BigDecimal.valueOf(scoped(WO_RULE, dashboardMapper::countOpenWorkOrders)), null, "/mes/wo"));
         }
         return cards;
     }

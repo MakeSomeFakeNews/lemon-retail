@@ -5,9 +5,7 @@ import com.lemon.erp.framework.record.RecordTypeProvider;
 import com.lemon.erp.modules.scm.entity.ScmOrder;
 import com.lemon.erp.modules.scm.mapper.ScmCustomerMapper;
 import com.lemon.erp.modules.scm.mapper.ScmOrderMapper;
-import com.lemon.erp.modules.scm.mapper.ScmPurchaseContractMapper;
 import com.lemon.erp.modules.scm.mapper.ScmSupplierMapper;
-import com.lemon.erp.modules.scm.mapper.ScmTenderMapper;
 import com.lemon.erp.modules.scm.model.OrderKind;
 import com.lemon.erp.modules.scm.model.ScmConstants;
 import lombok.RequiredArgsConstructor;
@@ -25,8 +23,6 @@ public class ScmRecordTypes implements RecordTypeProvider {
     private final ScmOrderMapper orderMapper;
     private final ScmCustomerMapper customerMapper;
     private final ScmSupplierMapper supplierMapper;
-    private final ScmPurchaseContractMapper contractMapper;
-    private final ScmTenderMapper tenderMapper;
 
     @Override
     public List<RecordType> recordTypes() {
@@ -36,10 +32,7 @@ public class ScmRecordTypes implements RecordTypeProvider {
                 new RecordType("scm_sales", "scm.label.salesOrder", "scm:sales:list", "scm:sales:edit",
                         ScmConstants.ORDER_RULE, id -> order(id, OrderKind.SALES)),
                 new RecordType("scm_customer", "scm.label.customer", "scm:customer:list", "scm:customer:edit", null, customerMapper::selectById),
-                new RecordType("scm_supplier", "scm.label.supplier", "scm:supplier:list", "scm:supplier:edit", null, supplierMapper::selectById),
-                new RecordType("scm_contract", "scm.label.purchaseContract", "scm:contract:list", "scm:contract:edit",
-                        ScmConstants.CONTRACT_RULE, contractMapper::selectById),
-                new RecordType("scm_tender", "scm.label.tender", "scm:tender:list", "scm:tender:edit", ScmConstants.TENDER_RULE, tenderMapper::selectById));
+                new RecordType("scm_supplier", "scm.label.supplier", "scm:supplier:list", "scm:supplier:edit", null, supplierMapper::selectById));
     }
 
     private ScmOrder order(long id, OrderKind kind) {

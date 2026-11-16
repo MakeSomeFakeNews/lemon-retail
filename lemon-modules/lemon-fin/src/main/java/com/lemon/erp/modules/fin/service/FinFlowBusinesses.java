@@ -26,18 +26,4 @@ public class FinFlowBusinesses {
                 number("amount", "fin.label.paymentAmount"),
                 text("settleNo", "fin.label.paymentNo"));
     }
-
-    @Bean
-    public FlowBusiness expenseFlow() {
-        return FlowBusiness.of("fin_expense", "fin.label.expenseClaimApproval",
-                number("amount", "fin.label.claimAmount"),
-                text("claimNo", "fin.label.claimNo"));
-    }
-
-    @Bean
-    public FlowBusiness loanFlow() {
-        return FlowBusiness.of("fin_loan", "fin.label.employeeLoanApproval",
-                number("amount", "fin.label.loanAmount"),
-                text("loanNo", "fin.label.loanNo"));
-    }
 }

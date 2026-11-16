@@ -6,56 +6,6 @@
           <GrossMarginPanel />
         </a-tab-pane>
 
-        <a-tab-pane key="inventory" :tab="$t('fin.analysis.inventory')">
-          <div class="filters">
-            <span>{{ $t('fin.analysis.period') }}</span>
-            <PeriodPicker v-model:value="period" @update:value="loadInventory" />
-            <span class="sub-text">{{ $t('fin.analysis.inventoryTip') }}</span>
-          </div>
-          <a-spin :spinning="invLoading">
-            <div class="section-title">{{ $t('fin.analysis.accountCheck') }}</div>
-            <a-table row-key="code" size="middle" :columns="accountColumns" :data-source="inventory.accounts" :pagination="false" class="block">
-              <template #bodyCell="{ column, record }">
-                <template v-if="column.key === 'account'">{{ record.code }} {{ record.name }}</template>
-                <template v-else-if="column.key === 'glBalance'">{{ formatMoney(record.glBalance) }}</template>
-                <template v-else-if="column.key === 'costAmount'">
-                  <span v-if="record.costAmount != null">{{ formatMoney(record.costAmount) }}</span>
-                  <span v-else class="sub-text">{{ $t('fin.analysis.notInCost') }}</span>
-                </template>
-                <template v-else-if="column.key === 'diff'">
-                  <template v-if="record.diff != null">
-                    <span v-if="Math.abs(Number(record.diff)) >= 0.005" class="neg bold">{{ formatMoney(record.diff) }}</span>
-                    <a-tag v-else color="green" :bordered="false">{{ $t('fin.analysis.match') }}</a-tag>
-                  </template>
-                  <span v-else class="sub-text">-</span>
-                </template>
-              </template>
-            </a-table>
-            <div class="section-title">
-              {{ $t('fin.analysis.qtyDiff') }}
-              <a-tag v-if="inventory.period" :color="inventory.qtyDiffs?.length ? 'red' : 'green'" :bordered="false">
-                {{ inventory.qtyDiffs?.length ? $t('fin.analysis.nMismatch', { n: inventory.qtyDiffs.length }) : $t('fin.analysis.allMatch') }}
-              </a-tag>
-            </div>
-            <a-table
-              row-key="materialId"
-              size="middle"
-              :columns="qtyColumns"
-              :data-source="inventory.qtyDiffs"
-              :pagination="inventory.qtyDiffs?.length > 20 ? { pageSize: 20 } : false"
-              :locale="{ emptyText: $t('fin.analysis.qtyEmpty') }"
-            >
-              <template #bodyCell="{ column, record }">
-                <template v-if="column.key === 'material'">{{ record.code }} {{ record.name }}</template>
-                <template v-else-if="column.key === 'costQty'">{{ formatQty(record.costQty) }}</template>
-                <template v-else-if="column.key === 'stockQty'">{{ formatQty(record.stockQty) }}</template>
-                <template v-else-if="column.key === 'diff'">
-                  <span class="neg">{{ formatQty(Number(record.costQty || 0) - Number(record.stockQty || 0)) }}</span>
-                </template>
-              </template>
-            </a-table>
-          </a-spin>
-        </a-tab-pane>
         <a-tab-pane key="age" :tab="$t('fin.analysis.age')">
           <div class="filters">
             <span>{{ $t('fin.analysis.asOf') }}</span>
@@ -119,43 +69,17 @@
 import MaterialCategorySelect from '@/components/wms/MaterialCategorySelect.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import GrossMarginPanel from '@/components/fin/GrossMarginPanel.vue'
-import PeriodPicker from '@/components/fin/PeriodPicker.vue'
-import { inventoryCheck, stockAge } from '@/api/fin'
+import { stockAge } from '@/api/fin'
 import WarehouseSelect from '@/components/wms/WarehouseSelect.vue'
 import { useDict } from '@/composables/useDict'
 import { formatQty, today } from '@/components/wms/wms'
-import { currentPeriod, formatMoney } from '@/components/fin/fin'
+import { formatMoney } from '@/components/fin/fin'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 const tab = ref('margin')
 
-// ---------------------------------------------------------------- 存货对账
-const period = ref(currentPeriod())
-const inventory = ref({ accounts: [], qtyDiffs: [] })
-const invLoading = ref(false)
-const accountColumns = [
-  { title: t('fin.analysis.account'), key: 'account', width: 220 },
-  { title: t('fin.analysis.glBalance'), key: 'glBalance', width: 160, align: 'right' },
-  { title: t('fin.analysis.costAmount'), key: 'costAmount', width: 220, align: 'right' },
-  { title: t('fin.analysis.diff'), key: 'diff', width: 160, align: 'right' }
-]
-const qtyColumns = [
-  { title: t('fin.analysis.material'), key: 'material', width: 260 },
-  { title: t('fin.analysis.costQty'), key: 'costQty', width: 200, align: 'right' },
-  { title: t('fin.analysis.stockQty'), key: 'stockQty', width: 180, align: 'right' },
-  { title: t('fin.analysis.diff'), key: 'diff', width: 140, align: 'right' }
-]
-async function loadInventory() {
-  invLoading.value = true
-  try {
-    inventory.value = await inventoryCheck(period.value)
-  } finally {
-    invLoading.value = false
-  }
-}
 watch(tab, (t) => {
-  if (t === 'inventory' && !inventory.value.period) loadInventory()
   if (t === 'age' && !age.result) loadAge()
 })
 
@@ -203,13 +127,6 @@ async function loadAge() {
 .cards {
   margin-bottom: 16px;
 }
-.section-title {
-  font-weight: 500;
-  margin: 8px 0;
-}
-.block {
-  margin-bottom: 16px;
-}
 .hint {
   margin-left: 6px;
   margin-right: 0;
@@ -217,12 +134,6 @@ async function loadAge() {
 .sub-text {
   color: var(--app-text-3);
   font-size: 12px;
-}
-.neg {
-  color: #cf1322;
-}
-.bold {
-  font-weight: 600;
 }
 .block-tip {
   margin-bottom: 12px;

@@ -30,7 +30,7 @@ import { carrierOptions, partnerOptions, partnersByIds } from '@/api/scm/partner
  * - type：supplier | customer，变化时重新加载选项（已选值由页面清空）
  * - v-model:value：ID；label：当前值的显示名（编辑时回显，不传时按 ID 取名称）
  * - @select(partner)：选中后返回 { id, code, name, contact, phone, address }
- * - carrier：承运商（采购运费、发运单），只列出标记为物流公司的供应商；还没有标记时列出全部供应商并提示去标记
+ * - carrier：承运商（采购运费、调拨费用），只列出标记为物流公司的供应商；还没有标记时列出全部供应商并提示去标记
  */
 const props = defineProps({
   type: { type: String, required: true },

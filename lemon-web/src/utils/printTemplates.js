@@ -115,15 +115,6 @@ export const PRINT_TYPES = [
     note: true
   },
   {
-    key: 'scm.wavePick',
-    module: n.modScm,
-    name: n.wavePick,
-    fields: [n.warehouse, n.deliveryNotice, n.prepared, n.status],
-    columns: [n.index, n.location, n.material, n.batch, n.expiryDate, num(n.quantity), n.sorting],
-    signs: [n.prepared, n.picker, n.reviewer],
-    note: true
-  },
-  {
     key: 'scm.packingList',
     module: n.modScm,
     name: n.packingList,
@@ -175,23 +166,6 @@ export const PRINT_TYPES = [
     columns: [n.date, n.type, n.docNo, n.sourceSettle, num(n.increase), num(n.decrease), num(n.balance), n.remark],
     signs: [n.tabulator, n.finReview, n.customerSeal, n.supplierSeal],
     note: true
-  },
-  {
-    key: 'mes.workOrder',
-    module: n.modMes,
-    name: n.workOrder,
-    fields: [n.product, n.bomVersion, n.planQty, n.planStart, n.planFinish, n.finishWarehouse],
-    columns: [...MATERIAL_COLUMNS, num(n.unitUsage), num(n.requiredQty), num(n.supplement), num(n.issued)],
-    signs: [n.prepared, n.productionManager, n.warehouse],
-    note: true
-  },
-  {
-    key: 'hr.payslip',
-    module: n.modHr,
-    name: n.payslip,
-    slip: true,
-    fields: [n.empName, n.empNo, n.dept, n.attendance, n.baseSalary, n.allowance, n.overtimePay, n.pieceWage, n.performanceBonus, n.otherBonus,
-      n.attendanceDeduction, n.grossPay, n.socialInsurance, n.housingFund, n.specialDeduction, n.incomeTax, n.otherDeduction, n.netPay, n.remark]
   }
 ].map((tp) => ({ ...tp, columns: (tp.columns || []).map((c) => (typeof c === 'string' ? { title: c } : c)), signs: tp.signs || [] }))
 

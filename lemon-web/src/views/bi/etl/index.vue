@@ -89,11 +89,7 @@ const FACTS = [
   { key: 'sales', name: t('bi.etl.fact.sales'), short: t('bi.etl.factShort.sales'), desc: t('bi.etl.factDesc.sales') },
   { key: 'purchase', name: t('bi.etl.fact.purchase'), short: t('bi.etl.factShort.purchase'), desc: t('bi.etl.factDesc.purchase') },
   { key: 'inventory', name: t('bi.etl.fact.inventory'), short: t('bi.etl.factShort.inventory'), desc: t('bi.etl.factDesc.inventory') },
-  { key: 'production', name: t('bi.etl.fact.production'), short: t('bi.etl.factShort.production'), desc: t('bi.etl.factDesc.production') },
-  { key: 'finance', name: t('bi.etl.fact.finance'), short: t('bi.etl.factShort.finance'), desc: t('bi.etl.factDesc.finance') },
-  { key: 'hr', name: t('bi.etl.fact.hr'), short: t('bi.etl.factShort.hr'), desc: t('bi.etl.factDesc.hr') },
-  { key: 'crm', name: t('bi.etl.fact.crm'), short: t('bi.etl.factShort.crm'), desc: t('bi.etl.factDesc.crm') },
-  { key: 'project', name: t('bi.etl.fact.project'), short: t('bi.etl.factShort.project'), desc: t('bi.etl.factDesc.project') }
+  { key: 'finance', name: t('bi.etl.fact.finance'), short: t('bi.etl.factShort.finance'), desc: t('bi.etl.factDesc.finance') }
 ]
 const LABELS = Object.fromEntries(FACTS.map((f) => [f.key, f.short]))
 

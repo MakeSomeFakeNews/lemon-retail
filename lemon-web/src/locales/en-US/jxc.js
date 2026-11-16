@@ -96,7 +96,7 @@ export default {
   },
   sales: {
     title: 'Sales report',
-    tip: 'Amounts exclude tax, in the base currency, with returns negative: shipped goods − returned goods = goods amount (before the order discount); goods amount − order discount = net amount (sales revenue, as booked); sales amount = net amount − freight borne by the company − receipt discounts / rounding − bad debts written off; gross profit = sales amount − cost, margin = gross profit / sales amount. The order discount is allocated to the lines (the tax-inclusive share converted by the line tax rate); receipt discounts (given when collecting the receivables of deliveries and returns, accumulated over receipts; negative for returns refunded less) and bad debts written off on the delivery receivables are converted to tax-exclusive by the ratio of the receivable and counted on the delivery date, not the receipt / write-off date; freight borne by the company covers shipments, deliveries with company-borne freight and freight paid by customers on returns; freight, discounts and bad debts are allocated by line amount, so a category, brand or item only carries the part of its own lines. In the income statement these three are selling, financial and non-operating expenses and gross profit there is net amount − cost, which differs from the gross profit here. Cost is the real-time inventory cost: shipments at the moving average cost at the time of issue, returns at the original issue cost (see stock transactions); older documents without real-time cost use the costing unit cost of the month or the reference cost. Finance "Gross Margin" uses the month-end costing unit cost (for bookkeeping), so the two may differ. In the details the adjustments can be shown "at the bottom" (lines show the goods amount and profit before discount, with one adjustment row per type at the bottom) or "allocated to lines", with the same totals. Data is limited to your data scope. Clicking a row opens the shipment lines when grouped by category, brand or item, and lists the documents otherwise (click a document for its lines); use "Documents" or "Item details" in the actions to choose. Click a document number to open the document.'
+    tip: 'Amounts exclude tax, in the base currency, with returns negative: shipped goods − returned goods = goods amount (before the order discount); goods amount − order discount = net amount (sales revenue, as booked); sales amount = net amount − freight borne by the company − receipt discounts / rounding − bad debts written off; gross profit = sales amount − cost, margin = gross profit / sales amount. The order discount is allocated to the lines (the tax-inclusive share converted by the line tax rate); receipt discounts (given when collecting the receivables of deliveries and returns, accumulated over receipts; negative for returns refunded less) and bad debts written off on the delivery receivables are converted to tax-exclusive by the ratio of the receivable and counted on the delivery date, not the receipt / write-off date; freight borne by the company = company-borne freight on deliveries + freight paid by customers on returns; freight, discounts and bad debts are allocated by line amount, so a category, brand or item only carries the part of its own lines. In the income statement these three are selling, financial and non-operating expenses and gross profit there is net amount − cost, which differs from the gross profit here. Cost is the real-time inventory cost: shipments at the moving average cost at the time of issue, returns at the original issue cost (see stock transactions); documents without a cost use the reference cost. In the details the adjustments can be shown "at the bottom" (lines show the goods amount and profit before discount, with one adjustment row per type at the bottom) or "allocated to lines", with the same totals. Data is limited to your data scope. Clicking a row opens the shipment lines when grouped by category, brand or item, and lists the documents otherwise (click a document for its lines); use "Documents" or "Item details" in the actions to choose. Click a document number to open the document.'
   },
   purchase: {
     title: 'Purchase report',
@@ -140,7 +140,7 @@ export default {
     netCash: 'Net inflow',
     salesTrend: 'Sales and profit trend',
     cashTrend: 'Cash flow trend',
-    cashTip: 'Receipts = receipts + advance receipts + note collections / discounting (net of interest); payments = payments + prepayments + notes payable paid (effective documents, actual amounts excluding discounts; receiving, endorsing or issuing notes moves no cash and is excluded)',
+    cashTip: 'Receipts = receipts + advance receipts; payments = payments + prepayments (effective documents, actual amounts excluding discounts)',
     cashNoScope: 'Cash flow covers the whole company and requires the "All data" data scope',
     salesmen: 'Sales by employee',
     customers: 'Sales by customer',
@@ -154,10 +154,8 @@ export default {
     today: 'Today',
     lastMonthEnd: 'End of last month',
     lastYearEnd: 'End of last year',
-    tip: 'Fund balances are voucher balances as of the date (including unposted ones, the same as the cashier daily report); inventory is the cumulative stock flow cost as of the date (by document date, rolled back from current stock × the real-time moving average cost for later flows; as of today it equals Stock Query), excluding supplier consignment warehouses; receivables and payables = documents up to the date − settlements up to the date (including discounts, advance offsets and bad debts; returns, offset notes and other red documents reduce the balance directly), and advances likewise; notes receivable are the notes held on the date and notes payable those issued but not yet paid, at face value. Documents dated after the as-of date are excluded. Covers the whole company.',
-    estimated: 'The date is before real-time inventory costing went live, so the inventory value uses approximate costs backfilled from costing unit costs or reference costs during the upgrade. For reference only.',
-    notesReceivable: 'Notes receivable',
-    notesPayable: 'Notes payable',
+    tip: 'Fund balances are voucher balances as of the date (including unposted ones, the same as the cashier daily report); inventory is the cumulative stock flow cost as of the date (by document date, rolled back from current stock × the real-time moving average cost for later flows; as of today it equals Stock Query), excluding supplier consignment warehouses; receivables and payables = documents up to the date − settlements up to the date (including discounts, advance offsets and bad debts; returns, offset notes and other red documents reduce the balance directly), and advances likewise. Documents dated after the as-of date are excluded. Covers the whole company.',
+    estimated: 'The date is before real-time inventory costing went live, so the inventory value uses approximate costs backfilled from reference costs during the upgrade. For reference only.',
     unvouchered: '{n} effective receipts / payments up to the date have no voucher yet (receipts {receipt}, payments {payment}); fund balances exclude them until vouchers are generated.',
     funds: 'Funds',
     cash: 'Cash',
@@ -169,7 +167,7 @@ export default {
     payable: 'Payables',
     advance: 'Advance receipts',
     netAssets: 'Net assets',
-    netTip: 'Net assets = funds + inventory + receivables + notes receivable + prepayments − payables − notes payable − advance receipts (notes are hidden when there are none)',
+    netTip: 'Net assets = funds + inventory + receivables + prepayments − payables − advance receipts',
     account: 'Account',
     balance: 'Balance',
     byWarehouse: 'Inventory by warehouse',

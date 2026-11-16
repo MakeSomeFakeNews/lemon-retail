@@ -39,9 +39,6 @@ public class ScmDelivery extends BaseEntity {
     /** 生成的销售出库单 */
     private Long tradeDocId;
 
-    /** 所属拣货波次 */
-    private Long waveId;
-
     private Long pickBy;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -70,6 +67,4 @@ public class ScmDelivery extends BaseEntity {
     private List<ScmDeliveryItem> items;
     @TableField(exist = false)
     private List<ScmDeliveryPick> picks;
-    @TableField(exist = false)
-    private String waveNo;
 }

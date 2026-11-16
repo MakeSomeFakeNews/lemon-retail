@@ -21,7 +21,6 @@ public record VoucherEntryRequest(
         Long deptId,
         @DecimalMin(value = "0", message = "{fin.valid.amountCannotLess}") @Digits(integer = 16, fraction = 2, message = "{fin.valid.amountAllowsMostDecimalPlaces}") BigDecimal debit,
         @DecimalMin(value = "0", message = "{fin.valid.amountCannotLess}") @Digits(integer = 16, fraction = 2, message = "{fin.valid.amountAllowsMostDecimalPlaces}") BigDecimal credit,
-        Long projectId,
         Long customerId,
         Long supplierId,
         Long materialId) {

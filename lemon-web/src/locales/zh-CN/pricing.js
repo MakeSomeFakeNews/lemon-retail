@@ -27,7 +27,6 @@ export default {
     minPrice: '最低价格',
     maxDate: '最高日期',
     maxPrice: '最高价格',
-    quotations: '报价历史',
     sales: '销售历史',
     purchases: '进货历史',
     purchaseQty: '进货数量',
@@ -40,7 +39,6 @@ export default {
     PRICE_LIST: '价目表',
     PRICE_LEVEL: '等级价',
     RETAIL: '零售价',
-    CONTRACT_PRICE: '合同价',
     SUPPLIER_PRICE: '供货价',
     LAST_PRICE: '最近价',
     REF_COST: '参考成本'

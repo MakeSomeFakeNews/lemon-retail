@@ -49,7 +49,7 @@ public class StockDocReverser {
         if (kind == TRANSFER) {
             periodGuard.checkOpen(bizDate, "wms.label.reversal");
         } else {
-            periodGuard.checkStockOpen(bizDate, "wms.label.reversal");
+            periodGuard.checkOpen(bizDate, "wms.label.reversal");
         }
         if (docMapper.update(Wrappers.<WmsStockDoc>lambdaUpdate().set(WmsStockDoc::getReversed, 1)
                 .eq(WmsStockDoc::getId, id).eq(WmsStockDoc::getReversed, 0)) == 0) {

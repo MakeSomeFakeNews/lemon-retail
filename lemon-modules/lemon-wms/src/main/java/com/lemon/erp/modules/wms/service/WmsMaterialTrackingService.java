@@ -11,16 +11,13 @@ import com.lemon.erp.modules.wms.entity.WmsBatch;
 import com.lemon.erp.modules.wms.entity.WmsMaterial;
 import com.lemon.erp.modules.wms.entity.WmsSerial;
 import com.lemon.erp.modules.wms.entity.WmsStock;
-import com.lemon.erp.modules.wms.entity.WmsStockHold;
 import com.lemon.erp.modules.wms.mapper.WmsBatchMapper;
 import com.lemon.erp.modules.wms.mapper.WmsMaterialCostMapper;
 import com.lemon.erp.modules.wms.mapper.WmsMaterialMapper;
 import com.lemon.erp.modules.wms.mapper.WmsSerialMapper;
 import com.lemon.erp.modules.wms.mapper.WmsStockFlowMapper;
-import com.lemon.erp.modules.wms.mapper.WmsStockHoldMapper;
 import com.lemon.erp.modules.wms.mapper.WmsStockMapper;
 import com.lemon.erp.modules.wms.mapper.WmsTrackingMapper;
-import com.lemon.erp.modules.wms.model.HoldStatus;
 import com.lemon.erp.modules.wms.model.SerialStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,7 +29,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static com.lemon.erp.modules.wms.model.WmsConstants.NO_BATCH;
@@ -61,7 +57,6 @@ public class WmsMaterialTrackingService {
     private final WmsMaterialMapper materialMapper;
     private final WmsStockMapper stockMapper;
     private final WmsStockFlowMapper flowMapper;
-    private final WmsStockHoldMapper holdMapper;
     private final WmsSerialMapper serialMapper;
     private final WmsBatchMapper batchMapper;
     private final WmsMaterialCostMapper costMapper;
@@ -217,18 +212,11 @@ public class WmsMaterialTrackingService {
         return s.getWarehouseId() + "|" + s.getLocationId();
     }
 
-    /** 阻止切换的进行中单据：仓库的在途调拨 / 审批中单据、未完成的盘点、仍冻结的待检 / 不合格库存，以及其他模块登记的 */
+    /** 阻止切换的进行中单据：仓库的在途调拨 / 审批中单据、未完成的盘点，以及其他模块登记的 */
     private List<String> openDocs(Long materialId) {
         List<String> docs = new ArrayList<>();
         trackingMapper.selectOpenStockDocs(materialId).forEach(no -> docs.add(Messages.get("wms.text.openStockDoc", no)));
         trackingMapper.selectOpenChecks(materialId).forEach(no -> docs.add(Messages.get("wms.text.openCheck", no)));
-        holdMapper.selectList(Wrappers.<WmsStockHold>lambdaQuery()
-                        .select(WmsStockHold::getSourceNo, WmsStockHold::getQty)
-                        .eq(WmsStockHold::getMaterialId, materialId)
-                        .in(WmsStockHold::getStatus, HoldStatus.HOLDING)
-                        .gt(WmsStockHold::getQty, BigDecimal.ZERO))
-                .stream().map(h -> Objects.toString(h.getSourceNo(), "-")).distinct()
-                .forEach(no -> docs.add(Messages.get("wms.text.openHold", no)));
         guards.forEach(g -> docs.addAll(g.openDocs(materialId)));
         if (docs.size() > MAX_LISTED) {
             int more = docs.size() - MAX_LISTED;

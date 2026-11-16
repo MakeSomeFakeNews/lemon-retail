@@ -24,9 +24,6 @@ public class FinVoucherEntry extends BaseEntity {
     /** 部门（辅助核算） */
     private Long deptId;
 
-    /** 辅助核算：项目 */
-    private Long projectId;
-
     /** 辅助核算：客户 */
     private Long customerId;
 
@@ -48,9 +45,6 @@ public class FinVoucherEntry extends BaseEntity {
 
     @TableField(exist = false)
     private String deptName;
-
-    @TableField(exist = false)
-    private String projectName;
 
     @TableField(exist = false)
     private String customerName;

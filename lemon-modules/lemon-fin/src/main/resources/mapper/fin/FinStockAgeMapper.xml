@@ -41,8 +41,7 @@
 
     <select id="selectUnitCosts" resultType="com.lemon.erp.modules.fin.dto.FinAnalysis$UnitCost">
         SELECT m.id AS "materialId",
-               COALESCE((SELECT c.unit_cost FROM fin_material_cost c WHERE c.material_id = m.id AND c.period &lt;= #{period}
-                         AND c.unit_cost &gt; 0 ORDER BY c.period DESC LIMIT 1), m.ref_cost, 0) AS "unitCost"
+               COALESCE((SELECT NULLIF(c.unit_cost, 0) FROM wms_material_cost c WHERE c.material_id = m.id), m.ref_cost, 0) AS "unitCost"
         FROM wms_material m
         WHERE m.id IN <foreach collection="materialIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </select>

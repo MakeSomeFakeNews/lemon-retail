@@ -30,6 +30,4 @@ public interface DashboardMapper {
     /** 应收 / 应付未核销余额 */
     java.math.BigDecimal sumBillBalance(@Param("kind") DashboardBillKind kind);
 
-    /** 已下达、生产中的工单数 */
-    long countOpenWorkOrders();
 }

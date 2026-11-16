@@ -51,7 +51,7 @@
               <template v-else-if="column.key === 'source'">
                 <DictTag type="fin_bill_source" :value="record.sourceType" />
                 <div class="sub-text">
-                  <SourceDocLink v-if="record.sourceNo" :type="record.sourceType" :id="record.sourceId" :no="record.sourceNo" :bill-kind="record.kind" :project-id="record.projectId" />
+                  <SourceDocLink v-if="record.sourceNo" :type="record.sourceType" :id="record.sourceId" :no="record.sourceNo" :bill-kind="record.kind" />
                   <template v-else>{{ record.remark || '' }}</template>
                 </div>
               </template>

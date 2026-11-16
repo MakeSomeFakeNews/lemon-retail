@@ -2,7 +2,8 @@
 export default {
   entry: {
     purchase: 'Quick Receipt',
-    draft: 'Drafts'
+    draft: 'Drafts',
+    order: 'Sales Orders'
   },
   kind: {
     salesOut: 'Sales Delivery',
@@ -62,5 +63,34 @@ export default {
     isDefault: 'default',
     more: 'More formats…',
     formatTagged: '{name} ({tags})'
+  },
+  order: {
+    searchCustomerPh: 'Search customer name or code',
+    byOrderNo: 'Order no.',
+    byCustomer: 'Customer',
+    title: 'Sales orders',
+    detailTitle: 'Order',
+    searchPh: 'Search order no.',
+    customer: 'Customer',
+    orderDate: 'Order date',
+    deliveryDate: 'Delivery date',
+    salesman: 'Salesperson',
+    warehouse: 'Warehouse',
+    totalAmount: 'Amount',
+    wholeDiscount: 'Order discount',
+    taxAmount: 'Tax',
+    remark: 'Remark',
+    progress: 'Shipping progress',
+    shipped: 'Shipped {done} / {total}',
+    items: 'Items',
+    qty: 'Qty',
+    doneQty: 'Shipped',
+    returnQty: 'Returned',
+    price: 'Price',
+    gift: 'Gift',
+    outDocs: 'Deliveries',
+    bills: 'Receivables',
+    billSummary: 'Receivable {total}, received {settled}',
+    settled: 'Received {amount}'
   }
 }

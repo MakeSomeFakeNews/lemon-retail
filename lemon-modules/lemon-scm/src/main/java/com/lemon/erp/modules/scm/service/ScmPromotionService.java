@@ -109,7 +109,7 @@ public class ScmPromotionService {
             return i;
         }).toList();
         // 预览不返回赠品的税率
-        Applied a = apply(customer, req.orderDate(), items, req.rebateAmount(), null);
+        Applied a = apply(customer, req.orderDate(), items, null);
         Map<Long, String> names = new HashMap<>();
         a.usages().forEach(u -> names.put(u.promotionId(), u.name()));
         Map<Long, WmsMaterial> materials = materialService.mapByIds(a.items().stream().map(ScmOrderItem::getMaterialId).toList());
@@ -144,13 +144,12 @@ public class ScmPromotionService {
     }
 
     /**
-     * 应用促销和返利抵扣
+     * 应用促销
      *
      * @param items  订单明细，单价为原价
-     * @param rebate 返利抵扣金额，为空或 0 不抵扣
      * @param giftTaxRate 赠品行的税率
      */
-    public Applied apply(ScmCustomer customer, LocalDate orderDate, List<ScmOrderItem> items, BigDecimal rebate, BigDecimal giftTaxRate) {
+    public Applied apply(ScmCustomer customer, LocalDate orderDate, List<ScmOrderItem> items, BigDecimal giftTaxRate) {
         List<ScmPromotion> promos = promotionMapper.selectApplicable(orderDate, customer.getLevel());
         Set<Long> ids = new HashSet<>();
         items.forEach(i -> ids.add(i.getMaterialId()));
@@ -158,7 +157,7 @@ public class ScmPromotionService {
         Map<Long, WmsMaterial> materials = ids.isEmpty() ? Map.of() : materialService.mapByIds(ids);
         // 指定物料分类的促销对其下级分类的物料同样适用
         MaterialCategoryTree categories = promos.stream().anyMatch(p -> p.getMaterialCategory() != null) ? categoryService.tree() : null;
-        return PromotionCalculator.calculate(promos, materials, items, rebate,
+        return PromotionCalculator.calculate(promos, materials, items,
                 categories == null ? PromotionCalculator.EXACT_CATEGORY : categories::lineage, giftTaxRate);
     }
 

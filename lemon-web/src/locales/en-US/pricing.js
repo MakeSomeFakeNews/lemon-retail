@@ -27,7 +27,6 @@ export default {
     minPrice: 'Lowest price',
     maxDate: 'Highest date',
     maxPrice: 'Highest price',
-    quotations: 'Quotations',
     sales: 'Sales history',
     purchases: 'Purchase history',
     purchaseQty: 'Purchase qty',
@@ -40,7 +39,6 @@ export default {
     PRICE_LIST: 'Price list',
     PRICE_LEVEL: 'Level price',
     RETAIL: 'Retail',
-    CONTRACT_PRICE: 'Contract price',
     SUPPLIER_PRICE: 'Supply price',
     LAST_PRICE: 'Last price',
     REF_COST: 'Ref. cost'

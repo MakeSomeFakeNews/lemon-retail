@@ -30,7 +30,6 @@ public class WmsPartnerMergeHandler implements PartnerMergeHandler {
         mergeMapper.mergeStockFlow(customer, sourceIds, targetId, targetName);
         mergeMapper.mergeStockDoc(customer, sourceIds, targetId, targetName);
         if (!customer) {
-            mergeMapper.mergeStockHold(sourceIds, targetId);
             mergeMapper.mergeFeeCarrier(sourceIds, targetId);
         }
     }

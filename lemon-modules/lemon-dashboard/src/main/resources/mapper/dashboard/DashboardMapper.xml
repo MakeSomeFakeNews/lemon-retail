@@ -44,8 +44,4 @@
         SELECT COALESCE(SUM(b.amount - b.settled_amount), 0) FROM fin_bill b WHERE b.kind = #{kind}
     </select>
 
-    <select id="countOpenWorkOrders" resultType="long">
-        SELECT COUNT(*) FROM mes_work_order w WHERE w.status IN ('RELEASED', 'STARTED')
-    </select>
-
 </mapper>

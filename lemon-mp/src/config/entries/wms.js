@@ -1,4 +1,4 @@
-/** 工作台入口（见 index.js）：扫码作业与查询，权限与 Web 端移动作业、对应接口一致 */
+/** 工作台入口（见 index.js）：开单、扫码作业与查询，权限与 Web 端对应接口一致 */
 export default [
   {
     // 快速开单：销售出库直接开单（不引用订单），参数关闭时不显示
@@ -9,6 +9,16 @@ export default [
     url: '/pkg-wms/sale/index',
     perm: 'scm:salesOut:add',
     rule: 'scm.directDoc.enabled'
+  },
+  {
+    // 销售订单进度：按订单号或客户查询，查看明细的发货进度、出库记录和应收
+    key: 'scm-sales-order',
+    group: 'sales',
+    title: 'trade.entry.order',
+    color: '#fa8c16',
+    url: '/pkg-wms/order/index',
+    perm: 'scm:sales:list',
+    links: ['/scm/sales']
   },
   {
     // 商品速查：名称、规格、简拼搜索商品，看库存和按设置显示的价格（价格按权限由后端过滤），点击联查图片、库存分布、价格历史
@@ -66,7 +76,7 @@ export default [
     color: '#1677ff',
     url: '/pkg-wms/receive/index',
     perm: 'scm:purchaseIn:add',
-    links: ['/m/receive', '/scm/purchase-in']
+    links: ['/scm/purchase-in']
   },
   {
     key: 'wms-putaway',
@@ -74,8 +84,7 @@ export default [
     title: 'wms.entry.putaway',
     color: '#722ed1',
     url: '/pkg-wms/putaway/index',
-    perm: 'wms:transfer:add',
-    links: ['/m/putaway']
+    perm: 'wms:transfer:add'
   },
   {
     key: 'wms-pick',
@@ -84,7 +93,7 @@ export default [
     color: '#fa8c16',
     url: '/pkg-wms/pick/index',
     perm: 'scm:delivery:pick',
-    links: ['/m/pick', '/scm/delivery']
+    links: ['/scm/delivery']
   },
   {
     key: 'wms-check',
@@ -93,17 +102,6 @@ export default [
     color: '#52c41a',
     url: '/pkg-wms/check/index',
     perm: 'wms:check:edit',
-    links: ['/m/check', '/wms/check']
-  },
-  {
-    key: 'mes-report',
-    group: 'warehouse',
-    title: 'wms.entry.report',
-    color: '#eb2f96',
-    url: '/pkg-wms/report/index',
-    perm: 'mes:wo:report',
-    // 报工页要查询工单列表和详情
-    permAll: ['mes:wo:list'],
-    links: ['/mes/wo']
+    links: ['/wms/check']
   }
 ]

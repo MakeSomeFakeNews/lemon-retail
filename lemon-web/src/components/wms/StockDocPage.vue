@@ -58,7 +58,7 @@
         :data-source="list"
         :loading="loading"
         :pagination="pagination"
-        :row-selection="{ ...rowSelection, getCheckboxProps: (r) => ({ disabled: r.status !== WmsDocStatus.DRAFT }) }"
+        :row-selection="{ ...rowSelection, getCheckboxProps: (r) => ({ disabled: r.status !== DocStatus.DRAFT }) }"
         :scroll="{ x: scrollX + 32, y: '100%' }"
         @change="onTableChange"
       >
@@ -162,7 +162,7 @@ import { useRouteOpen } from '@/composables/useRouteOpen'
 import { useUserStore } from '@/store/user'
 import { money } from '@/utils/number'
 
-import { WmsDocStatus } from '@/constants/enums'
+import { DocStatus } from '@/constants/enums'
 /**
  * 入库单 / 出库单 / 调拨单列表页，三个页面共用
  */
@@ -273,7 +273,7 @@ function onEditFromDetail(record) {
 
 // 行操作
 const rowActions = (record) => {
-  const draft = record.status === WmsDocStatus.DRAFT
+  const draft = record.status === DocStatus.DRAFT
   return [
     { type: 'view', onClick: () => openDetail(record) },
     { type: 'edit', show: draft, perm: `wms:${props.kind}:edit`, onClick: () => form.value.openEdit(record) },
@@ -298,7 +298,7 @@ const rowActions = (record) => {
       slot: 'receive',
       label: t('wms.common.receive'),
       icon: InboxOutlined,
-      show: props.kind === 'transfer' && record.status === WmsDocStatus.TRANSIT,
+      show: props.kind === 'transfer' && record.status === DocStatus.TRANSIT,
       perm: 'wms:transfer:receive'
     },
     {

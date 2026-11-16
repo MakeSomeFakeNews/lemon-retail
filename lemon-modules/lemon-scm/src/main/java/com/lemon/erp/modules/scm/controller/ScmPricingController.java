@@ -52,7 +52,7 @@ public class ScmPricingController {
      * @param qtys 与 materialIds 一一对应的数量（可省略）
      */
     @GetMapping("/pricing/default")
-    @PreAuthorize("@ss.hasAnyPerm('scm:sales:add', 'scm:sales:edit', 'scm:quotation:add', 'scm:quotation:edit', 'scm:salesOut:add', "
+    @PreAuthorize("@ss.hasAnyPerm('scm:sales:add', 'scm:sales:edit', 'scm:salesOut:add', "
             + "'scm:purchase:add', 'scm:purchase:edit', 'scm:purchaseIn:add', 'scm:price:list', 'scm:goodsPrice:list')")
     public R<List<PricingViews.DefaultPrice>> defaults(@RequestParam OrderKind kind, @RequestParam(required = false) Long partnerId,
                                                        @RequestParam List<Long> materialIds,
@@ -68,7 +68,7 @@ public class ScmPricingController {
      * @param kind    partnerId 的种类（SALES 客户 / PURCHASE 供应商），指定时 partnerId 只筛选该方向的分区
      */
     @GetMapping("/pricing/reference")
-    @PreAuthorize("@ss.hasAnyPerm('scm:sales:list', 'scm:salesOut:list', 'scm:quotation:list', 'scm:purchase:list', 'scm:purchaseIn:list')")
+    @PreAuthorize("@ss.hasAnyPerm('scm:sales:list', 'scm:salesOut:list', 'scm:purchase:list', 'scm:purchaseIn:list')")
     public R<PricingViews.Reference> reference(@RequestParam Long materialId, @RequestParam(required = false) Long partnerId,
                                                @RequestParam(required = false) String keyword,
                                                @RequestParam(required = false) OrderKind kind,

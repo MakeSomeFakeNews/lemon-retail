@@ -34,11 +34,9 @@
             {{ detail.currency }} @{{ Number(detail.exchangeRate) }}
             <span class="sub-text">（≈ ¥{{ formatMoney(Number(detail.totalAmount) * Number(detail.exchangeRate || 0)) }}）</span>
           </a-descriptions-item>
-          <a-descriptions-item v-if="Number(detail.discountAmount) || Number(detail.rebateAmount) || Number(detail.wholeDiscount)" :label="$t('scm.order.discount')">
+          <a-descriptions-item v-if="Number(detail.discountAmount) || Number(detail.wholeDiscount)" :label="$t('scm.order.discount')">
             <span v-if="Number(detail.discountAmount)">{{ $t('scm.order.promotionAmount', { amount: symbol + formatMoney(detail.discountAmount) }) }}</span>
-            <span v-if="Number(detail.discountAmount) && Number(detail.rebateAmount)">{{ $t('scm.order.comma') }}</span>
-            <span v-if="Number(detail.rebateAmount)">{{ $t('scm.order.rebateAmount', { amount: symbol + formatMoney(detail.rebateAmount) }) }}</span>
-            <span v-if="Number(detail.wholeDiscount) && (Number(detail.discountAmount) || Number(detail.rebateAmount))">{{ $t('scm.order.comma') }}</span>
+            <span v-if="Number(detail.wholeDiscount) && Number(detail.discountAmount)">{{ $t('scm.order.comma') }}</span>
             <span v-if="Number(detail.wholeDiscount)">{{ $t('scm.wholeDiscount.value', { amount: symbol + formatMoney(detail.wholeDiscount) }) }}</span>
             <div v-if="Number(detail.wholeDiscount)" class="sub-text">{{ $t('scm.wholeDiscount.grossOnly', { amount: symbol + formatMoney(grossTotal) }) }}</div>
           </a-descriptions-item>
@@ -48,17 +46,8 @@
               <div class="sub-text">{{ $t('scm.order.closeAdjustHint') }}</div>
             </div>
           </a-descriptions-item>
-          <a-descriptions-item v-if="detail.contractNo" :label="$t('scm.order.contract')">{{ detail.contractNo }}</a-descriptions-item>
           <a-descriptions-item v-if="detail.invoiceKind" :label="$t('scm.taxRate.invoiceKind')">
             <DictTag type="scm_invoice_kind" :value="detail.invoiceKind" />
-          </a-descriptions-item>
-          <a-descriptions-item v-if="kind === 'purchase' && detail.approveTime" :label="$t('scm.order.supplierConfirm')">
-            <template v-if="detail.supplierConfirm">
-              <DictTag type="scm_supplier_confirm" :value="detail.supplierConfirm" />
-              <span v-if="detail.promisedDate">{{ $t('scm.order.promisedDateValue', { date: detail.promisedDate }) }}</span>
-              <span v-if="detail.confirmRemark" class="sub-text"> {{ detail.confirmRemark }}</span>
-            </template>
-            <span v-else class="sub-text">{{ $t('scm.order.unconfirmed') }}</span>
           </a-descriptions-item>
           <a-descriptions-item v-if="kind === 'sales'" :label="$t('scm.order.salesman')">
             <template v-if="!salesmanEditing">
@@ -97,7 +86,7 @@
                 </template>
                 <template v-else-if="column.key === 'qty'">{{ qtyText(record) }}</template>
                 <template v-else-if="column.key === 'price'">
-                  <!-- 整单优惠只在合计处扣减：明细显示优惠前的单价；划线价只表示促销、返利抵扣 -->
+                  <!-- 整单优惠只在合计处扣减：明细显示优惠前的单价；划线价只表示促销 -->
                   <div>{{ symbol }}{{ formatMoney(grossPrice(record)) }}</div>
                   <div v-if="record.gift" class="sub-text"><a-tag color="magenta">{{ $t('scm.order.gift') }}</a-tag>{{ record.promotionName }}</div>
                   <div v-else-if="promoted(record)" class="sub-text">
@@ -145,13 +134,6 @@
               </template>
             </a-table>
           </a-tab-pane>
-          <a-tab-pane v-if="kind === 'purchase'" key="outsource" :tab="$t('scm.order.tabOutsource')">
-            <OutsourcePanel
-              v-if="detail"
-              :order-id="detail.id"
-              :editable="[OrderStatus.APPROVED, OrderStatus.PARTIAL, OrderStatus.COMPLETED].includes(detail.status) && userStore.hasPerm('scm:purchaseIn:add')"
-            />
-          </a-tab-pane>
           <a-tab-pane key="trace" :tab="$t('scm.order.tabTrace')">
             <OrderTrace v-if="detail" :kind="kind" :order-id="detail.id" @voucher="(id) => ((voucherId = id), (voucherOpen = true))" />
           </a-tab-pane>
@@ -193,7 +175,6 @@ import {
   ExportOutlined,
   ImportOutlined,
   PrinterOutlined,
-  ProjectOutlined,
   RollbackOutlined,
   SendOutlined,
   StopOutlined,
@@ -205,7 +186,6 @@ import { findDict } from '@/utils/dict'
 import AttachmentPanel from '@/components/AttachmentPanel.vue'
 import VoucherDetail from '@/components/fin/VoucherDetail.vue'
 import OrderTrace from './OrderTrace.vue'
-import OutsourcePanel from './OutsourcePanel.vue'
 import SalesReservationPanel from './SalesReservationPanel.vue'
 import ChangeLogPanel from '@/components/ChangeLogPanel.vue'
 import OrderChangeDrawer from './OrderChangeDrawer.vue'
@@ -270,7 +250,7 @@ const deliveryColumns = [
 const detail = ref()
 /** 优惠前合计（明细金额合计）= 价税合计 + 整单优惠 */
 const grossTotal = computed(() => Math.round((Number(detail.value?.totalAmount || 0) + Number(detail.value?.wholeDiscount || 0)) * 100) / 100)
-/** 有促销、返利抵扣（原价不同于优惠前单价）时显示划线原价；只有整单优惠时不显示 */
+/** 有促销（原价不同于优惠前单价）时显示划线原价；只有整单优惠时不显示 */
 const promoted = (r) => r.origPrice != null && Math.abs(Number(r.origPrice) - grossPrice(r)) >= 0.005
 const deliveries = ref([])
 const voucherOpen = ref(false)
@@ -461,26 +441,6 @@ const actions = computed(() => {
       label: t('scm.order.tabDelivery'),
       icon: SendOutlined,
       run: () => router.push({ path: '/scm/delivery', query: { orderId: d.id, create: 1 } })
-    })
-  }
-  // 销售订单一键建项目（交付类订单）
-  if (k === 'sales' && [OrderStatus.APPROVED, OrderStatus.PARTIAL, OrderStatus.COMPLETED].includes(d.status) && userStore.hasPerm('pm:project:add')) {
-    list.push({
-      key: 'project',
-      label: t('scm.order.createProject'),
-      icon: ProjectOutlined,
-      run: () =>
-        router.push({
-          path: '/pm/project',
-          query: {
-            create: 1,
-            salesOrderId: d.id,
-            salesOrderNo: d.orderNo,
-            customerId: d.partnerId,
-            contractAmount: d.totalAmount,
-            name: `${d.partnerName || ''} ${d.orderNo}`.trim()
-          }
-        })
     })
   }
   return list

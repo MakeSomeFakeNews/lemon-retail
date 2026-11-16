@@ -8,13 +8,14 @@
         FROM sys_user u
         LEFT JOIN sys_dept d ON d.id = u.dept_id
         LEFT JOIN sys_im_user b ON b.user_id = u.id AND b.platform = #{q.platform}
-        WHERE u.supplier_id IS NULL AND u.customer_id IS NULL
-        <if test="q.bound != null and q.bound">AND b.id IS NOT NULL</if>
-        <if test="q.bound != null and !q.bound">AND b.id IS NULL</if>
-        <if test="q.keyword != null and q.keyword != ''">
-            AND (u.username LIKE CONCAT('%', #{q.keyword}, '%') OR u.nickname LIKE CONCAT('%', #{q.keyword}, '%')
-                 OR u.phone LIKE CONCAT('%', #{q.keyword}, '%') OR b.im_user_id LIKE CONCAT('%', #{q.keyword}, '%'))
-        </if>
+        <where>
+            <if test="q.bound != null and q.bound">AND b.id IS NOT NULL</if>
+            <if test="q.bound != null and !q.bound">AND b.id IS NULL</if>
+            <if test="q.keyword != null and q.keyword != ''">
+                AND (u.username LIKE CONCAT('%', #{q.keyword}, '%') OR u.nickname LIKE CONCAT('%', #{q.keyword}, '%')
+                     OR u.phone LIKE CONCAT('%', #{q.keyword}, '%') OR b.im_user_id LIKE CONCAT('%', #{q.keyword}, '%'))
+            </if>
+        </where>
         ORDER BY u.id
     </select>
 

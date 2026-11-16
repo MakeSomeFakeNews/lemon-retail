@@ -180,11 +180,10 @@ const cardMeta = {
   purchase: { icon: 'ShoppingCartOutlined', color: '#1677ff' },
   receivable: { icon: 'RiseOutlined', color: '#fa8c16', sub: t('dashboard.card.receivableSub') },
   payable: { icon: 'FallOutlined', color: '#722ed1', sub: t('dashboard.card.payableSub') },
-  toShip: { icon: 'SendOutlined', color: '#13c2c2', unit: t('dashboard.card.orderUnit'), sub: t('dashboard.card.toShipSub') },
-  wip: { icon: 'ProfileOutlined', color: '#eb2f96', unit: t('dashboard.card.woUnit'), sub: t('dashboard.card.wipSub') }
+  toShip: { icon: 'SendOutlined', color: '#13c2c2', unit: t('dashboard.card.orderUnit'), sub: t('dashboard.card.toShipSub') }
 }
 const cards = ref([])
-// 经营数据卡片按内容区宽度均匀分行：每张至少 STAT_MIN_WIDTH，各行数量尽量相同（6 张为 6 / 3+3 / 2+2+2，不会出现 4+2）
+// 经营数据卡片按内容区宽度均匀分行：每张至少 STAT_MIN_WIDTH，各行数量尽量相同（如 6 张为 6 / 3+3 / 2+2+2，不会出现 4+2）
 const STAT_MIN_WIDTH = 150
 const STAT_GAP = 16
 const root = ref()
@@ -221,11 +220,8 @@ const quickActions = computed(() =>
   [
     { path: '/scm/sales', title: t('dashboard.quick.sales'), icon: 'ShoppingOutlined' },
     { path: '/scm/purchase', title: t('dashboard.quick.purchase'), icon: 'ShoppingCartOutlined' },
-    { path: '/mes/wo', title: t('dashboard.quick.wo'), icon: 'ProfileOutlined' },
     { path: '/wms/stock', title: t('dashboard.quick.stock'), icon: 'DatabaseOutlined' },
-    { path: '/fin/voucher', title: t('dashboard.quick.voucher'), icon: 'FileTextOutlined' },
-    { path: '/fin/claim', title: t('dashboard.quick.claim'), icon: 'AccountBookOutlined' },
-    { path: '/hr/self', title: t('dashboard.quick.self'), icon: 'SmileOutlined' }
+    { path: '/fin/voucher', title: t('dashboard.quick.voucher'), icon: 'FileTextOutlined' }
   ].filter((a) => canVisit(a.path)).slice(0, 5)
 )
 

@@ -60,7 +60,6 @@ public class BiJxcAnalysisService {
      *   <li>应收应付：单据日期不晚于该日的单据金额 − 该日（含）之前的核销（收付款核销、折让、预收预付冲抵、坏账，
      *       退货、冲账单等红字单据直接计入余额）；逾期 = 到期日早于该日</li>
      *   <li>预收预付：该日之前收付的金额 − 该日之前的冲抵</li>
-     *   <li>应收票据：该日持有的（已收票，未贴现、托收、拒付、背书）；应付票据：已开出未兑付的</li>
      *   <li>已生效还没有生成凭证的收付款不在资金余额中，单独返回提示</li>
      * </ul>
      * 截至今天时与各模块的当前余额一致（业务日期晚于今天的单据不计入）
@@ -107,8 +106,6 @@ public class BiJxcAnalysisService {
         b.setApBalance(Decimals.money(b.getApBalance()));
         b.setAdvanceReceived(Decimals.money(b.getAdvanceReceived()));
         b.setAdvancePaid(Decimals.money(b.getAdvancePaid()));
-        b.setNotesReceivable(Decimals.money(b.getNotesReceivable()));
-        b.setNotesPayable(Decimals.money(b.getNotesPayable()));
         JxcViews.Unvouchered unvouchered = jxcMapper.selectUnvouchered(date);
         if (unvouchered == null) {
             unvouchered = new JxcViews.Unvouchered();
@@ -117,8 +114,8 @@ public class BiJxcAnalysisService {
         unvouchered.setReceipt(Decimals.money(unvouchered.getReceipt()));
         unvouchered.setPayment(Decimals.money(unvouchered.getPayment()));
 
-        BigDecimal net = cash.add(bank).add(inventoryAmount).add(b.getArBalance()).add(b.getNotesReceivable()).add(b.getAdvancePaid())
-                .subtract(b.getApBalance()).subtract(b.getNotesPayable()).subtract(b.getAdvanceReceived());
+        BigDecimal net = cash.add(bank).add(inventoryAmount).add(b.getArBalance()).add(b.getAdvancePaid())
+                .subtract(b.getApBalance()).subtract(b.getAdvanceReceived());
         return new JxcViews.Assets(date, date.equals(today), cash, bank, funds, inventoryAmount, estimated, warehouses, categories, b,
                 jxcMapper.selectTopBalances("AR", date, TOP_BALANCES), jxcMapper.selectTopBalances("AP", date, TOP_BALANCES),
                 unvouchered, net);

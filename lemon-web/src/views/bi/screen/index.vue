@@ -17,15 +17,6 @@
             </div>
             <div class="card-desc">{{ s.desc }}</div>
             <a-space class="card-actions" wrap>
-              <a-select
-                v-if="WORK_CENTER_SCREENS.includes(s.key)"
-                v-model:value="workCenterId"
-                :options="workCenters"
-                allow-clear
-                :placeholder="$t('bi.screen.allWorkCenters')"
-                size="small"
-                class="wc-select"
-              />
               <a-button type="primary" size="small" @click="open([s.key])"><template #icon><ExpandOutlined /></template>{{ $t('bi.screen.open') }}</a-button>
             </a-space>
           </div>
@@ -52,7 +43,6 @@
           <template v-if="column.key === 'screens'">
             <a-tag v-for="k in record.screens.split(',')" :key="k" :bordered="false" color="blue">{{ screenLabel(k) }}</a-tag>
           </template>
-          <template v-else-if="column.key === 'workCenter'">{{ workCenterName(record.workCenterId) }}</template>
           <template v-else-if="column.key === 'interval'">{{ record.screens.includes(',') ? $t('bi.screen.seconds', { n: record.intervalSeconds }) : '-' }}</template>
           <template v-else-if="column.key === 'status'">
             <a-tag v-if="expired(record)" color="default" :bordered="false">{{ $t('bi.screen.expired') }}</a-tag>
@@ -93,17 +83,12 @@
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item :label="$t('bi.screen.workCenter')" name="workCenterId" :extra="$t('bi.screen.workCenterExtra')">
-              <a-select v-model:value="form.workCenterId" :options="workCenters" allow-clear :placeholder="$t('common.status.all')" />
-            </a-form-item>
-          </a-col>
-        </a-row>
-        <a-row :gutter="16">
-          <a-col :span="12">
             <a-form-item :label="$t('bi.screen.expireTime')" name="expireTime">
               <a-date-picker v-model:value="form.expireTime" show-time value-format="YYYY-MM-DDTHH:mm:ss" :placeholder="$t('bi.screen.permanent')" class="full" />
             </a-form-item>
           </a-col>
+        </a-row>
+        <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item :label="$t('common.field.status')" name="status">
               <a-radio-group v-model:value="form.status">
@@ -127,8 +112,7 @@ import { message } from 'ant-design-vue'
 import { CopyOutlined, ExpandOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons-vue'
 import FormDrawer from '@/components/FormDrawer.vue'
 import { createShare, deleteShare, listShares, resetShare, updateShare } from '@/api/bi/screen'
-import { workCenterOptions } from '@/api/mes/base'
-import { SCREENS, WORK_CENTER_SCREENS, screenLabel } from '@/components/screen/screen'
+import { SCREENS, screenLabel } from '@/components/screen/screen'
 import { useFormDrawer } from '@/composables/useFormDrawer'
 import { useUserStore } from '@/store/user'
 import { useI18n } from 'vue-i18n'
@@ -140,9 +124,6 @@ const { t } = useI18n()
 const userStore = useUserStore()
 const canShare = computed(() => userStore.hasPerm('bi:screen:share'))
 
-const workCenters = ref([])
-const workCenterId = ref()
-const workCenterName = (id) => (id ? workCenters.value.find((w) => w.value === id)?.label || id : t('common.status.all'))
 const rotate = ref(SCREENS.map((s) => s.key))
 const interval = ref(60)
 function toggleRotate(key) {
@@ -156,7 +137,6 @@ function open(keys) {
     params.set('rotate', keys.join(',').toLowerCase())
     params.set('interval', String(interval.value || 60))
   }
-  if (keys.some((k) => WORK_CENTER_SCREENS.includes(k)) && workCenterId.value) params.set('workCenterId', String(workCenterId.value))
   const query = params.toString()
   window.open(`/screen/${keys[0].toLowerCase()}${query ? `?${query}` : ''}`, '_blank')
 }
@@ -168,7 +148,6 @@ const columns = [
   { title: t('common.field.name'), dataIndex: 'name', width: 160 },
   { title: t('bi.screen.screens'), key: 'screens', width: 260 },
   { title: t('bi.screen.interval'), key: 'interval', width: 110 },
-  { title: t('bi.screen.workCenter'), key: 'workCenter', width: 130 },
   { title: t('common.field.status'), key: 'status', width: 90 },
   { title: t('bi.screen.expireTime'), key: 'expireTime', width: 170 },
   { title: t('bi.screen.lastAccess'), dataIndex: 'lastAccessTime', width: 170 },
@@ -202,19 +181,18 @@ const rules = {
   intervalSeconds: [{ required: true, message: t('common.rule.required', { name: t('bi.screen.interval') }) }]
 }
 const drawer = useFormDrawer({
-  emptyForm: () => ({ id: undefined, name: '', screens: ['FACTORY'], intervalSeconds: 60, workCenterId: undefined, expireTime: undefined, status: STATUS_ENABLED }),
+  emptyForm: () => ({ id: undefined, name: '', screens: [SCREENS[0].key], intervalSeconds: 60, expireTime: undefined, status: STATUS_ENABLED }),
   fetch: (r) => ({ ...r, screens: r.screens.split(','), expireTime: r.expireTime ? r.expireTime.replace(' ', 'T') : undefined }),
   create: createShare,
   update: updateShare,
-  toPayload: ({ name, screens, intervalSeconds, workCenterId: wc, expireTime, status }) => ({
-    name, screens, intervalSeconds, workCenterId: wc ?? null, expireTime: expireTime || null, status
+  toPayload: ({ name, screens, intervalSeconds, expireTime, status }) => ({
+    name, screens, intervalSeconds, expireTime: expireTime || null, status
   }),
   onSuccess: load
 })
 const { formRef, form } = drawer
 
-onMounted(async () => {
-  workCenters.value = (await workCenterOptions()).map((w) => ({ value: w.id, label: w.name }))
+onMounted(() => {
   if (canShare.value) load()
 })
 </script>
@@ -256,10 +234,8 @@ onMounted(async () => {
   flex: 1;
   background: linear-gradient(180deg, #00e4ff, rgba(0, 228, 255, 0.15));
 }
-.thumb.progress .bar { background: linear-gradient(180deg, #3d8bff, rgba(61, 139, 255, 0.15)); }
 .thumb.warehouse .bar { background: linear-gradient(180deg, #2fe6a5, rgba(47, 230, 165, 0.15)); }
 .thumb.sales .bar { background: linear-gradient(180deg, #ffb03a, rgba(255, 176, 58, 0.15)); }
-.thumb.quality .bar { background: linear-gradient(180deg, #a77bff, rgba(167, 123, 255, 0.15)); }
 .card-body {
   flex: 1;
   display: flex;
@@ -278,9 +254,6 @@ onMounted(async () => {
 }
 .card-actions {
   justify-content: flex-end;
-}
-.wc-select {
-  width: 140px;
 }
 .rotate-bar {
   display: flex;

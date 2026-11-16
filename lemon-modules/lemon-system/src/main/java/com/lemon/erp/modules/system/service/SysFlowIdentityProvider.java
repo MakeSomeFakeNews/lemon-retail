@@ -46,9 +46,7 @@ public class SysFlowIdentityProvider implements FlowIdentityProvider {
         Set<Long> enabled = userMapper.selectList(Wrappers.<SysUser>lambdaQuery()
                         .select(SysUser::getId)
                         .in(SysUser::getId, userIds)
-                        .eq(SysUser::getStatus, EnableStatus.ENABLED)
-                        .isNull(SysUser::getSupplierId)
-                        .isNull(SysUser::getCustomerId))
+                        .eq(SysUser::getStatus, EnableStatus.ENABLED))
                 .stream().map(SysUser::getId).collect(Collectors.toCollection(HashSet::new));
         return userIds.stream().filter(enabled::contains).distinct().toList();
     }
@@ -93,8 +91,6 @@ public class SysFlowIdentityProvider implements FlowIdentityProvider {
                         SysUser::getAvatar, SysUser::getStatus)
                 .eq(SysUser::getStatus, EnableStatus.ENABLED)
                 // 供应商 / 经销商门户账号不是内部人员，不出现在选人列表中
-                .isNull(SysUser::getSupplierId)
-                .isNull(SysUser::getCustomerId)
                 .and(StringUtils.hasText(keyword), w -> w.like(SysUser::getUsername, keyword)
                         .or().like(SysUser::getNickname, keyword))
                 .orderByAsc(SysUser::getId));

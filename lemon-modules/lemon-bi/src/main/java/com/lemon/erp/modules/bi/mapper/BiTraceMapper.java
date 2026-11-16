@@ -16,11 +16,4 @@ public interface BiTraceMapper {
 
     List<OrderTrace.Settlement> selectSettlements(@Param("orderId") Long orderId);
 
-    List<OrderTrace.Shipment> selectShipments(@Param("orderId") Long orderId);
-
-    List<OrderTrace.Inspection> selectInspections(@Param("orderId") Long orderId);
-
-    List<OrderTrace.Plan> selectPlans(@Param("orderId") Long orderId);
-
-    List<OrderTrace.Project> selectProjects(@Param("orderId") Long orderId);
 }

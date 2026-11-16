@@ -1,4 +1,4 @@
-/** 扫码作业与查询（wms.xxx）：库存查询、经营历史、快速开单、扫码收货、上架、拣货、盘点、生产报工 */
+/** 扫码作业与查询（wms.xxx）：库存查询、经营历史、快速开单、扫码收货、上架、拣货、盘点 */
 export default {
   entry: {
     stock: '库存查询',
@@ -7,7 +7,6 @@ export default {
     putaway: '上架',
     pick: '拣货',
     check: '盘点',
-    report: '报工',
     quickSale: '快速开单'
   },
   common: {
@@ -260,36 +259,5 @@ export default {
     costPrice: '成本价',
     costPricePh: '默认均价 {n}',
     costPriceDefault: '默认按确认时的当前均价'
-  },
-  report: {
-    scanWo: '扫描或输入工单号',
-    noWo: '没有已下达或生产中的工单',
-    woNotFound: '没有可报工的工单 {no}',
-    planQty: '计划 {n} {unit}',
-    changeWo: '换工单',
-    selectOp: '选择要报工的工序',
-    noOps: '工单没有工序',
-    firstArticle: '首件检验',
-    firstArticlePending: '首件检验合格前，该工序累计只能报工 1 件',
-    opProgress: '合格 {good}，报废 {scrap}，计划 {total}',
-    opHours: '工时 {n}',
-    changeOp: '换工序',
-    reportDate: '报工日期',
-    goodQty: '合格数量',
-    scrapQty: '报废数量',
-    hours: '实际工时（小时）',
-    equipment: '生产设备',
-    mold: '模具',
-    notSpecified: '不指定',
-    notUsed: '不使用',
-    moldOption: '{code} {name}（{n} 穴）',
-    shotsHint: '本次 {shots} 模次，累计 {used}',
-    shotsHintLife: '本次 {shots} 模次，累计 {used} / {life}',
-    operatorSelf: '操作员为本人；代他人报工请在电脑端操作',
-    goodQtyRequired: '请填写合格数量',
-    scrapQtyInvalid: '报废数量不能小于 0',
-    hoursRequired: '请填写实际工时',
-    submit: '提交报工',
-    done: '报工成功'
   }
 }

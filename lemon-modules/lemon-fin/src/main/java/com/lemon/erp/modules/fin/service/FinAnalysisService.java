@@ -11,7 +11,6 @@ import com.lemon.erp.common.i18n.Messages;
 import com.lemon.erp.modules.fin.entity.FinAccount;
 import com.lemon.erp.modules.fin.mapper.FinAnalysisMapper;
 import com.lemon.erp.modules.fin.mapper.FinVoucherEntryMapper;
-import com.lemon.erp.modules.fin.model.FinConstants;
 import com.lemon.erp.modules.fin.model.MarginGroup;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,14 +23,12 @@ import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
 
 import static com.lemon.erp.modules.fin.model.FinConstants.previous;
 import static com.lemon.erp.modules.fin.model.FinConstants.toYearMonth;
 
 /**
- * 经营分析：销售毛利、存货对账（总账与成本核算、数量与库存流水）、现金流量表（直接法）
+ * 经营分析：销售毛利、现金流量表（直接法）
  */
 @Service
 @RequiredArgsConstructor
@@ -163,43 +160,8 @@ public class FinAnalysisService {
     }
 
     /**
-     * 存货对账：原材料、库存商品的总账余额与成本核算期末金额；成本核算期末数量与截至期末的库存流水不一致的物料
-     */
-    public FinAnalysis.InventoryReconciliation inventoryReconciliation(int period) {
-        toYearMonth(period);
-        Map<String, BigDecimal> costByAccount = new HashMap<>();
-        for (FinAnalysis.CategoryAmount r : analysisMapper.selectCostCloseByCategory(period)) {
-            costByAccount.merge(accountRules.code(AccountRole.INVENTORY, r.getCategory()), dec(r.getCloseAmount()), BigDecimal::add);
-        }
-        String outsource = accountRules.code(AccountRole.OUTSOURCE_MATERIAL, null);
-        Set<String> codes = new TreeSet<>(costByAccount.keySet());
-        codes.add(accountRules.code(AccountRole.INVENTORY, FinConstants.CATEGORY_RAW));
-        codes.add(accountRules.code(AccountRole.INVENTORY, FinConstants.CATEGORY_FINISHED));
-        codes.add(outsource);
-        List<FinAccount> all = accountService.listAll();
-        List<FinAnalysis.InventoryAccount> accounts = new ArrayList<>();
-        for (String code : codes) {
-            FinAccount parent = all.stream().filter(a -> a.getCode().equals(code)).findFirst().orElse(null);
-            if (parent == null) {
-                continue;
-            }
-            BigDecimal gl = BigDecimal.ZERO;
-            for (FinAccount a : all) {
-                if (Boolean.TRUE.equals(a.getLeaf()) && a.getCode().startsWith(code)) {
-                    gl = gl.add(entryMapper.sumBalanceUpTo(a.getId(), period));
-                }
-            }
-            BigDecimal costAmount = outsource.equals(code) ? null : costByAccount.getOrDefault(code, BigDecimal.ZERO);
-            accounts.add(new FinAnalysis.InventoryAccount(code, parent.getName(), gl, costAmount,
-                    costAmount == null ? null : gl.subtract(costAmount)));
-        }
-        List<FinAnalysis.QtyDiff> qty = analysisMapper.selectQtyDiff(period, toYearMonth(period).atEndOfMonth());
-        return new FinAnalysis.InventoryReconciliation(period, accounts, qty);
-    }
-
-    /**
      * 现金流量表（直接法）：已记账凭证中库存现金、银行存款的发生额，按对方科目分类；一张凭证有多个对方科目时按金额比例分摊
-     * （尾差计入最后一个参与分摊的科目），只有现金科目之间的划转不计入。付款核销了固定资产购置应付单的部分、直接付款购入固定资产时的
+     * （尾差计入最后一个参与分摊的科目），只有现金科目之间的划转不计入。直接付款购入固定资产时的
      * 进项税额归入购建固定资产支付的现金。期初、期末现金余额同样只按已记账凭证（与资产负债表口径一致），有未记账凭证时也能平衡
      */
     public FinAnalysis.CashFlow cashFlow(int begin, int end) {
@@ -212,9 +174,6 @@ public class FinAnalysisService {
         List<String> cash = accountService.cashCodes();
         String inputVat = accountService.roleCode(AccountRole.INPUT_VAT);
         String outputVat = accountService.roleCode(AccountRole.OUTPUT_VAT);
-        String payable = accountService.roleCode(AccountRole.PAYABLE);
-        Map<Long, FinAnalysis.AssetPayment> assetPayments = new HashMap<>();
-        analysisMapper.selectAssetPayments(begin, end).forEach(a -> assetPayments.put(a.getVoucherId(), a));
         Map<Long, List<FinAnalysis.CashEntry>> byVoucher = new LinkedHashMap<>();
         for (FinAnalysis.CashEntry e : analysisMapper.selectCashVoucherEntries(begin, end, cash)) {
             byVoucher.computeIfAbsent(e.getVoucherId(), k -> new ArrayList<>()).add(e);
@@ -242,9 +201,8 @@ public class FinAnalysisService {
             boolean inflow = cashNet.signum() > 0;
             List<BigDecimal> shares = others.stream().map(e -> side(e, inflow)).toList();
             List<BigDecimal> amounts = allocate(cashNet.abs(), shares);
-            // 购入固定资产直接付款的凭证中，进项税额与资产一并计入购建固定资产支付的现金（与付款核销固定资产应付单的口径一致）
+            // 购入固定资产直接付款的凭证中，进项税额与资产一并计入购建固定资产支付的现金
             boolean assetPurchase = !inflow && others.stream().anyMatch(e -> side(e, false).signum() > 0 && isLongTermAsset(e.getAccountCode()));
-            FinAnalysis.AssetPayment assetPayment = assetPayments.get(others.get(0).getVoucherId());
             for (int i = 0; i < others.size(); i++) {
                 BigDecimal amount = amounts.get(i);
                 if (amount.signum() == 0) {
@@ -254,13 +212,6 @@ public class FinAnalysisService {
                 CashItem item = classify(code, inflow, inputVat, outputVat);
                 if (assetPurchase && item == CashItem.PURCHASE_OUT && code.startsWith(inputVat)) {
                     item = CashItem.ASSET_OUT;
-                }
-                if (!inflow && assetPayment != null && code.startsWith(payable) && dec(assetPayment.getTotalAmount()).signum() != 0) {
-                    // 付款核销了固定资产购置应付单：按核销金额比例归入购建固定资产支付的现金，其余仍为购买商品、接受劳务支付的现金
-                    BigDecimal asset = amount.multiply(dec(assetPayment.getAssetAmount()))
-                            .divide(dec(assetPayment.getTotalAmount()), Decimals.MONEY_SCALE, Decimals.ROUNDING);
-                    items.merge(CashItem.ASSET_OUT, asset, BigDecimal::add);
-                    amount = amount.subtract(asset);
                 }
                 items.merge(item, amount, BigDecimal::add);
             }

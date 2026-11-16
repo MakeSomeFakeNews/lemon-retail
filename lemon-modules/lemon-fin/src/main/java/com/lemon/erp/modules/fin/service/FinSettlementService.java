@@ -16,7 +16,6 @@ import com.lemon.erp.modules.fin.dto.PartnerAmountRow;
 import com.lemon.erp.modules.fin.dto.SettlementDiscountRow;
 import com.lemon.erp.modules.fin.dto.SettlementItemRequest;
 import com.lemon.erp.modules.fin.dto.SettlementRequest;
-import com.lemon.erp.modules.fin.model.SettleMethods;
 import com.lemon.erp.modules.fin.model.BillKind;
 import com.lemon.erp.modules.fin.model.FinConstants;
 import com.lemon.erp.modules.fin.model.SettleKind;
@@ -68,7 +67,7 @@ public class FinSettlementService {
 
     /** 付款审批流程标识（只有付款单走审批） */
     public static final String PAYMENT_PROCESS_KEY = "fin_payment";
-    /** 付款审批（票据背书、开票生成的付款单也按此回调，见 FinNoteService） */
+    /** 付款审批 */
     static final ApprovalFlow PAYMENT_FLOW = new ApprovalFlow(PAYMENT_PROCESS_KEY, "fin_payment:");
 
     private final FinSettlementMapper settlementMapper;
@@ -133,32 +132,11 @@ public class FinSettlementService {
      */
     @Transactional
     public Long create(SettlementRequest req) {
-        // 票据结算的收付款单由票据业务生成（只能在票据管理中删除），手工收付款不能选择
-        if (SettleMethods.NOTE.equals(req.method())) {
-            throw new BizException("fin.error.noteSettleMethodNotManual");
-        }
         accountService.requireCashAccount(req.accountId());
         FinSettlement s = save(null, req);
         if (confirmOnSave(req)) {
             doConfirm(s);
         }
-        return s.getId();
-    }
-
-    /**
-     * 以票据结算（收票、背书转让、开具应付票据）：结算科目为应收票据或应付票据，其余与收付款相同（核销往来、付款审批、生成凭证），
-     * 不存草稿
-     *
-     * @param noteAccount 应收票据 / 应付票据
-     * @return 新单据 ID
-     */
-    @Transactional
-    public Long createForNote(SettlementRequest req, AccountRole noteAccount) {
-        if (!accountRules.accountId(noteAccount).equals(req.accountId())) {
-            throw new BizException("fin.error.invalidNoteSettlementAccount");
-        }
-        FinSettlement s = save(null, req);
-        doConfirm(s);
         return s.getId();
     }
 
@@ -174,9 +152,6 @@ public class FinSettlementService {
         }
         if (old.getStatus() != ApproveStatus.DRAFT && old.getStatus() != ApproveStatus.REJECTED) {
             throw new BizException("fin.error.settlementNotEditable", old.getSettleNo());
-        }
-        if (SettleMethods.NOTE.equals(old.getMethod()) || SettleMethods.NOTE.equals(req.method())) {
-            throw new BizException("fin.error.noteSettleMethodNotManual");
         }
         accountService.requireCashAccount(req.accountId());
         periodGuard.checkOpen(old.getSettleDate(), "fin.label.receiptPayment");
@@ -620,26 +595,17 @@ public class FinSettlementService {
         return item.getDiscountFc() == null || (item.getDiscountFc().signum() == 0 && discount.signum() != 0) ? discount : item.getDiscountFc();
     }
 
-    /** 删除（未生成凭证的），恢复单据的核销金额；票据结算的收付款单须在票据管理中删除 */
+    /** 删除（未生成凭证的），恢复单据的核销金额 */
     @Transactional
     public void delete(List<Long> ids) {
-        doDelete(ids, false);
+        doDelete(ids);
     }
 
-    /** 删除票据登记、背书生成的收付款单（票据管理删除票据时） */
-    @Transactional
-    public void deleteForNote(List<Long> ids) {
-        doDelete(ids, true);
-    }
-
-    private void doDelete(List<Long> ids, boolean forNote) {
+    private void doDelete(List<Long> ids) {
         for (Long id : ids) {
             FinSettlement s = settlementMapper.selectById(id);
             if (s == null) {
                 continue;
-            }
-            if (!forNote && SettleMethods.NOTE.equals(s.getMethod())) {
-                throw new BizException("fin.error.generatedNoteTransactionDeleteNoteNotes", s.getSettleNo());
             }
             if (s.getVoucherId() != null) {
                 throw new BizException("fin.error.alreadyHasVoucherDeleteVoucherFirst", s.getSettleNo());

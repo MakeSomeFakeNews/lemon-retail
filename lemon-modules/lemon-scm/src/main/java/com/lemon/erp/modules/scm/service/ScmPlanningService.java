@@ -7,7 +7,6 @@ import com.lemon.erp.modules.scm.dto.AtpResult;
 import com.lemon.erp.modules.scm.dto.BackorderRow;
 import com.lemon.erp.modules.scm.mapper.ScmPlanningMapper;
 import com.lemon.erp.modules.scm.model.AtpLine;
-import com.lemon.erp.modules.scm.model.AtpProvider;
 import com.lemon.erp.modules.scm.model.OrderKind;
 import com.lemon.erp.modules.wms.service.StockReservationService;
 import com.lemon.erp.modules.wms.service.WmsMaterialService;
@@ -33,10 +32,9 @@ public class ScmPlanningService {
     private final WmsStockQueryService stockQueryService;
     private final StockReservationService reservationService;
     private final WmsMaterialService materialService;
-    private final List<AtpProvider> providers;
 
     /**
-     * 可承诺量：从空闲库存（可用 - 预留）出发，按日期累加采购在途、在制工单产出，扣减未预留的销售待发、工单待领料。
+     * 可承诺量：从空闲库存（可用 - 预留）出发，按日期累加采购在途，扣减未预留的销售待发。
      * 现在可承诺的数量是未来各时点累计余额的最小值；传入数量时给出最早可承诺日期
      */
     public AtpResult atp(Long materialId, Long warehouseId, BigDecimal qty) {
@@ -59,7 +57,6 @@ public class ScmPlanningService {
             lines.add(new AtpLine(toDate(row.get("date")), (String) row.get("type"), (String) row.get("docNo"),
                     new BigDecimal(row.get("qty").toString())));
         }
-        providers.forEach(p -> lines.addAll(p.lines(materialId, warehouseId)));
         // 同一天先计供应再计需求；过去的日期按今天
         lines.sort(Comparator.comparing((AtpLine l) -> l.date() == null || l.date().isBefore(today) ? today : l.date())
                 .thenComparing(l -> l.qty().signum() < 0));

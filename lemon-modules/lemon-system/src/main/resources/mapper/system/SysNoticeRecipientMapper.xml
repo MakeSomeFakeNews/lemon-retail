@@ -10,7 +10,7 @@
     <!-- 启用的内部用户（门户账号关联了供应商或客户，不接收内部公告） -->
     <select id="selectScopeUsers" resultType="java.lang.Long">
         SELECT u.id FROM sys_user u
-        WHERE u.status = 1 AND u.supplier_id IS NULL AND u.customer_id IS NULL
+        WHERE u.status = 1
         <if test="deptIds != null">
             AND u.dept_id IN <foreach collection="deptIds" item="d" open="(" separator="," close=")">#{d}</foreach>
         </if>

@@ -16,9 +16,9 @@
     </select>
 
     <select id="selectUnitCosts" resultType="java.util.Map">
-        SELECT m.id AS "materialId", COALESCE(c.unit_cost, m.ref_cost, 0) AS "unitCost"
+        SELECT m.id AS "materialId", COALESCE(NULLIF(c.unit_cost, 0), m.ref_cost, 0) AS "unitCost"
         FROM wms_material m
-        LEFT JOIN fin_material_cost c ON c.material_id = m.id AND c.period = #{period}
+        LEFT JOIN wms_material_cost c ON c.material_id = m.id
         WHERE m.id IN <foreach collection="materialIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </select>
 

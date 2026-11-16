@@ -32,7 +32,7 @@ import { computed, ref, watch } from 'vue'
 import { useRemoteOptions } from '@/composables/useRemoteOptions'
 
 /**
- * 远程搜索下拉（客户、供应商、员工、设备、项目等可能上千条的资料）：打开时取第一页，输入时防抖搜索，
+ * 远程搜索下拉（客户、供应商、物料等可能上千条的资料）：打开时取第一页，输入时防抖搜索，
  * 滚动到底部加载下一页；已选值用 label 回显，没有 label 时按 ID 取名称（fetchByIds）。
  * - fetch({ keyword, current, size })：返回数组或 { records, total }
  * - toLabel(record)：选项文字

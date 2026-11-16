@@ -22,7 +22,7 @@ public interface UserLookup {
      * @param errorKey 不存在时抛出的 {@link BizException} 消息键
      */
     default UserBrief require(Long userId, String errorKey) {
-        return find(userId).filter(u -> !u.portal()).orElseThrow(() -> new BizException(errorKey));
+        return find(userId).orElseThrow(() -> new BizException(errorKey));
     }
 
     /**
@@ -31,7 +31,7 @@ public interface UserLookup {
      * @param errorKey 不存在或已停用时抛出的 {@link BizException} 消息键
      */
     default UserBrief requireActive(Long userId, String errorKey) {
-        return find(userId).filter(u -> u.active() && !u.portal()).orElseThrow(() -> new BizException(errorKey));
+        return find(userId).filter(UserBrief::active).orElseThrow(() -> new BizException(errorKey));
     }
 
     /**
@@ -43,8 +43,7 @@ public interface UserLookup {
 
     /**
      * @param active 账号状态为正常（未停用）
-     * @param portal 供应商 / 经销商门户账号（不是内部人员）
      */
-    record UserBrief(Long id, String username, String nickname, Long deptId, boolean active, boolean portal) {
+    record UserBrief(Long id, String username, String nickname, Long deptId, boolean active) {
     }
 }

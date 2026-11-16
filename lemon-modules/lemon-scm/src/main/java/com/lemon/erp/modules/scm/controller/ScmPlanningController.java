@@ -39,7 +39,7 @@ public class ScmPlanningController {
 
     /** 可承诺量：销售接单时查询物料能否按期交货 */
     @GetMapping("/atp")
-    @PreAuthorize("@ss.hasAnyPerm('scm:sales:list', 'scm:quotation:list', 'scm:backorder:list')")
+    @PreAuthorize("@ss.hasAnyPerm('scm:sales:list', 'scm:backorder:list')")
     public R<AtpResult> atp(@RequestParam Long materialId, @RequestParam(required = false) Long warehouseId,
                             @RequestParam(required = false) BigDecimal qty) {
         return R.ok(planningService.atp(materialId, warehouseId, qty));

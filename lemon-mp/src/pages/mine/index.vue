@@ -92,7 +92,6 @@ import { hasPerm, resetUser, userState } from '@/store/user'
 import { getProfile, logout, miniappUnbind } from '@/api/auth'
 import { pageMine, pageTodo } from '@/api/workflow'
 import { unreadCount } from '@/api/message'
-import { selfProfile } from '@/api/hr'
 import { runAction } from '@/composables/useAction'
 import { useTitle } from '@/composables/useTitle'
 import { ensureLogin } from '@/utils/session'
@@ -106,8 +105,8 @@ const { t } = useI18n()
 useTitle('common.tab.mine')
 
 const profile = reactive({ deptName: '', roleNames: [] })
-/** 个人数据：待我审批、审批中的申请、未读消息、年假余额（没有权限或没有员工档案的不显示） */
-const counts = reactive({ todo: null, running: null, unread: null, annual: null })
+/** 个人数据：待我审批、审批中的申请、未读消息（没有权限的不显示） */
+const counts = reactive({ todo: null, running: null, unread: null })
 
 const displayName = computed(() => userState.user?.nickname || userState.user?.username || '')
 const avatar = computed(() => fileUrl(userState.user?.avatar))
@@ -123,17 +122,13 @@ const stats = computed(() =>
   [
     counts.todo !== null && { key: 'todo', value: counts.todo, label: t('common.mine.statTodo'), alert: counts.todo > 0, open: openKey('approval', '/workflow/todo') },
     counts.running !== null && { key: 'running', value: counts.running, label: t('common.mine.statRunning'), open: openKey('approval', '/workflow/mine') },
-    counts.unread !== null && { key: 'unread', value: counts.unread, label: t('common.mine.statUnread'), alert: counts.unread > 0, open: () => uni.switchTab({ url: '/pages/message/index' }) },
-    counts.annual !== null && { key: 'annual', value: counts.annual, label: t('common.mine.statAnnual'), open: openKey('hr-attendance') }
+    counts.unread !== null && { key: 'unread', value: counts.unread, label: t('common.mine.statUnread'), alert: counts.unread > 0, open: () => uni.switchTab({ url: '/pages/message/index' }) }
   ].filter(Boolean)
 )
 
 /** 常用：按入口权限显示 */
 const SHORTCUTS = [
-  { key: 'approval', icon: 'document', color: '#1677ff', label: 'common.mine.myApplications', link: '/workflow/mine' },
-  { key: 'hr-clock', icon: 'clock', color: '#13c2c2', label: 'hr.entry.clock' },
-  { key: 'hr-leave', icon: 'calendar', color: '#fa8c16', label: 'hr.entry.leave' },
-  { key: 'hr-payslip', icon: 'wallet', color: '#52c41a', label: 'hr.entry.payslip' }
+  { key: 'approval', icon: 'document', color: '#1677ff', label: 'common.mine.myApplications', link: '/workflow/mine' }
 ]
 const shortcuts = computed(() =>
   userState.loaded
@@ -146,20 +141,17 @@ const shortcuts = computed(() =>
 )
 
 async function load() {
-  const [p, todo, running, unread, hr] = await Promise.all([
+  const [p, todo, running, unread] = await Promise.all([
     getProfile().catch(() => null),
     hasPerm('wf:task:todo') ? pageTodo({ current: 1, size: 1 }).catch(() => null) : null,
     hasPerm('wf:instance:mine') ? pageMine({ current: 1, size: 1, status: FlowStatus.RUNNING }).catch(() => null) : null,
-    unreadCount().catch(() => null),
-    // 没有关联员工档案时报错，不显示年假
-    selfProfile().catch(() => null)
+    unreadCount().catch(() => null)
   ])
   profile.deptName = p?.deptName || ''
   profile.roleNames = p?.roleNames || []
   counts.todo = todo ? todo.total : null
   counts.running = running ? running.total : null
   counts.unread = unread ?? null
-  counts.annual = hr && hr.annualDays !== undefined ? Math.max(0, +(hr.annualDays - Number(hr.annualUsedDays || 0)).toFixed(1)) : null
   if (unread !== null) setMessageBadge(unread)
 }
 

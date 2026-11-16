@@ -15,9 +15,7 @@ export default {
     receivableSub: '未核销的应收单',
     payableSub: '未核销的应付单',
     orderUnit: '单',
-    toShipSub: '已审核、部分出库',
-    woUnit: '张',
-    wipSub: '已下达、生产中'
+    toShipSub: '已审核、部分出库'
   },
   trend: {
     new: '新增',
@@ -26,10 +24,7 @@ export default {
   quick: {
     sales: '销售订单',
     purchase: '采购订单',
-    wo: '生产工单',
     stock: '库存查询',
-    voucher: '凭证',
-    claim: '费用报销',
-    self: '员工自助'
+    voucher: '凭证'
   }
 }

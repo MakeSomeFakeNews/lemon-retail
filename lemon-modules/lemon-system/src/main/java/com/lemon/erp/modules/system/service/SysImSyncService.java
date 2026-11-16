@@ -81,8 +81,7 @@ public class SysImSyncService {
                 .collect(Collectors.toMap(SysImUser::getImUserId, SysImUser::getUserId));
         Set<Long> boundUsers = new HashSet<>(bound.values());
         List<SysUser> users = userMapper.selectList(Wrappers.<SysUser>lambdaQuery()
-                .select(SysUser::getId, SysUser::getUsername, SysUser::getPhone)
-                .isNull(SysUser::getSupplierId).isNull(SysUser::getCustomerId));
+                .select(SysUser::getId, SysUser::getUsername, SysUser::getPhone));
         // 手机号重复的账号无法确定对应关系，不自动绑定
         Map<String, List<SysUser>> byPhone = users.stream().filter(u -> normalizePhone(u.getPhone()) != null)
                 .collect(Collectors.groupingBy(u -> normalizePhone(u.getPhone())));
@@ -238,7 +237,7 @@ public class SysImSyncService {
     /** 手工绑定：填写成员在平台中的 userid（手机号不一致或平台不返回手机号时） */
     public void bind(Long userId, ImPlatform platform, String imUserId) {
         SysUser user = userMapper.selectById(userId);
-        if (user == null || user.getSupplierId() != null || user.getCustomerId() != null) {
+        if (user == null) {
             throw new BizException("system.error.userNotFound");
         }
         if (!StringUtils.hasText(imUserId) || imUserId.trim().length() > 64) {

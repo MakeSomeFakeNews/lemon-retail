@@ -3,12 +3,11 @@
 <mapper namespace="com.lemon.erp.modules.fin.mapper.FinVoucherEntryMapper">
 
     <select id="selectByVoucherId" resultType="com.lemon.erp.modules.fin.entity.FinVoucherEntry">
-        SELECT e.*, a.code AS account_code, a.name AS account_name, d.name AS dept_name, p.name AS project_name,
+        SELECT e.*, a.code AS account_code, a.name AS account_name, d.name AS dept_name,
                c.name AS customer_name, s.name AS supplier_name, m.name AS material_name
         FROM fin_voucher_entry e
         JOIN fin_account a ON a.id = e.account_id
         LEFT JOIN sys_dept d ON d.id = e.dept_id
-        LEFT JOIN pm_project p ON p.id = e.project_id
         LEFT JOIN scm_customer c ON c.id = e.customer_id
         LEFT JOIN scm_supplier s ON s.id = e.supplier_id
         LEFT JOIN wms_material m ON m.id = e.material_id
@@ -17,10 +16,10 @@
     </select>
 
     <insert id="insertBatch">
-        INSERT INTO fin_voucher_entry (voucher_id, seq, summary, account_id, dept_id, project_id, customer_id, supplier_id, material_id,
+        INSERT INTO fin_voucher_entry (voucher_id, seq, summary, account_id, dept_id, customer_id, supplier_id, material_id,
                                        debit, credit, create_time, update_time) VALUES
         <foreach collection="list" item="i" separator=",">
-            (#{i.voucherId}, #{i.seq}, #{i.summary}, #{i.accountId}, #{i.deptId}, #{i.projectId}, #{i.customerId}, #{i.supplierId}, #{i.materialId},
+            (#{i.voucherId}, #{i.seq}, #{i.summary}, #{i.accountId}, #{i.deptId}, #{i.customerId}, #{i.supplierId}, #{i.materialId},
              #{i.debit}, #{i.credit}, NOW(), NOW())
         </foreach>
     </insert>
@@ -92,7 +91,6 @@
             <when test="dimension.name() == 'DEPT'">e.dept_id</when>
             <when test="dimension.name() == 'CUSTOMER'">e.customer_id</when>
             <when test="dimension.name() == 'SUPPLIER'">e.supplier_id</when>
-            <when test="dimension.name() == 'PROJECT'">e.project_id</when>
             <otherwise>e.material_id</otherwise>
         </choose>
     </sql>
@@ -118,7 +116,6 @@
             <when test="dimension.name() == 'DEPT'">LEFT JOIN sys_dept x ON x.id = t.aux_id</when>
             <when test="dimension.name() == 'CUSTOMER'">LEFT JOIN scm_customer x ON x.id = t.aux_id</when>
             <when test="dimension.name() == 'SUPPLIER'">LEFT JOIN scm_supplier x ON x.id = t.aux_id</when>
-            <when test="dimension.name() == 'PROJECT'">LEFT JOIN pm_project x ON x.id = t.aux_id</when>
             <otherwise>LEFT JOIN wms_material x ON x.id = t.aux_id</otherwise>
         </choose>
         WHERE t.debit &lt;&gt; 0 OR t.credit &lt;&gt; 0 OR t.balance &lt;&gt; 0

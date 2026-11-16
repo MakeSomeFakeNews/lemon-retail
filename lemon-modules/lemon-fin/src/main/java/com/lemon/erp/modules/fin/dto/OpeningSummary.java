@@ -10,11 +10,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 期初建账概况：科目期初、期初入库单、期初库存成本、期初应收应付
+ * 期初建账概况：科目期初、期初入库单、期初应收应付
  *
  * @param bills 按应收 / 应付
  */
-public record OpeningSummary(AccountTotals accounts, List<StockDoc> stockDocs, StockStatus stock, Map<BillKind, BillTotals> bills) {
+public record OpeningSummary(AccountTotals accounts, List<StockDoc> stockDocs, Map<BillKind, BillTotals> bills) {
 
     /** 科目期初：条数、借方合计、贷方合计 */
     public record AccountTotals(int count, BigDecimal debit, BigDecimal credit) {
@@ -30,16 +30,6 @@ public record OpeningSummary(AccountTotals accounts, List<StockDoc> stockDocs, S
         private String warehouseName;
         private BigDecimal totalQty;
         private Integer reversed;
-    }
-
-    /**
-     * 期初库存成本
-     *
-     * @param saved         已保存期初成本
-     * @param openingPeriod 期初成本所在期间
-     * @param costed        已做过成本核算（之后不能再改期初）
-     */
-    public record StockStatus(boolean saved, Integer openingPeriod, boolean costed) {
     }
 
     /**

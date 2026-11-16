@@ -1,7 +1,7 @@
 <template>
   <ScreenShell
-    :title="title"
-    :subtitle="subtitle"
+    :title="screenName(current)"
+    :subtitle="$t('screen.runner.realtime')"
     :company="company"
     :updated-at="updatedAt"
     :error="error"
@@ -22,11 +22,8 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { useI18n } from 'vue-i18n'
-import { SCREENS, WORK_CENTER_SCREENS } from '@/components/screen/screen'
+import { SCREENS } from '@/components/screen/screen'
 import ScreenShell from '@/components/screen/ScreenShell.vue'
-import FactoryScreen from './FactoryScreen.vue'
-import ProgressScreen from './ProgressScreen.vue'
-import QualityScreen from './QualityScreen.vue'
 import SalesScreen from './SalesScreen.vue'
 import WarehouseScreen from './WarehouseScreen.vue'
 
@@ -34,20 +31,18 @@ import WarehouseScreen from './WarehouseScreen.vue'
  * 大屏运行：显示 screens 中的大屏，多个时按 interval 秒轮播；当前大屏每 30 秒刷新一次数据，
  * 请求失败时保留上次的数据并在标题栏提示离线，恢复后自动继续
  * - fetcher(key)：取大屏数据
- * - titleSuffix：标题后缀：生产车间、生产进度大屏的工作中心名称
  */
 const props = defineProps({
   screens: { type: Array, required: true },
   interval: { type: Number, default: 60 },
   fetcher: { type: Function, required: true },
   company: String,
-  titleSuffix: String,
   closable: Boolean
 })
 const emit = defineEmits(['close'])
 const { t } = useI18n()
 
-const COMPONENTS = { FACTORY: FactoryScreen, PROGRESS: ProgressScreen, WAREHOUSE: WarehouseScreen, SALES: SalesScreen, QUALITY: QualityScreen }
+const COMPONENTS = { WAREHOUSE: WarehouseScreen, SALES: SalesScreen }
 const REFRESH_MS = 30000
 
 const index = ref(0)
@@ -59,9 +54,6 @@ const current = computed(() => props.screens[index.value])
 /** 大屏名称优先用前端的译文 */
 const screenName = (s) => (s ? SCREENS.find((x) => x.key === s.key)?.label || s.label || '' : '')
 const namedScreens = computed(() => props.screens.map((s) => ({ ...s, label: screenName(s) })))
-const byWorkCenter = computed(() => WORK_CENTER_SCREENS.includes(current.value?.key) && !!props.titleSuffix)
-const title = computed(() => `${screenName(current.value)}${byWorkCenter.value ? ` · ${props.titleSuffix}` : ''}`)
-const subtitle = computed(() => (byWorkCenter.value ? '' : t('screen.runner.realtime')))
 const updatedAt = computed(() => (current.value && loadedAt[current.value.key] ? dayjs(loadedAt[current.value.key]).format('HH:mm:ss') : ''))
 
 async function load(force = false) {

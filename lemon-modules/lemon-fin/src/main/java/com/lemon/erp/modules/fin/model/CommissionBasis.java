@@ -6,7 +6,7 @@ package com.lemon.erp.modules.fin.model;
 public enum CommissionBasis {
     /** 销售额：销售出库的不含税金额，扣除退货 */
     SALES,
-    /** 毛利：销售额 - 出库数量 × 当期成本单价（未核算时取参考成本价） */
+    /** 毛利：销售额 - 出库数量 × 实时成本单价（没有时取参考成本价） */
     PROFIT,
     /** 回款：收款核销的销售出库 / 退货应收单金额 */
     RECEIPT

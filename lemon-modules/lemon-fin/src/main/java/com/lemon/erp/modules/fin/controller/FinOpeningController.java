@@ -7,8 +7,6 @@ import com.lemon.erp.framework.log.OperLog;
 import com.lemon.erp.framework.log.OperType;
 import com.lemon.erp.modules.fin.dto.AccountOpeningRequest;
 import com.lemon.erp.modules.fin.dto.AccountOpeningRow;
-import com.lemon.erp.modules.fin.dto.StockOpeningRequest;
-import com.lemon.erp.modules.fin.dto.StockOpeningView;
 import com.lemon.erp.framework.excel.ImportRequest;
 import com.lemon.erp.framework.excel.ImportResult;
 import com.lemon.erp.modules.fin.dto.OpeningBillRow;
@@ -74,21 +72,6 @@ public class FinOpeningController {
     @OperLog(title = "科目期初余额", type = OperType.UPDATE) // i18n-ignore
     public R<Void> saveAccounts(@Valid @RequestBody AccountOpeningRequest req) {
         openingService.saveAccountOpenings(req);
-        return R.ok();
-    }
-
-    /** @param startPeriod 尚未保存存货期初时，按该启用期间推算期初数量 */
-    @GetMapping("/stock")
-    @PreAuthorize("@ss.hasPerm('fin:opening:list')")
-    public R<StockOpeningView> stock(@RequestParam(required = false) Integer startPeriod) {
-        return R.ok(openingService.stockOpening(startPeriod));
-    }
-
-    @PutMapping("/stock")
-    @PreAuthorize("@ss.hasPerm('fin:opening:edit')")
-    @OperLog(title = "存货期初", type = OperType.UPDATE) // i18n-ignore
-    public R<Void> saveStock(@Valid @RequestBody StockOpeningRequest req) {
-        openingService.saveStockOpening(req);
         return R.ok();
     }
 }

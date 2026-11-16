@@ -8,20 +8,11 @@ import com.lemon.erp.modules.fin.model.PeriodStatus;
 import com.lemon.erp.common.i18n.Messages;
 import com.lemon.erp.modules.fin.model.AccountRole;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import com.lemon.erp.modules.fin.entity.FinAsset;
-import com.lemon.erp.modules.fin.model.AssetStatus;
-import com.lemon.erp.modules.fin.entity.FinBankStatement;
 import com.lemon.erp.modules.fin.entity.FinBill;
-import com.lemon.erp.modules.fin.entity.FinCostRun;
-import com.lemon.erp.modules.fin.entity.FinDepreciation;
 import com.lemon.erp.modules.fin.entity.FinPeriod;
 import com.lemon.erp.modules.fin.entity.FinSettlement;
 import com.lemon.erp.modules.fin.entity.FinVoucher;
-import com.lemon.erp.modules.fin.mapper.FinAssetMapper;
-import com.lemon.erp.modules.fin.mapper.FinBankStatementMapper;
 import com.lemon.erp.modules.fin.mapper.FinBillMapper;
-import com.lemon.erp.modules.fin.mapper.FinCostRunMapper;
-import com.lemon.erp.modules.fin.mapper.FinDepreciationMapper;
 import com.lemon.erp.modules.fin.mapper.FinPeriodMapper;
 import com.lemon.erp.modules.fin.mapper.FinSettlementMapper;
 import com.lemon.erp.modules.fin.mapper.FinVoucherEntryMapper;
@@ -49,10 +40,6 @@ public class FinCloseCheckService {
     private final FinVoucherEntryMapper entryMapper;
     private final FinBillMapper billMapper;
     private final FinSettlementMapper settlementMapper;
-    private final FinCostRunMapper costRunMapper;
-    private final FinDepreciationMapper depreciationMapper;
-    private final FinAssetMapper assetMapper;
-    private final FinBankStatementMapper statementMapper;
     private final FinTaxService taxService;
     private final FinAccountService accountService;
     private final FinAccountRuleService accountRules;
@@ -86,21 +73,9 @@ public class FinCloseCheckService {
                 .isNull(FinSettlement::getVoucherId).eq(FinSettlement::getStatus, ApproveStatus.APPROVED));
         items.add(settles == 0 ? ok("fin.label.vouchersGeneratedReceiptsPayments") : warn("fin.label.vouchersGeneratedReceiptsPayments", Messages.get("fin.text.receiptPaymentDocumentSWithoutVouchers", settles)));
 
-        FinCostRun run = Queries.first(costRunMapper, Wrappers.<FinCostRun>lambdaQuery().eq(FinCostRun::getPeriod, period));
-        items.add(run == null ? warn("fin.label.costAccounting", Messages.get("fin.text.costAccountingHasNotRunPeriod")) : run.getVoucherId() == null ? warn("fin.label.costAccounting", Messages.get("fin.text.costTransferVoucherHasNotGenerated"))
-                : ok("fin.label.costAccounting"));
-
-        boolean hasAssets = assetMapper.exists(Wrappers.<FinAsset>lambdaQuery().in(FinAsset::getStatus, AssetStatus.IN_USE, AssetStatus.IDLE)
-                .lt(FinAsset::getUseDate, begin));
-        boolean depreciated = depreciationMapper.exists(Wrappers.<FinDepreciation>lambdaQuery().eq(FinDepreciation::getPeriod, period));
-        items.add(!hasAssets || depreciated ? ok("fin.label.depreciation") : warn("fin.label.depreciation", Messages.get("fin.text.depreciationHasNotAccruedPeriod")));
-
         boolean output = entryMapper.sumBalanceUpTo(accountRules.accountId(AccountRole.OUTPUT_VAT), period).signum() < 0;
         items.add(!output || taxService.transferred(period) ? ok("fin.label.vatTransfer") : warn("fin.label.vatTransfer", Messages.get("fin.text.outputVatHasNotTransferredSurtaxes")));
 
-        long unmatched = statementMapper.selectCount(Wrappers.<FinBankStatement>lambdaQuery().between(FinBankStatement::getTxnDate, begin, end)
-                .isNull(FinBankStatement::getEntryId));
-        items.add(unmatched == 0 ? ok("fin.label.bankReconciliation") : warn("fin.label.bankReconciliation", Messages.get("fin.text.bankTransactionSNotMatched", unmatched)));
         return items;
     }
 

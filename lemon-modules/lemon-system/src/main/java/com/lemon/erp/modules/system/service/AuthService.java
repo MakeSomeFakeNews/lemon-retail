@@ -8,7 +8,6 @@ import com.lemon.erp.common.util.ServletUtils;
 import com.lemon.erp.common.util.TreeUtils;
 import com.lemon.erp.common.util.UserAgentUtils;
 import com.lemon.erp.framework.demo.DemoProperties;
-import com.lemon.erp.framework.portal.PortalKind;
 import com.lemon.erp.framework.log.LoginLogEvent;
 import com.lemon.erp.framework.security.LoginUser;
 import com.lemon.erp.framework.security.SecurityUtils;
@@ -33,12 +32,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.stream.Collectors;
-import java.util.Set;
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -120,12 +115,6 @@ public class AuthService {
         if (user.getStatus() != EnableStatus.ENABLED) {
             throw loginFailed(user.getUsername(), request, "system.error.accountDisabled");
         }
-        if (user.getSupplierId() != null || user.getCustomerId() != null) {
-            // 登录日志记中文，提示按请求语言
-            String via = Messages.get(Messages.DEFAULT_LOCALE, viaKey);
-            publishLoginLog(user.getUsername(), request, 0, "门户账号不能使用" + via); // i18n-ignore
-            throw new BizException("system.error.portalAccountsCannotUse", Messages.get(viaKey));
-        }
         return issue(user, request, Messages.get(Messages.DEFAULT_LOCALE, viaKey) + "成功"); // i18n-ignore 登录日志
     }
 
@@ -166,20 +155,10 @@ public class AuthService {
                 : menuMapper.selectRouterMenusByUserId(loginUser.userId(), tenantLookup.currentPackageId());
         boolean platform = TenantContext.isPlatform();
         boolean saas = tenantLookup.isEnabled();
-        // 门户模块只对所属门户的账号显示，门户账号只显示所属门户；其余模块只对内部用户显示
-        Map<Long, PortalKind> portalModules = new HashMap<>();
-        menus.forEach(m -> {
-            PortalKind k = PortalKind.ofModulePath(m.getPath());
-            if (k != null) {
-                portalModules.put(m.getId(), k);
-            }
-        });
-        PortalKind kind = loginUser.portalKind();
         // 平台专属菜单只对平台租户显示，租户管理菜单只在 SaaS 模式下显示
         return TreeUtils.build(menus.stream()
                 .filter(m -> platform || !PlatformFeatures.isPlatformOnly(m.getPerms()))
                 .filter(m -> saas || !PlatformFeatures.isTenantManagement(m.getPerms()))
-                .filter(m -> kind == portalModules.getOrDefault(m.getId(), portalModules.get(m.getParentId())))
                 .toList());
     }
 

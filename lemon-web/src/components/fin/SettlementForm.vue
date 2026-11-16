@@ -83,7 +83,7 @@
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'source'">
           <DictTag type="fin_bill_source" :value="record.sourceType" />
-          <SourceDocLink class="sub-text" :type="record.sourceType" :id="record.sourceId" :no="record.sourceNo" :bill-kind="record.kind" :project-id="record.projectId" />
+          <SourceDocLink class="sub-text" :type="record.sourceType" :id="record.sourceId" :no="record.sourceNo" :bill-kind="record.kind" />
         </template>
         <template v-else-if="column.key === 'amount'">
           <template v-if="isForeign(record.currency)">
@@ -171,10 +171,7 @@ const { rules } = useBizRules({ 'fin.settlement.draft': false })
 const draftMode = computed(() => rules['fin.settlement.draft'] === true)
 
 const dict = useDict('fin_settle_method', 'fin_bill_source')
-// 票据结算由票据业务（收票、背书、开票）自动生成，手工收付款时显示为禁用并说明
-const methodOptions = computed(() =>
-  toOptions(dict.fin_settle_method).map((o) => (o.value !== 'NOTE' ? o : { ...o, label: t('fin.settlementPage.noteMethodHint', { label: o.label }), disabled: true }))
-)
+const methodOptions = computed(() => toOptions(dict.fin_settle_method))
 
 const billColumns = [
   { title: t('fin.settlementPage.no'), dataIndex: 'billNo', width: 150 },

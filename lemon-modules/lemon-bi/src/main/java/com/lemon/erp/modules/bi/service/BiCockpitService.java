@@ -3,7 +3,6 @@ package com.lemon.erp.modules.bi.service;
 import com.lemon.erp.common.util.Decimals;
 import com.lemon.erp.modules.bi.dto.BiInsight;
 import com.lemon.erp.modules.bi.mapper.BiInsightMapper;
-import com.lemon.erp.modules.fin.service.FinCostService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -29,7 +28,6 @@ public class BiCockpitService {
 
     private final BiInsightMapper insightMapper;
     private final BiEtlService etlService;
-    private final FinCostService costService;
 
     public BiInsight.Cockpit cockpit() {
         BiDecisionService.requireAllData();
@@ -84,9 +82,7 @@ public class BiCockpitService {
                 insightMapper.selectTopCustomers(today.withDayOfYear(1), 5),
                 insightMapper.selectTopMaterials(today.withDayOfYear(1), 5),
                 insightMapper.selectInventoryByCategory(),
-                etlService.lastSuccess(),
-                // 账务利润（凭证）中本月的营业成本在月末成本核算后才结转
-                value(finance, cur, BiInsight.PeriodRow::getRevenue).signum() == 0 ? null : costService.costWarning(cur));
+                etlService.lastSuccess());
     }
 
     static int period(YearMonth ym) {

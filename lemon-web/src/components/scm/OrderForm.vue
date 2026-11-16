@@ -36,20 +36,9 @@
             <WarehouseSelect v-model:value="form.warehouseId" :placeholder="$t('scm.orderForm.warehousePlaceholder')" />
           </a-form-item>
         </a-col>
-        <a-col v-if="kind === 'purchase' && (contracts.length || form.contractId)" :xs="24" :sm="12" :lg="8">
-          <a-form-item :label="$t('scm.order.contract')" name="contractId" :extra="$t('scm.orderForm.contractExtra')">
-            <a-select
-              v-model:value="form.contractId"
-              allow-clear
-              :options="contractOptions"
-              :placeholder="$t('scm.orderForm.noContract')"
-              @change="onContractChange"
-            />
-          </a-form-item>
-        </a-col>
         <a-col :xs="12" :sm="6" :lg="4">
           <a-form-item :label="$t('scm.orderForm.currency')" name="currency" :class="ai?.cls('currency')">
-            <a-select :value="form.currency" :options="currencyOptions(currencyList)" :disabled="!!form.contractId" @change="onCurrencyChange" />
+            <a-select :value="form.currency" :options="currencyOptions(currencyList)" @change="onCurrencyChange" />
           </a-form-item>
         </a-col>
         <a-col v-if="foreign" :xs="12" :sm="6" :lg="4">
@@ -68,11 +57,6 @@
         <a-col :xs="12" :sm="6" :lg="4">
           <a-form-item :label="$t('scm.taxRate.invoiceKind')" name="invoiceKind" :tooltip="$t('scm.taxRate.invoiceKindExtra')">
             <InvoiceKindSelect v-model:value="form.invoiceKind" @change="onInvoiceKindChange" />
-          </a-form-item>
-        </a-col>
-        <a-col v-if="kind === 'sales' && (rebateBalance > 0 || form.rebateAmount)" :xs="24" :sm="12" :lg="8">
-          <a-form-item :label="$t('scm.orderForm.rebate')" name="rebateAmount" :extra="$t('scm.orderForm.rebateExtra', { amount: formatMoney(rebateBalance) })">
-            <a-input-number v-model:value="form.rebateAmount" :min="0" :max="rebateBalance" :precision="2" prefix="¥" class="full" />
           </a-form-item>
         </a-col>
         <a-col :span="24">
@@ -96,9 +80,9 @@
           </a-button>
         </a-space>
       </div>
-      <a-alert v-if="promo && (Number(promo.discountAmount) > 0 || promo.gifts.length || Number(form.rebateAmount) > 0)" type="success" show-icon class="promo-tip">
+      <a-alert v-if="promo && (Number(promo.discountAmount) > 0 || promo.gifts.length)" type="success" show-icon class="promo-tip">
         <template #message>
-          {{ $t('scm.orderForm.promoDiscount', { amount: symbol + formatMoney(promo.discountAmount) }) }}<span v-if="Number(form.rebateAmount) > 0">{{ $t('scm.orderForm.promoRebate', { amount: symbol + formatMoney(form.rebateAmount) }) }}</span>{{ $t('scm.order.comma') }}
+          {{ $t('scm.orderForm.promoDiscount', { amount: symbol + formatMoney(promo.discountAmount) }) }}{{ $t('scm.order.comma') }}
           {{ $t('scm.orderForm.promoTotal', { amount: symbol + formatMoney(promoTotal) }) }}
           <div v-for="(n, i) in promo.notes" :key="i" class="sub-text">{{ n }}</div>
           <div class="sub-text">{{ $t('scm.orderForm.promoNote') }}</div>
@@ -159,13 +143,11 @@
                 :min="0"
                 :precision="4"
                 :prefix="symbol"
-                :disabled="contractPrices.has(record.materialId)"
                 class="full"
                 @change="record.priceAuto = false"
               />
             </a-form-item>
-            <div v-if="contractPrices.has(record.materialId)" class="sub-text">{{ $t('scm.orderForm.contractPrice') }}</div>
-            <div v-else-if="record.priceSource && record.priceAuto" class="sub-text">{{ $t(`pricing.source.${record.priceSource}`) }}</div>
+            <div v-if="record.priceSource && record.priceAuto" class="sub-text">{{ $t(`pricing.source.${record.priceSource}`) }}</div>
             <div v-if="supplyPriceDiff(record) != null" class="sub-text">
               {{ $t('scm.orderForm.supplyPrice') }} <a @click="useSupplyPrice(record)">{{ symbol }}{{ formatQty(supplyPriceDiff(record)) }}</a>
             </div>
@@ -174,7 +156,6 @@
               {{ $t('scm.orderForm.paren', { text: record.lastPrice.orderDate }) }}
             </div>
             <div v-if="priceWarning(record)" class="warn-text">{{ priceWarning(record) }}</div>
-            <div v-else-if="form.contractId && record.materialId" class="warn-text">{{ $t('scm.orderForm.notInContract') }}</div>
             <div v-if="record.unitName" class="sub-text">{{ $t('scm.orderForm.perUnit', { unit: record.unitName }) }}</div>
             <a v-if="record.materialId && canReference" class="atp-link" @click="openReference(record)">
               <HistoryOutlined /> {{ $t('pricing.reference.open') }}
@@ -250,8 +231,7 @@ import { useUserStore } from '@/store/user'
 import { addOrder, getOrder, updateOrder } from '@/api/scm/order'
 import { materialUnits } from '@/api/wms/material'
 import { partnerOptions, supplierPrices } from '@/api/scm/partner'
-import { previewPromotion, priceControlsOf, priceHistory, rebateBalance as fetchRebateBalance } from '@/api/scm/sourcing'
-import { activeContracts } from '@/api/scm/srm'
+import { previewPromotion, priceControlsOf, priceHistory } from '@/api/scm/sourcing'
 import { useFormDrawer } from '@/composables/useFormDrawer'
 import { formatQty, rowKey, today } from '@/components/wms/wms'
 import { ORDER_KINDS, formatMoney, lineAmount, lineTax, qty4 } from './scm'
@@ -269,7 +249,7 @@ import { OrderKind, PriceControlMode, PriceSource, SupplierLevel } from '@/const
  * 物料有辅助单位时可按辅助单位录入：表单中 unitQty / unitPrice 为所选单位的数量、单价，
  * 提交时折算为基本单位的 qty / price（qty = unitQty × 换算率，price = unitPrice ÷ 换算率），并带上 unitName
  * 外币订单：单价、金额为订单币种的原币，按人民币维护的供货价格 / 价目价自动带出时除以汇率
- * 整单优惠（含抹零）：保存时在促销、返利之后按行金额分摊到各行；编辑时单价按原价（origPrice）录入，保存时重新分摊
+ * 整单优惠（含抹零）：保存时在促销之后按行金额分摊到各行；编辑时单价按原价（origPrice）录入，保存时重新分摊
  * 通过 ref 调用 openCreate(defaults) / openEdit(record)，保存成功后触发 success(id)
  */
 const props = defineProps({
@@ -310,8 +290,6 @@ const emptyForm = () => ({
   warehouseId: undefined,
   currency: BASE_CURRENCY,
   exchangeRate: 1,
-  contractId: undefined,
-  rebateAmount: undefined,
   wholeDiscount: undefined,
   invoiceKind: undefined,
   remark: '',
@@ -381,30 +359,6 @@ function changeUnit(row, unitName) {
   if (props.kind === 'sales') fetchSalesPrice(row)
 }
 
-// 采购合同：供应商在订单日期有效的生效合同
-const contracts = ref([])
-async function loadContracts(supplierId, date, order) {
-  contracts.value = []
-  if (props.kind !== 'purchase' || !supplierId) return
-  const list = await activeContracts({ supplierId, date: date || undefined })
-  // 编辑时引用的合同可能已关闭或到期，仍显示
-  if (order?.contractId && !list.some((c) => c.id === order.contractId)) {
-    list.push({ id: order.contractId, contractNo: order.contractNo, name: t('scm.orderForm.expired'), items: [] })
-  }
-  contracts.value = list
-}
-const contractOptions = computed(() =>
-  contracts.value.map((c) => ({ value: c.id, label: `${c.contractNo} ${c.name}${c.endDate ? t('scm.orderForm.until', { date: c.endDate }) : ''}` }))
-)
-const contractPrices = computed(() => {
-  const c = contracts.value.find((x) => x.id === form.value.contractId)
-  return new Map((c?.items || []).map((i) => [i.materialId, i]))
-})
-function onContractChange() {
-  if (form.value.contractId) form.value.currency = BASE_CURRENCY
-  form.value.items.forEach((row) => fillPrice(row, true))
-}
-
 // 供应商的供货价格：materialId → price
 const prices = ref(new Map())
 async function loadPrices(supplierId) {
@@ -422,7 +376,7 @@ const drawer = useFormDrawer(
     emptyForm,
     fetch: async (record) => {
       const order = await getOrder(props.kind, record.id)
-      await Promise.all([loadPrices(order.partnerId), loadContracts(order.partnerId, order.orderDate, order), loadRebate(order.partnerId, order.id)])
+      await loadPrices(order.partnerId)
       // 销售订单：赠品行由促销自动生成，单价按原价编辑（保存时重新应用促销）
       const items = order.items.filter((i) => !i.gift).map((i) => toRow(i.origPrice != null ? { ...i, price: i.origPrice } : i))
       await Promise.all(items.map(attachUnits))
@@ -430,7 +384,6 @@ const drawer = useFormDrawer(
         ...order,
         currency: order.currency || BASE_CURRENCY,
         exchangeRate: order.exchangeRate != null ? Number(order.exchangeRate) : 1,
-        rebateAmount: Number(order.rebateAmount) || undefined,
         wholeDiscount: Number(order.wholeDiscount) || undefined,
         invoiceKind: order.invoiceKind || undefined,
         items
@@ -438,11 +391,7 @@ const drawer = useFormDrawer(
     },
     beforeOpen: (record) => {
       unitCache.clear()
-      if (!record) {
-        prices.value = new Map()
-        contracts.value = []
-        rebateBalance.value = 0
-      }
+      if (!record) prices.value = new Map()
       promo.value = undefined
       partnerLevel.value = undefined
     },
@@ -462,8 +411,6 @@ const drawer = useFormDrawer(
       warehouseId: f.warehouseId || null,
       currency: f.currency || BASE_CURRENCY,
       exchangeRate: isForeign(f.currency) ? f.exchangeRate : 1,
-      contractId: f.contractId || null,
-      rebateAmount: props.kind === 'sales' && f.rebateAmount ? f.rebateAmount : null,
       wholeDiscount: f.wholeDiscount || null,
       invoiceKind: f.invoiceKind || null,
       remark: f.remark,
@@ -562,14 +509,12 @@ function addRow() {
 // ---------------------------------------------------------------- 税率：发票类型、统一设置（issue #82）
 /** 默认税率（业务参数）与发票类型：新明细的税率为发票类型的税率，没有时为默认税率 */
 const tax = useTaxRates()
-/** 可以统一调整税率的行：引用合同的物料按合同税率（锁定） */
-const rateRows = () => form.value.items.filter((row) => !contractPrices.value.has(row.materialId))
 function onInvoiceKindChange(kind, rate) {
   if (rate == null) return
-  message.success(t('scm.taxRate.invoiceKindApplied', { n: applyTaxRate(rateRows(), rate), rate }))
+  message.success(t('scm.taxRate.invoiceKindApplied', { n: applyTaxRate(form.value.items, rate), rate }))
 }
 function applyAllTaxRate(rate) {
-  message.success(t('scm.taxRate.applied', { n: applyTaxRate(rateRows(), rate), rate }))
+  message.success(t('scm.taxRate.applied', { n: applyTaxRate(form.value.items, rate), rate }))
 }
 
 const partnerLevel = ref()
@@ -579,21 +524,18 @@ function onPartnerSelect(partner) {
 }
 
 /**
- * 选定往来单位后加载相关数据：销售订单按客户重新取价、加载返利余额；采购订单加载供应商的供货价格、生效合同。
+ * 选定往来单位后加载相关数据：销售订单按客户重新取价；采购订单加载供应商的供货价格。
  * keepPrices（打开时已带入明细，如智能录入的预填）：保留已有的单价，只补全空的单价、税率；
  * 否则（手工换了往来单位）自动带出的单价按新单位更新
  */
 async function loadPartnerData(partner, keepPrices = false) {
   partnerLevel.value = partner.level
   if (props.kind === 'sales') {
-    if (!keepPrices) form.value.rebateAmount = undefined
-    loadRebate(partner.id, form.value.id)
     // 手工改过（含预填）的单价不覆盖，只更新价目价；所有行一次取价
     await fetchSalesPrices(form.value.items).catch(() => {})
     return
   }
-  form.value.contractId = undefined
-  await Promise.all([loadPrices(partner.id), loadContracts(partner.id, form.value.orderDate)])
+  await loadPrices(partner.id)
   form.value.items.forEach((row) => fillPrice(row, !keepPrices))
 }
 
@@ -640,14 +582,6 @@ async function fetchSalesPrices(rows) {
 }
 
 function fillPrice(row, overwrite) {
-  // 引用合同时按合同价
-  const cp = contractPrices.value.get(row.materialId)
-  if (cp) {
-    row.unitPrice = qty4(Number(cp.price) * ratioOf(row))
-    row.taxRate = Number(cp.taxRate)
-    row.priceAuto = true
-    return
-  }
   const p = prices.value.get(row.materialId)
   if (!p) return
   // 供货价格按基本单位
@@ -675,9 +609,9 @@ async function loadLastPrice(row) {
     if (rate != null) row.taxRate = rate
   }
 }
-/** 采购订单：单价与供应商供货价不一致时返回供货价（订单单位、订单币种），用于提示；引用合同时不提示 */
+/** 采购订单：单价与供应商供货价不一致时返回供货价（订单单位、订单币种），用于提示 */
 function supplyPriceDiff(row) {
-  if (props.kind !== 'purchase' || form.value.contractId || row.unitPrice == null) return null
+  if (props.kind !== 'purchase' || row.unitPrice == null) return null
   const p = prices.value.get(row.materialId)
   if (!p) return null
   const price = qty4(fromBase(Number(p.price) * ratioOf(row)))
@@ -745,19 +679,14 @@ function applyMaterial(row, material) {
   loadLastPrice(row)
 }
 
-// ---------------------------------------------------------------- 促销预览、返利抵扣
-const rebateBalance = ref(0)
-async function loadRebate(customerId, orderId) {
-  if (props.kind !== 'sales' || !customerId) return
-  rebateBalance.value = Number(await fetchRebateBalance(customerId, orderId).catch(() => 0)) || 0
-}
+// ---------------------------------------------------------------- 促销预览
 const promo = ref()
 let promoTimer
 let promoSeq = 0
-/** 客户、日期、明细、返利抵扣变化后（防抖）预览促销 */
+/** 客户、日期、明细变化后（防抖）预览促销 */
 watch(
   () => props.kind === 'sales' && drawer.open.value
-    ? JSON.stringify([form.value.partnerId, form.value.orderDate, form.value.rebateAmount,
+    ? JSON.stringify([form.value.partnerId, form.value.orderDate,
       form.value.items.map((i) => [i.materialId, baseQty(i), basePrice(i)])])
     : null,
   (key) => {
@@ -772,7 +701,7 @@ watch(
       }
       const seq = ++promoSeq
       const res = await previewPromotion({
-        customerId: f.partnerId, orderDate: f.orderDate, rebateAmount: f.rebateAmount || null,
+        customerId: f.partnerId, orderDate: f.orderDate,
         items: lines.map((i) => ({ materialId: i.materialId, qty: baseQty(i), price: basePrice(i) }))
       }).catch(() => undefined)
       if (seq === promoSeq) promo.value = res
@@ -784,7 +713,7 @@ const promoLine = (index) => {
   const line = promo.value?.lines?.[index]
   return line && line.origPrice != null ? line : null
 }
-/** 整单优惠的基数：销售订单有促销预览时为促销、返利后的成交价合计（与后端一致，按行舍入后求和） */
+/** 整单优惠的基数：销售订单有促销预览时为促销后的成交价合计（与后端一致，按行舍入后求和） */
 const discountBase = computed(() =>
   round2(promo.value
     ? (promo.value.lines || []).reduce((sum, l, i) => sum + lineAmount(baseQty(form.value.items[i] || {}), l.price), 0)
@@ -795,7 +724,7 @@ const promoTotal = computed(() => (promo.value?.lines || []).reduce((sum, l, i) 
 // 价格参考：点选的历史价格（基本单位、本位币）按当前单位、币种填入单价
 const userStore = useUserStore()
 const canReference = computed(() =>
-  userStore.hasPerm(['scm:sales:list', 'scm:salesOut:list', 'scm:quotation:list', 'scm:purchase:list', 'scm:purchaseIn:list'])
+  userStore.hasPerm(['scm:sales:list', 'scm:salesOut:list', 'scm:purchase:list', 'scm:purchaseIn:list'])
 )
 const referenceRef = ref()
 let referenceRow
@@ -809,7 +738,7 @@ function openReference(row) {
   })
 }
 function onReferencePick(price) {
-  if (!referenceRow || contractPrices.value.has(referenceRow.materialId)) return
+  if (!referenceRow) return
   referenceRow.unitPrice = qty4(fromBase(price * ratioOf(referenceRow)))
   referenceRow.priceAuto = false
 }
@@ -823,7 +752,7 @@ function openAtp(row) {
 }
 
 /**
- * 传入的明细（基本单位）转为表单行。带了往来单位（如智能录入的预填）时与手工选择一样加载供货价格、合同、返利等，
+ * 传入的明细（基本单位）转为表单行。带了往来单位（如智能录入的预填）时与手工选择一样加载供货价格等，
  * 但保留传入的单价：只补全空的单价，税率为空时按供货价 / 价目表带出（都没有时按发票类型 / 默认税率）
  */
 async function openCreate(defaults = {}) {

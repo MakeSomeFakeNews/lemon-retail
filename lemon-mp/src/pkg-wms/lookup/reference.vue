@@ -52,12 +52,12 @@ import { useTitle } from '@/composables/useTitle'
 import { price, qty } from '@/utils/format'
 
 /**
- * 更多内容：与 Web 端销售单明细上的「价格参考」相同的接口和标签页（报价、销售、进货、客户、供货商），
+ * 更多内容：与 Web 端销售单明细上的「价格参考」相同的接口和标签页（销售、进货、客户、供货商），
  * 后端按权限裁剪分区，没有权限的标签页不显示（只能看售价的人看不到进货、供货商）。参数：materialId、kind（默认打开的方向）、name
  */
 const { t } = useI18n()
 useTitle('lookup.ref.title')
-const TABS = ['quotations', 'sales', 'purchases', 'customerCompare', 'supplierCompare']
+const TABS = ['sales', 'purchases', 'customerCompare', 'supplierCompare']
 const COMPARE = ['customerCompare', 'supplierCompare']
 
 const materialId = ref(null)

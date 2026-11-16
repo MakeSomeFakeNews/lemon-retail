@@ -9,7 +9,7 @@ import { hasPerm } from '@/store/user'
 export function canViewKind(kind) {
   return kind === OrderKind.PURCHASE
     ? hasPerm(['scm:purchase:list', 'scm:purchaseIn:list'])
-    : hasPerm(['scm:sales:list', 'scm:salesOut:list', 'scm:quotation:list'])
+    : hasPerm(['scm:sales:list', 'scm:salesOut:list'])
 }
 
 /** 点击价格时打开哪种历史：进货类价格（参考进货价、最新进价、库存均价）看进价历史，其他看售价历史 */

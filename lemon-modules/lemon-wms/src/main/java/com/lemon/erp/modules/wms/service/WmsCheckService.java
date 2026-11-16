@@ -310,7 +310,7 @@ public class WmsCheckService {
     @Transactional
     public boolean confirm(Long id) {
         WmsCheck check = getDraft(id);
-        periodGuard.checkStockOpen(check.getBizDate(), StockBizType.CHECK.getLabelKey());
+        periodGuard.checkOpen(check.getBizDate(), StockBizType.CHECK.getLabelKey());
         // 只有存在差异时才审批
         if (approvalSupport.isAvailable(FLOW)) {
             List<WmsCheckItem> items = itemMapper.selectList(Wrappers.<WmsCheckItem>lambdaQuery().eq(WmsCheckItem::getCheckId, id));

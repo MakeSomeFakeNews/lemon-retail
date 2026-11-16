@@ -60,7 +60,7 @@ export default {
     syncNow: '立即同步',
     rows: '行',
     snapshots: '{n} 天快照',
-    tip: '每天凌晨 1:30 自动同步（配置项 lemon.bi.etl-cron，设为 "-" 关闭定时同步），也可以手动「立即同步」。经营驾驶舱、多维分析、自定义报表和决策支持读取数据仓库，业务数据变化后同步才会反映到分析中；每次同步全量重建销售、采购、生产、财务事实表，并保存当天的库存快照（历史快照保留，用于库存趋势分析）。',
+    tip: '每天凌晨 1:30 自动同步（配置项 lemon.bi.etl-cron，设为 "-" 关闭定时同步），也可以手动「立即同步」。经营驾驶舱、多维分析、自定义报表和决策支持读取数据仓库，业务数据变化后同步才会反映到分析中；每次同步全量重建销售、采购、财务事实表，并保存当天的库存快照（历史快照保留，用于库存趋势分析）。',
     logs: '同步日志',
     allStatus: '全部状态',
     manual: '手动',
@@ -81,31 +81,19 @@ export default {
       sales: '销售事实',
       purchase: '采购事实',
       inventory: '库存快照',
-      production: '生产事实',
-      finance: '财务事实',
-      hr: '人力事实',
-      crm: '客户经营事实',
-      project: '项目事实'
+      finance: '财务事实'
     },
     factShort: {
       sales: '销售',
       purchase: '采购',
       inventory: '库存快照',
-      production: '生产',
-      finance: '财务',
-      hr: '人力',
-      crm: '客户经营',
-      project: '项目'
+      finance: '财务'
     },
     factDesc: {
       sales: '销售出库 / 退货明细，含成本与毛利（按存货单位成本）',
       purchase: '采购入库 / 退货明细，不含税金额',
       inventory: '每天按仓库、物料汇总的库存数量与金额',
-      production: '已下达的工单：计划、完工、报废、工时、是否延期',
-      finance: '已记账凭证按期间、科目、部门汇总（不含结转损益）',
-      hr: '最近 24 个月按部门、岗位类别的月末人数、入职、离职、工资与人工成本',
-      crm: '按月份、负责人的新增线索、跟进、新增商机、赢单与输单',
-      project: '按月份、项目的已审批工时与人工成本、费用、月结确认的收入与结转成本'
+      finance: '已记账凭证按期间、科目、部门汇总（不含结转损益）'
     }
   },
   report: {
@@ -154,7 +142,6 @@ export default {
   screen: {
     title: '数据大屏',
     hint: '按 1920 × 1080 设计，自动缩放铺满屏幕；数据每 30 秒刷新，按 F11 或右下角按钮全屏',
-    allWorkCenters: '全部工作中心',
     open: '打开',
     rotatePrefix: '轮播：已选 {n} 个大屏，每',
     rotateSuffix: '秒切换',
@@ -177,8 +164,6 @@ export default {
     screensExtra: '选择多个时轮播',
     intervalSeconds: '轮播间隔（秒）',
     interval: '轮播间隔',
-    workCenter: '工作中心',
-    workCenterExtra: '生产车间、生产进度大屏只显示该工作中心',
     expireTime: '有效期至',
     lastAccess: '最近访问',
     link: '链接',
@@ -188,8 +173,8 @@ export default {
   },
   cockpit: {
     title: '经营驾驶舱',
-    sub: '趋势、排行来自数据仓库；应收应付、在途订单、生产、项目、客户服务为实时数据',
-    subSynced: '趋势、排行来自数据仓库（数据更新于 {time}）；应收应付、在途订单、生产、项目、客户服务为实时数据',
+    sub: '趋势、排行来自数据仓库；应收应付、在途订单为实时数据',
+    subSynced: '趋势、排行来自数据仓库（数据更新于 {time}）；应收应付、在途订单为实时数据',
     notSynced: '数据仓库尚未同步',
     notSyncedDesc: '销售、采购、利润趋势读取数据仓库，请先同步一次（之后每天凌晨自动同步）。',
     salesTrend: '近 12 个月销售额与毛利',
@@ -215,17 +200,6 @@ export default {
     monthPurchase: '本月采购',
     openSales: '在途销售订单',
     unshippedAmount: '未出库金额',
-    openWo: '在制工单',
-    countN: '{n} 张',
-    late: '延期',
-    activeProjects: '进行中项目',
-    avgProgress: '平均进度',
-    headcount: '在职人数',
-    peopleN: '{n} 人',
-    pipeline: '商机储备',
-    pipelineAmount: '进行中商机金额',
-    tickets: '服务工单',
-    overtime: '超时',
     sales: '销售额',
     profitName: '毛利',
     revenue: '收入',

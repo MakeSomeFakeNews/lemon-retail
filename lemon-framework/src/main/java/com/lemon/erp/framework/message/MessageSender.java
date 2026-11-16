@@ -14,7 +14,7 @@ public interface MessageSender {
     /**
      * 发送给拥有某个权限标识的全部启用用户；没有任何用户拥有该权限时发给超级管理员
      *
-     * @param perm 权限标识，如 hr:employee:list
+     * @param perm 权限标识，如 scm:sales:list
      */
     void sendToPermission(String perm, Message message);
 

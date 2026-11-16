@@ -109,7 +109,6 @@ public class ScmOrderAssembler {
         order.setOrderDate(req.orderDate());
         order.setDeliveryDate(req.deliveryDate());
         order.setWarehouseId(req.warehouseId());
-        order.setContractId(req.contractId());
         order.setInvoiceKind(req.invoiceKind() == null || req.invoiceKind().isBlank() ? null : req.invoiceKind().trim());
         order.setRemark(req.remark());
         order.setTotalQty(Decimals.sum(items, ScmOrderItem::getQty));

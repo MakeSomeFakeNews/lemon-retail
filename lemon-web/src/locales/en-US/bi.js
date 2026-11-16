@@ -60,7 +60,7 @@ export default {
     syncNow: 'Sync Now',
     rows: 'rows',
     snapshots: '{n}-day snapshots',
-    tip: 'Syncs automatically at 1:30 AM every day (setting lemon.bi.etl-cron; set to "-" to disable), or click "Sync Now". The Cockpit, Pivot Analysis, custom reports and Decision Support read from the data warehouse, so business changes appear in analysis only after a sync. Each sync fully rebuilds the sales, purchasing, production and finance fact tables and saves a stock snapshot for the day (historical snapshots are kept for stock trend analysis).',
+    tip: 'Syncs automatically at 1:30 AM every day (setting lemon.bi.etl-cron; set to "-" to disable), or click "Sync Now". The Cockpit, Pivot Analysis, custom reports and Decision Support read from the data warehouse, so business changes appear in analysis only after a sync. Each sync fully rebuilds the sales, purchasing and finance fact tables and saves a stock snapshot for the day (historical snapshots are kept for stock trend analysis).',
     logs: 'Sync Logs',
     allStatus: 'All Statuses',
     manual: 'Manual',
@@ -81,31 +81,19 @@ export default {
       sales: 'Sales Facts',
       purchase: 'Purchase Facts',
       inventory: 'Stock Snapshots',
-      production: 'Production Facts',
-      finance: 'Finance Facts',
-      hr: 'HR Facts',
-      crm: 'CRM Facts',
-      project: 'Project Facts'
+      finance: 'Finance Facts'
     },
     factShort: {
       sales: 'Sales',
       purchase: 'Purchase',
       inventory: 'Stock Snapshot',
-      production: 'Production',
-      finance: 'Finance',
-      hr: 'HR',
-      crm: 'CRM',
-      project: 'Project'
+      finance: 'Finance'
     },
     factDesc: {
       sales: 'Sales delivery / return lines with cost and gross profit (at inventory unit cost)',
       purchase: 'Purchase receipt / return lines, amounts excluding tax',
       inventory: 'Daily stock quantity and value by warehouse and material',
-      production: 'Released work orders: planned, completed, scrap, hours, delays',
-      finance: 'Posted vouchers summarized by period, account and department (excluding P&L closing)',
-      hr: 'Last 24 months by department and position type: month-end headcount, hires, leavers, payroll and labor cost',
-      crm: 'By month and owner: new leads, follow-ups, new opportunities, won and lost',
-      project: 'By month and project: approved hours and labor cost, expenses, recognized revenue and carried-forward cost'
+      finance: 'Posted vouchers summarized by period, account and department (excluding P&L closing)'
     }
   },
   report: {
@@ -154,7 +142,6 @@ export default {
   screen: {
     title: 'Data Screens',
     hint: 'Designed for 1920 × 1080 and scaled to fit; data refreshes every 30 s. Press F11 or use the bottom-right button for full screen.',
-    allWorkCenters: 'All work centers',
     open: 'Open',
     rotatePrefix: 'Rotation: {n} screens selected, switch every',
     rotateSuffix: 'seconds',
@@ -177,8 +164,6 @@ export default {
     screensExtra: 'Rotates when several are selected',
     intervalSeconds: 'Rotation Interval (s)',
     interval: 'Interval',
-    workCenter: 'Work Center',
-    workCenterExtra: 'The Production and Production Progress screens show only this work center',
     expireTime: 'Valid Until',
     lastAccess: 'Last Access',
     link: 'Link',
@@ -188,8 +173,8 @@ export default {
   },
   cockpit: {
     title: 'Business Cockpit',
-    sub: 'Trends and rankings come from the data warehouse; receivables, payables, open orders, production, projects and service are live',
-    subSynced: 'Trends and rankings come from the data warehouse (updated {time}); receivables, payables, open orders, production, projects and service are live',
+    sub: 'Trends and rankings come from the data warehouse; receivables, payables and open orders are live',
+    subSynced: 'Trends and rankings come from the data warehouse (updated {time}); receivables, payables and open orders are live',
     notSynced: 'The data warehouse has not been synced',
     notSyncedDesc: 'Sales, purchase and profit trends read from the data warehouse. Sync once first (it then syncs automatically every night).',
     salesTrend: 'Sales and Gross Profit (12 Months)',
@@ -215,17 +200,6 @@ export default {
     monthPurchase: 'Purchases (Month)',
     openSales: 'Open Sales Orders',
     unshippedAmount: 'Unshipped amount',
-    openWo: 'WIP Work Orders',
-    countN: '{n}',
-    late: 'Late',
-    activeProjects: 'Active Projects',
-    avgProgress: 'Avg. progress',
-    headcount: 'Headcount',
-    peopleN: '{n}',
-    pipeline: 'Pipeline',
-    pipelineAmount: 'Open opportunity amount',
-    tickets: 'Service Tickets',
-    overtime: 'Overdue',
     sales: 'Sales',
     profitName: 'Gross Profit',
     revenue: 'Revenue',

@@ -128,7 +128,6 @@ export default {
   },
   unit: {
     piece: '',
-    day: 'days',
     times: 'times',
     people: 'people'
   }

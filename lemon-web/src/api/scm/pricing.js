@@ -7,7 +7,7 @@ const list = (v) => (Array.isArray(v) ? v.join(',') : v)
  * params: { kind: 'SALES' | 'PURCHASE', partnerId, materialIds: [id] | '1,2', qtys?: [数量]（与 materialIds 一一对应）, date? }
  * → 按行返回 [{ materialId, price, taxRate, source }]（与 materialIds 一一对应，同一物料多行按各行数量分别匹配起订量 / 阶梯价），source 见 @/constants/enums 的 PriceSource（没有价格时 price、source 为空，
  * taxRate 为空表示来源没有税率，保持原税率）。
- * 优先级：销售 客户执行价 → 价目表 → 客户价格等级价 → 零售价 → 最近售价；采购 合同价 → 供货价 → 最近进价 → 参考成本价
+ * 优先级：销售 客户执行价 → 价目表 → 客户价格等级价 → 零售价 → 最近售价；采购 供货价 → 最近进价 → 参考成本价
  */
 export const defaultPrices = (params) =>
   request.get('/scm/pricing/default', {
@@ -22,7 +22,7 @@ export const defaultPrices = (params) =>
 /**
  * 价格参考：params { materialId, partnerId?, kind?（partnerId 是客户 SALES 还是供应商 PURCHASE，指定时只筛选该方向的分区）,
  *   keyword?（往来单位编码 / 名称）, start?, end? }
- * → { quotations, sales, purchases, purchaseQty, supplierCompare, customerCompare }，没有权限的分区不返回
+ * → { sales, purchases, purchaseQty, supplierCompare, customerCompare }，没有权限的分区不返回
  */
 export const priceReference = (params) => request.get('/scm/pricing/reference', { params })
 

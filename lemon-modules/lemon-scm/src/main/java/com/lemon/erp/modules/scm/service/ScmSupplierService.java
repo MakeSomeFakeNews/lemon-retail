@@ -9,21 +9,17 @@ import com.lemon.erp.common.i18n.Messages;
 import com.lemon.erp.common.result.PageResult;
 import com.lemon.erp.framework.data.SearchKeyTable;
 import com.lemon.erp.framework.data.SearchKeys;
-import com.lemon.erp.framework.quality.SupplierQualityProvider;
 import com.lemon.erp.framework.record.ChangeLogger;
 import com.lemon.erp.framework.ref.RefType;
 import com.lemon.erp.framework.ref.ReferenceGuard;
 import com.lemon.erp.modules.scm.dto.CarrierOptions;
 import com.lemon.erp.modules.scm.dto.PartnerOption;
-import com.lemon.erp.modules.scm.dto.SupplierKpi;
 import com.lemon.erp.modules.scm.entity.ScmCustomer;
 import com.lemon.erp.modules.scm.entity.ScmOrder;
 import com.lemon.erp.modules.scm.entity.ScmSupplier;
-import com.lemon.erp.modules.scm.entity.ScmSupplierEval;
 import com.lemon.erp.modules.scm.entity.ScmSupplierPrice;
 import com.lemon.erp.modules.scm.mapper.ScmCustomerMapper;
 import com.lemon.erp.modules.scm.mapper.ScmOrderMapper;
-import com.lemon.erp.modules.scm.mapper.ScmSupplierEvalMapper;
 import com.lemon.erp.modules.scm.mapper.ScmSupplierMapper;
 import com.lemon.erp.modules.scm.mapper.ScmSupplierPriceMapper;
 import com.lemon.erp.modules.scm.model.OrderKind;
@@ -34,7 +30,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -60,11 +55,9 @@ public class ScmSupplierService {
     private final ScmCustomerMapper customerMapper;
     private final DocNoService docNoService;
     private final ScmSupplierPriceMapper priceMapper;
-    private final ScmSupplierEvalMapper evalMapper;
     private final ScmOrderMapper orderMapper;
     private final ReferenceGuard referenceGuard;
     private final ChangeLogger changeLogger;
-    private final SupplierQualityProvider qualityProvider;
     private final SearchKeyTable<ScmSupplier> searchKeys;
 
     /**
@@ -297,7 +290,7 @@ public class ScmSupplierService {
         supplierMapper.updateById(entity);
     }
 
-    /** 有订单的供应商不能删除（可以停用）；删除时一并删除供货价格和评估记录 */
+    /** 有订单的供应商不能删除（可以停用）；删除时一并删除供货价格 */
     @Transactional
     public void delete(List<Long> ids) {
         for (ScmSupplier supplier : supplierMapper.selectByIds(ids)) {
@@ -308,28 +301,7 @@ public class ScmSupplierService {
             referenceGuard.checkDeletable(RefType.SUPPLIER, supplier.getId(), Messages.get("scm.text.supplier", supplier.getName()));
         }
         priceMapper.delete(Wrappers.<ScmSupplierPrice>lambdaQuery().in(ScmSupplierPrice::getSupplierId, ids));
-        evalMapper.delete(Wrappers.<ScmSupplierEval>lambdaQuery().in(ScmSupplierEval::getSupplierId, ids));
         supplierMapper.deleteByIds(ids);
-    }
-
-    /** 供应商绩效 */
-    public PageResult<SupplierKpi> kpi(long current, long size, String keyword, LocalDate begin, LocalDate end) {
-        Page<SupplierKpi> page = Page.of(current, size);
-        supplierMapper.selectKpi(page, keyword, begin, end);
-        Map<Long, SupplierQualityProvider.QualityStat> stats = qualityProvider.qualityStats(
-                page.getRecords().stream().map(SupplierKpi::getSupplierId).toList(), begin, end);
-        page.getRecords().forEach(k -> {
-            SupplierQualityProvider.QualityStat st = stats.get(k.getSupplierId());
-            if (st != null) {
-                if (st.iqcBatches() > 0) {
-                    k.setIqcBatches(st.iqcBatches());
-                    k.setIqcPassBatches(st.iqcPassBatches());
-                }
-                k.setClaimCount(st.claims());
-                k.setClaimAmount(st.claimAmount());
-            }
-        });
-        return PageResult.of(page);
     }
 
     private void checkCodeUnique(String code, Long id) {

@@ -39,21 +39,4 @@ public final class SecurityUtils {
         return auth != null && auth.getPrincipal() instanceof LoginUser user ? user.username() : null;
     }
 
-    /** 供应商门户接口：当前用户关联的供应商，不是供应商账号时拒绝访问 */
-    public static Long requireSupplierId() {
-        Long supplierId = getLoginUser().supplierId();
-        if (supplierId == null) {
-            throw new BizException(R.FORBIDDEN, "framework.error.supplierPortalOnlySupplierAccounts");
-        }
-        return supplierId;
-    }
-
-    /** 经销商门户接口：当前用户关联的客户，不是经销商账号时拒绝访问 */
-    public static Long requireCustomerId() {
-        Long customerId = getLoginUser().customerId();
-        if (customerId == null) {
-            throw new BizException(R.FORBIDDEN, "framework.error.dealerPortalOnlyDealerAccounts");
-        }
-        return customerId;
-    }
 }

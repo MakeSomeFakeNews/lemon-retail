@@ -6,7 +6,7 @@ import java.util.function.BiConsumer;
  * 单据接入审批的声明：流程标识 + 业务标识前缀。业务标识为「前缀 + 单据 ID」，审批结束事件中原样返回，据此找回单据。
  * 在业务 Service 中声明为常量，配合 {@link ApprovalSupport#submit} 发起、{@link #onFinished} 处理审批结果：
  * <pre>{@code
- * private static final ApprovalFlow FLOW = new ApprovalFlow("crm_contract", "crm_contract:");
+ * private static final ApprovalFlow FLOW = new ApprovalFlow("scm_order_change", "scm_order_change:");
  *
  * @EventListener
  * public void onFlowFinished(FlowFinishedEvent e) {
@@ -15,7 +15,7 @@ import java.util.function.BiConsumer;
  * }</pre>
  *
  * @param processKey 流程标识（流程模型的 modelKey，与 FlowBusiness 声明一致）
- * @param keyPrefix  业务标识前缀（含分隔符，如 {@code "crm_contract:"}）；已发起的流程按原前缀回调，不能修改
+ * @param keyPrefix  业务标识前缀（含分隔符，如 {@code "scm_order_change:"}）；已发起的流程按原前缀回调，不能修改
  */
 public record ApprovalFlow(String processKey, String keyPrefix) {
 

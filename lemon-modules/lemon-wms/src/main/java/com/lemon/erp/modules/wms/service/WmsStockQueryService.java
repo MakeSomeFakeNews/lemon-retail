@@ -63,7 +63,6 @@ public class WmsStockQueryService {
     private final WmsBatchMapper batchMapper;
     private final WmsSerialMapper serialMapper;
     private final WmsSerialLogMapper serialLogMapper;
-    private final StockHoldService holdService;
     private final StockCostService costService;
     private final WmsMaterialMapper materialMapper;
     private final PermissionService permissionService;
@@ -177,21 +176,12 @@ public class WmsStockQueryService {
                 .getRecords().stream().map(WmsSerial::getSerialNo).toList();
     }
 
-    /**
-     * 各物料在全部仓库的现有库存（MRP 计算）：可用 + 待检（检验后将可用），不含不合格冻结的；没有库存的物料不在结果中
-     */
-    public Map<Long, BigDecimal> onHand(Collection<Long> materialIds) {
-        Map<Long, BigDecimal> map = available(materialIds);
-        holdService.pendingQty(materialIds).forEach((id, qty) -> map.merge(id, qty, BigDecimal::add));
-        return map;
-    }
-
     /** 拣货候选库存（先到期先出，已过期批次除外）：[{locationId, locationCode, batchNo, expiryDate, qty}] */
     public List<Map<String, Object>> pickCandidates(Long warehouseId, Long materialId) {
         return stockMapper.selectPickCandidates(warehouseId, materialId, java.time.LocalDate.now());
     }
 
-    /** 各物料在全部仓库的可用库存（库存 - 冻结），齐套分析使用 */
+    /** 各物料在全部仓库的可用库存（库存 - 冻结） */
     public Map<Long, BigDecimal> available(Collection<Long> materialIds) {
         Map<Long, BigDecimal> map = new HashMap<>();
         if (materialIds.isEmpty()) {

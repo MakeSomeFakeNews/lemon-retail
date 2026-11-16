@@ -18,7 +18,6 @@ import com.lemon.erp.framework.workflow.ApprovalFlow;
 import com.lemon.erp.framework.workflow.ApprovalSupport;
 import com.lemon.erp.framework.workflow.FlowFinishedEvent;
 import com.lemon.erp.modules.wms.dto.DocQuery;
-import com.lemon.erp.modules.wms.dto.StockDocItemRequest;
 import com.lemon.erp.modules.wms.dto.StockDocRequest;
 import com.lemon.erp.modules.wms.entity.WmsStockDoc;
 import com.lemon.erp.modules.wms.entity.WmsStockDocItem;
@@ -270,7 +269,7 @@ public class WmsStockDocService {
         if (kind == StockBizType.TRANSFER) {
             periodGuard.checkOpen(doc.getBizDate(), kind.getLabelKey());
         } else {
-            periodGuard.checkStockOpen(doc.getBizDate(), kind.getLabelKey());
+            periodGuard.checkOpen(doc.getBizDate(), kind.getLabelKey());
         }
         Long id = doc.getId();
         boolean transit = kind == TRANSFER && Integer.valueOf(1).equals(doc.getInTransit());

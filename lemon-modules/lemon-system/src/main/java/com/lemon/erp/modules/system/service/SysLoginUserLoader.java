@@ -1,7 +1,6 @@
 package com.lemon.erp.modules.system.service;
 
 import com.lemon.erp.common.enums.EnableStatus;
-import com.lemon.erp.framework.portal.PortalKind;
 import com.lemon.erp.framework.security.LoginUser;
 import com.lemon.erp.framework.security.LoginUserLoader;
 import com.lemon.erp.framework.security.PermissionService;
@@ -55,14 +54,7 @@ public class SysLoginUserLoader implements LoginUserLoader {
                     .filter(p -> platform || !PlatformFeatures.isPlatformOnly(p))
                     .collect(Collectors.toCollection(HashSet::new));
         }
-        PortalKind kind = user.getSupplierId() != null ? PortalKind.SUPPLIER : user.getCustomerId() != null ? PortalKind.DEALER : null;
-        if (kind != null) {
-            // 门户账号：不论分配了什么角色，只保留所属门户的权限，数据只到本人（门户接口按关联的供应商 / 客户过滤）
-            Set<String> portalPerms = perms.stream().filter(kind::isPortalPerm).collect(Collectors.toSet());
-            return new LoginUser(user.getId(), user.getUsername(), null, roleCodes, portalPerms,
-                    new DataScope(false, Set.of(), user.getId()), null, tenantId, user.getSupplierId(), user.getCustomerId());
-        }
         DataScope dataScope = admin ? DataScope.ALL : dataScopeResolver.resolve(user, roles);
-        return new LoginUser(user.getId(), user.getUsername(), user.getDeptId(), roleCodes, perms, dataScope, null, tenantId, null, null);
+        return new LoginUser(user.getId(), user.getUsername(), user.getDeptId(), roleCodes, perms, dataScope, null, tenantId);
     }
 }

@@ -37,3 +37,9 @@ export const printFormats = () => get('/system/print-template/formats', undefine
 export const PRINT_FORMATS_KEY = 'printFormats'
 export const getPrintFormatSetting = () => get(`/profile/settings/${PRINT_FORMATS_KEY}`, undefined, { silent: true })
 export const savePrintFormatSetting = (value) => put(`/profile/settings/${PRINT_FORMATS_KEY}`, value, { silent: true })
+
+/** 销售订单：{ current, size, orderNo, partnerName（客户名称或编码）, partnerId, status } */
+export const pageSalesOrders = (params) => get('/scm/sales/order', params)
+export const getSalesOrder = (id) => get(`/scm/sales/order/${id}`)
+/** 订单追溯：出库单、应收单（已核销金额），按权限返回 */
+export const salesOrderTrace = (id) => get(`/bi/trace/order/sales/${id}`, null, { silent: true })

@@ -35,9 +35,6 @@ public class FinBill extends BaseEntity {
 
     private String sourceNo;
 
-    /** 项目（辅助核算），项目开票时填写 */
-    private Long projectId;
-
     /** 费用类应付单（如运费）的借方费用科目，为空时按入库物料的存货科目 */
     private Long expenseAccountId;
 

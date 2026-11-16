@@ -28,14 +28,9 @@ public interface FinMergeMapper {
 
     int mergeIoDoc(@Param("customer") boolean customer, @Param("ids") List<Long> sourceIds, @Param("targetId") Long targetId);
 
-    int mergeNote(@Param("customer") boolean customer, @Param("ids") List<Long> sourceIds, @Param("targetId") Long targetId);
-
-    int mergeNoteLog(@Param("customer") boolean customer, @Param("ids") List<Long> sourceIds, @Param("targetId") Long targetId);
-
     /** 凭证分录的辅助核算（客户 / 供应商），含已记账、已结账期间的凭证：辅助余额按合并后的单位汇总 */
     int mergeVoucherEntry(@Param("customer") boolean customer, @Param("ids") List<Long> sourceIds, @Param("targetId") Long targetId);
 
     int mergeNetting(@Param("customer") boolean customer, @Param("ids") List<Long> sourceIds, @Param("targetId") Long targetId);
 
-    int mergeSupplierStatement(@Param("ids") List<Long> sourceIds, @Param("targetId") Long targetId);
 }

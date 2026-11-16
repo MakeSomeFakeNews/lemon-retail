@@ -70,15 +70,7 @@
             (SELECT COALESCE(SUM(amount - settled_amount), 0) FROM fin_bill WHERE kind = 'AP') AS "apBalance",
             (SELECT COALESCE(SUM(i.price * GREATEST(i.qty - i.done_qty + i.replenish_qty, 0)), 0)
              FROM scm_order o JOIN scm_order_item i ON i.order_id = o.id
-             WHERE o.kind = 'SALES' AND o.status IN ('APPROVED', 'PARTIAL')) AS "openSalesAmount",
-            (SELECT COUNT(*) FROM mes_work_order WHERE status IN ('RELEASED', 'STARTED')) AS "openWorkOrders",
-            (SELECT COUNT(*) FROM mes_work_order WHERE status IN ('RELEASED', 'STARTED') AND plan_end &lt; #{today}) AS "lateWorkOrders",
-            (SELECT COUNT(*) FROM pm_project WHERE status = 'ACTIVE') AS "activeProjects",
-            (SELECT AVG(progress) FROM pm_project WHERE status = 'ACTIVE') AS "projectProgress",
-            (SELECT COUNT(*) FROM hr_employee WHERE status &lt;&gt; 'LEFT') AS "headcount",
-            (SELECT COALESCE(SUM(amount), 0) FROM crm_opportunity WHERE stage NOT IN ('WON', 'LOST')) AS "pipeline",
-            (SELECT COUNT(*) FROM crm_ticket WHERE status IN ('OPEN', 'PROCESSING')) AS "openTickets",
-            (SELECT COUNT(*) FROM crm_ticket WHERE status IN ('OPEN', 'PROCESSING') AND due_time &lt; #{now}) AS "overdueTickets"
+             WHERE o.kind = 'SALES' AND o.status IN ('APPROVED', 'PARTIAL')) AS "openSalesAmount"
     </select>
 
     <select id="selectAbcSource" resultType="com.lemon.erp.modules.bi.dto.BiInsight$AbcRow">
@@ -142,20 +134,9 @@
                     GROUP BY s.material_id
                     HAVING SUM(s.qty) &gt; 0 AND (MAX(t.last_out) IS NULL OR MAX(t.last_out) &lt; #{since})) x
             </when>
-            <when test="metric == 'GROSS_MARGIN'">
+            <otherwise>
                 SELECT CASE WHEN SUM(amount) &gt; 0 THEN SUM(profit) * 100 / SUM(amount) END
                 FROM bi_fact_sales WHERE period = #{period}
-            </when>
-            <when test="metric == 'TICKET_OVERDUE'">
-                SELECT COUNT(*) FROM crm_ticket WHERE status IN ('OPEN', 'PROCESSING') AND due_time &lt; #{now}
-            </when>
-            <when test="metric == 'TASK_OVERDUE'">
-                SELECT COUNT(*) FROM pm_task t JOIN pm_project p ON p.id = t.project_id
-                WHERE p.status = 'ACTIVE' AND t.status &lt;&gt; 'DONE' AND t.plan_end &lt; #{today}
-                  AND NOT EXISTS (SELECT 1 FROM pm_task s WHERE s.parent_id = t.id)
-            </when>
-            <otherwise>
-                SELECT COUNT(*) FROM mes_work_order WHERE status IN ('RELEASED', 'STARTED') AND plan_end &lt; #{today}
             </otherwise>
         </choose>
     </select>

@@ -1,6 +1,5 @@
 package com.lemon.erp.modules.scm.service;
 
-import com.lemon.erp.common.exception.BizException;
 import com.lemon.erp.common.i18n.Messages;
 import com.lemon.erp.common.util.Decimals;
 import com.lemon.erp.modules.scm.entity.ScmOrderItem;
@@ -34,18 +33,17 @@ public final class PromotionCalculator {
     }
 
     /**
-     * 应用促销和返利抵扣：会修改 items 的单价、促销、原价
+     * 应用促销：会修改 items 的单价、促销、原价
      *
      * @param promos    适用的促销活动（已按订单日期、客户等级筛选）
      * @param materials 明细物料和赠品物料
      * @param items     订单明细，单价为原价
-     * @param rebate    返利抵扣金额，为空或 0 不抵扣
      * @param giftTaxRate 赠品行的税率（单价为 0，不影响金额）：订单明细未填写税率时的税率（发票类型 → 默认税率）
      * @return 明细（含赠品行，单价已调整、金额未重算）、促销优惠合计、各促销的应用记录、说明
      */
     public static Applied calculate(List<ScmPromotion> promos, Map<Long, WmsMaterial> materials, List<ScmOrderItem> items,
-                                    BigDecimal rebate, BigDecimal giftTaxRate) {
-        return calculate(promos, materials, items, rebate, EXACT_CATEGORY, giftTaxRate);
+                                    BigDecimal giftTaxRate) {
+        return calculate(promos, materials, items, EXACT_CATEGORY, giftTaxRate);
     }
 
     /** 物料分类只匹配自身（不考虑上下级） */
@@ -53,10 +51,10 @@ public final class PromotionCalculator {
 
     /**
      * @param lineage 物料分类 → 自身及各级上级的编码：指定分类的促销对其下级分类的物料同样适用
-     * @see #calculate(List, Map, List, BigDecimal, BigDecimal)
+     * @see #calculate(List, Map, List, BigDecimal)
      */
     public static Applied calculate(List<ScmPromotion> promos, Map<Long, WmsMaterial> materials, List<ScmOrderItem> items,
-                                    BigDecimal rebate, Function<String, List<String>> lineage, BigDecimal giftTaxRate) {
+                                    Function<String, List<String>> lineage, BigDecimal giftTaxRate) {
         BiPredicate<ScmPromotion, WmsMaterial> matches = (p, m) -> matches(p, m, lineage);
         Map<Long, Usage> usages = new LinkedHashMap<>();
         List<String> notes = new ArrayList<>();
@@ -123,14 +121,6 @@ public final class PromotionCalculator {
             notes.add(Messages.get("scm.text.gift", gift.getName(), plain(g.getQty()), p.getName()));
         }
         BigDecimal discount = Decimals.sum(usages.values(), Usage::discountAmount);
-        // 返利抵扣：按非赠品行金额分摊
-        if (rebate != null && rebate.signum() > 0) {
-            if (rebate.compareTo(sum(items)) > 0) {
-                throw new BizException("scm.error.rebateDeductionCannotExceedOrderAmount", plain(sum(items)));
-            }
-            allocate(items, rebate);
-            notes.add(Messages.get("scm.text.rebateDeduction", plain(rebate)));
-        }
         items.forEach(i -> i.setOrigPrice(i.getPrice().compareTo(origPrices.get(i)) == 0 ? null : origPrices.get(i)));
         return new Applied(result, discount, new ArrayList<>(usages.values()), notes);
     }

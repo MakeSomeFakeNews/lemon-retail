@@ -1,7 +1,6 @@
 package com.lemon.erp.modules.scm.entity;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -9,7 +8,6 @@ import com.lemon.erp.common.base.BaseEntity;
 import com.lemon.erp.modules.scm.model.OrderKind;
 import com.lemon.erp.modules.scm.model.OrderSource;
 import com.lemon.erp.modules.scm.model.OrderStatus;
-import com.lemon.erp.modules.scm.model.SupplierConfirm;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -56,26 +54,8 @@ public class ScmOrder extends BaseEntity {
 
     private String flowInstanceId;
 
-    /** 引用的采购合同（按合同价下单） */
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
-    private Long contractId;
-
-    /** 供应商在门户的确认，为空表示未确认 */
-    private SupplierConfirm supplierConfirm;
-
-    /** 供应商承诺交期 */
-    private LocalDate promisedDate;
-
-    private String confirmRemark;
-
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    private LocalDateTime confirmTime;
-
     /** 促销优惠合计（原价 - 成交价） */
     private BigDecimal discountAmount;
-
-    /** 使用返利抵扣的金额 */
-    private BigDecimal rebateAmount;
 
     /** 整单优惠（含税，含抹零）：按行金额分摊到各行，已从金额中扣除 */
     private BigDecimal wholeDiscount;
@@ -85,9 +65,6 @@ public class ScmOrder extends BaseEntity {
 
     /** 关闭时的尾差调整合计（订单币种）：部分出入库的行按 行金额 × 已出入库数量 / 订单数量 调整，生成应收 / 应付调整单 */
     private BigDecimal closeAdjust;
-
-    /** 外部单号（电商 / 门店订单导入） */
-    private String externalNo;
 
     private String remark;
 
@@ -113,8 +90,6 @@ public class ScmOrder extends BaseEntity {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime approveTime;
 
-    @TableField(exist = false)
-    private String contractNo;
     @TableField(exist = false)
     private String partnerCode;
 

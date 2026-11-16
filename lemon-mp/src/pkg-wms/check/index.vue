@@ -79,7 +79,7 @@
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useI18n } from '@/locales'
-import { WmsDocStatus } from '@web/constants/enums'
+import { DocStatus } from '@web/constants/enums'
 import { getCheck, locationOptions, pageCheck, updateCheck } from '@/api/wms'
 import { useTitle } from '@/composables/useTitle'
 import { runAction } from '@/composables/useAction'
@@ -105,7 +105,7 @@ const saving = ref(false)
 
 onLoad(async () => {
   try {
-    checks.value = (await pageCheck({ status: WmsDocStatus.DRAFT, current: 1, size: 50 })).records || []
+    checks.value = (await pageCheck({ status: DocStatus.DRAFT, current: 1, size: 50 })).records || []
   } finally {
     loaded.value = true
   }

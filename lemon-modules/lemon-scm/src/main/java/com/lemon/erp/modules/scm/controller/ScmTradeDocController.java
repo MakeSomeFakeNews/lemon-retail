@@ -28,8 +28,7 @@ import com.lemon.erp.modules.scm.service.ScmTradeDraftService;
 /**
  * 采购入库 /scm/purchaseIn、采购退货 /scm/purchaseReturn、销售出库 /scm/salesOut、销售退货 /scm/salesReturn：
  * 共用一套接口，权限标识按路径区分，如 scm:purchaseIn:add。保存即审核（出入库），没有修改、删除；
- * 业务参数 scm.tradeDoc.draft 开启时可先存草稿（{@link ScmTradeDraftController}），此时直接保存即审核还需要审核权限 scm:{kind}:post。
- * 创建发运单的用户（scm:shipment:add）只能查看销售出库单
+ * 业务参数 scm.tradeDoc.draft 开启时可先存草稿（{@link ScmTradeDraftController}），此时直接保存即审核还需要审核权限 scm:{kind}:post
  */
 @RestController
 @RequestMapping("/scm/{kind:purchaseIn|purchaseReturn|salesOut|salesReturn}")
@@ -41,7 +40,7 @@ public class ScmTradeDocController {
     private final PermissionService permissionService;
 
     @GetMapping
-    @PreAuthorize("@ss.hasPerm('scm:' + #kind + ':list') or (#kind == 'salesOut' and @ss.hasPerm('scm:shipment:add'))")
+    @PreAuthorize("@ss.hasPerm('scm:' + #kind + ':list')")
     public R<PageResult<ScmTradeDoc>> page(@PathVariable String kind,
                                            @RequestParam(defaultValue = "1") long current,
                                            @RequestParam(defaultValue = "10") long size,
@@ -50,7 +49,7 @@ public class ScmTradeDocController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@ss.hasPerm('scm:' + #kind + ':list') or (#kind == 'salesOut' and @ss.hasPerm('scm:shipment:add'))")
+    @PreAuthorize("@ss.hasPerm('scm:' + #kind + ':list')")
     public R<ScmTradeDoc> detail(@PathVariable String kind, @PathVariable Long id) {
         return R.ok(docService.detail(TradeKind.ofPath(kind), id));
     }

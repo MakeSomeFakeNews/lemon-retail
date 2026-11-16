@@ -71,12 +71,6 @@ public class FinAnalysisController {
         return R.ok(stockAgeService.analyze(asOf, warehouseId, category, keyword, buckets));
     }
 
-    @GetMapping("/analysis/inventory")
-    @PreAuthorize("@ss.hasPerm('fin:analysis:list')")
-    public R<FinAnalysis.InventoryReconciliation> inventory(@RequestParam int period) {
-        return R.ok(analysisService.inventoryReconciliation(period));
-    }
-
     @GetMapping("/report/cash-flow")
     @PreAuthorize("@ss.hasAnyPerm('fin:report:list', 'fin:analysis:list')")
     public R<FinAnalysis.CashFlow> cashFlow(@RequestParam int begin, @RequestParam int end) {

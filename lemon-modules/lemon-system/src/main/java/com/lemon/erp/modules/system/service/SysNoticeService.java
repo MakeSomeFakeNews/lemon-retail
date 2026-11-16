@@ -9,7 +9,6 @@ import com.lemon.erp.framework.data.StatusTransitions;
 import com.lemon.erp.framework.dict.DictLookup;
 import com.lemon.erp.framework.message.MessageCategory;
 import com.lemon.erp.framework.message.MessageSender;
-import com.lemon.erp.framework.portal.PortalKind;
 import com.lemon.erp.framework.security.PermissionService;
 import com.lemon.erp.framework.security.SecurityUtils;
 import com.lemon.erp.modules.system.dto.NoticeOptions;
@@ -35,7 +34,6 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -68,7 +66,6 @@ public class SysNoticeService {
     private static final int BATCH = 500;
     private static final int EXCERPT_MAX = 100;
     private static final List<NoticeStatus> EDITABLE = List.of(NoticeStatus.DRAFT, NoticeStatus.WITHDRAWN);
-    private static final Set<String> PORTAL_ROLES = Arrays.stream(PortalKind.values()).map(PortalKind::getRole).collect(Collectors.toSet());
 
     private final SysNoticeMapper noticeMapper;
     private final SysNoticeTargetMapper targetMapper;
@@ -237,7 +234,6 @@ public class SysNoticeService {
     public NoticeOptions options() {
         List<SysDept> depts = deptService.tree();
         List<NoticeOptions.RoleOption> roles = roleService.listEnabled().stream()
-                .filter(r -> !PORTAL_ROLES.contains(r.getCode()))
                 .map(r -> new NoticeOptions.RoleOption(r.getId(), r.getName(), r.getCode())).toList();
         return new NoticeOptions(depts, roles);
     }
@@ -315,7 +311,7 @@ public class SysNoticeService {
             }
         } else {
             List<SysRole> roles = roleService.listByIds(ids);
-            if (roles.size() != ids.size() || roles.stream().anyMatch(r -> PORTAL_ROLES.contains(r.getCode()))) {
+            if (roles.size() != ids.size()) {
                 throw new BizException("system.error.noticeRoleInvalid");
             }
         }

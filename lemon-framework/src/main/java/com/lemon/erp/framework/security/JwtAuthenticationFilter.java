@@ -1,7 +1,5 @@
 package com.lemon.erp.framework.security;
 
-import com.lemon.erp.common.result.R;
-import com.lemon.erp.framework.portal.PortalFeatures;
 import com.lemon.erp.framework.tenant.TenantContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -35,15 +33,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         Long previous = TenantContext.get();
         try {
-            LoginUser user = authenticate(request);
-            String denied = user == null ? null
-                    : PortalFeatures.deniedMessage(user, request.getRequestURI().substring(request.getContextPath().length()));
-            if (denied != null) {
-                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                response.setContentType("application/json;charset=UTF-8");
-                response.getWriter().write("{\"code\":" + R.FORBIDDEN + ",\"msg\":\"" + denied + "\"}");
-                return;
-            }
+            authenticate(request);
             chain.doFilter(request, response);
         } finally {
             TenantContext.clear();

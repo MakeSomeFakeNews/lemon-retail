@@ -21,10 +21,6 @@ public final class FinConstants {
     /** 物料分类：低值易耗品，存货科目为周转材料 */
     public static final String LOW_VALUE_CATEGORY = "LOW_VALUE";
 
-    /** 岗位类别（业务字典 hr_position_category）的内置取值：生产岗位、销售岗位，工资计提按此取费用科目 */
-    public static final String POSITION_PRODUCTION = "PRODUCTION";
-    public static final String POSITION_SALES = "SALES";
-
     private FinConstants() {
     }
 

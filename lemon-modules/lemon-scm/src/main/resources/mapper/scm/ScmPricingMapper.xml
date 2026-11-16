@@ -8,20 +8,6 @@
         <if test="q.keyword != null and q.keyword != ''">AND (p.code LIKE CONCAT('%', #{q.keyword}, '%') OR p.name LIKE CONCAT('%', #{q.keyword}, '%'))</if>
     </sql>
 
-    <select id="selectQuotationHistory" resultType="com.lemon.erp.modules.scm.dto.PricingViews$HistoryRow">
-        SELECT q.id AS doc_id, q.quote_no AS doc_no, q.quote_date AS biz_date, p.id AS partner_id, p.code AS partner_code,
-               p.name AS partner_name, i.qty, i.price, i.amount, COALESCE(i.remark, q.remark) AS remark
-        FROM scm_quotation_item i
-        JOIN scm_quotation q ON q.id = i.quotation_id
-        JOIN scm_customer p ON p.id = q.customer_id
-        WHERE i.material_id = #{q.materialId}
-        <include refid="partnerFilter"/>
-        <if test="q.start != null">AND q.quote_date &gt;= #{q.start}</if>
-        <if test="q.end != null">AND q.quote_date &lt;= #{q.end}</if>
-        ORDER BY q.quote_date DESC, q.id DESC, i.id DESC
-        LIMIT #{q.limit}
-    </select>
-
     <select id="selectTradeHistory" resultType="com.lemon.erp.modules.scm.dto.PricingViews$HistoryRow">
         SELECT d.id AS doc_id, d.doc_no, d.biz_date, p.id AS partner_id, p.code AS partner_code, p.name AS partner_name,
                i.qty, COALESCE(i.gross_price, i.price) AS price, i.amount + i.discount_share AS amount, COALESCE(i.remark, d.remark) AS remark

@@ -11,8 +11,6 @@ import com.lemon.erp.modules.bi.mapper.BiAlertRuleMapper;
 import com.lemon.erp.modules.bi.mapper.BiInsightMapper;
 import com.lemon.erp.modules.bi.model.AbcClass;
 import com.lemon.erp.modules.bi.model.BiAlertMetric;
-import com.lemon.erp.modules.fin.dto.BudgetExecution;
-import com.lemon.erp.modules.fin.service.FinBudgetService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -43,7 +41,6 @@ public class BiDecisionService {
 
     private final BiInsightMapper insightMapper;
     private final BiAlertRuleMapper ruleMapper;
-    private final FinBudgetService budgetService;
 
     /**
      * 销售预测：取近 24 个月的月销售额，对最近 12 个月做最小二乘线性回归得到趋势，
@@ -239,36 +236,7 @@ public class BiDecisionService {
     }
 
     private BigDecimal metricValue(BiAlertMetric m, LocalDate today, LocalDateTime now, int period) {
-        return m == BiAlertMetric.BUDGET_OVERRUN ? budgetOverrun()
-                : insightMapper.selectMetric(m.name(), today, now, period, today.minusDays(SLOW_DAYS));
-    }
-
-    /** 本年累计（截至本月）执行数超过累计预算的预算科目，按超支金额降序（智能报告的预警分析使用） */
-    public List<BudgetExecution> overBudget() {
-        LocalDate today = LocalDate.now();
-        int month = today.getMonthValue();
-        List<BudgetExecution> list = new ArrayList<>();
-        for (BudgetExecution e : budgetService.execution(today.getYear(), null)) {
-            if (ytd(e.budgets(), month).signum() > 0 && ytd(e.actuals(), month).compareTo(ytd(e.budgets(), month)) > 0) {
-                list.add(e);
-            }
-        }
-        list.sort(Comparator.comparing((BudgetExecution e) -> ytd(e.actuals(), month).subtract(ytd(e.budgets(), month))).reversed());
-        return list;
-    }
-
-    /** 前 month 个月的累计 */
-    public static BigDecimal ytd(List<BigDecimal> values, int month) {
-        BigDecimal sum = BigDecimal.ZERO;
-        for (int i = 0; i < month && i < values.size(); i++) {
-            sum = sum.add(values.get(i) == null ? BigDecimal.ZERO : values.get(i));
-        }
-        return sum;
-    }
-
-    /** 本年累计（截至本月）执行数超过累计预算的预算科目数 */
-    private BigDecimal budgetOverrun() {
-        return BigDecimal.valueOf(overBudget().size());
+        return insightMapper.selectMetric(m.name(), today, now, period, today.minusDays(SLOW_DAYS));
     }
 
     private static BigDecimal dec(Object v) {

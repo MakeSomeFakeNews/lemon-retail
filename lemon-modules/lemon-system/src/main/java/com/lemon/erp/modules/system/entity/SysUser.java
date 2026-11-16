@@ -51,14 +51,6 @@ public class SysUser extends BaseEntity {
     /** 头像 URL，只能通过个人中心上传修改 */
     private String avatar;
 
-    /** 供应商门户账号关联的供应商（在供应商资料中开通），内部用户为空；用户管理中不能修改 */
-    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
-    private Long supplierId;
-
-    /** 经销商门户账号关联的客户（在客户资料中开通），内部用户为空；用户管理中不能修改 */
-    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
-    private Long customerId;
-
     /** 1 启用 0 停用 */
     private EnableStatus status;
 

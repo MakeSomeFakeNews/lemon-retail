@@ -6,7 +6,7 @@
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'source'">
             <DictTag type="fin_bill_source" :value="record.sourceType" />
-            <SourceDocLink class="sub-text" :type="record.sourceType" :id="record.sourceId" :no="record.sourceNo" :bill-kind="record.kind" :project-id="record.projectId" />
+            <SourceDocLink class="sub-text" :type="record.sourceType" :id="record.sourceId" :no="record.sourceNo" :bill-kind="record.kind" />
           </template>
           <template v-else-if="column.key === 'amount'">
             <span :class="{ neg: Number(record.amount) < 0 }">{{ formatMoney(record.amount) }}</span>
@@ -28,7 +28,7 @@
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'source'">
             <DictTag type="fin_bill_source" :value="record.sourceType" />
-            <SourceDocLink class="sub-text" :type="record.sourceType" :id="record.sourceId" :no="record.sourceNo" :bill-kind="record.kind" :project-id="record.projectId" />
+            <SourceDocLink class="sub-text" :type="record.sourceType" :id="record.sourceId" :no="record.sourceNo" :bill-kind="record.kind" />
           </template>
           <template v-else-if="column.key === 'amount'">{{ formatMoney(record.amount) }}</template>
           <template v-else-if="column.key === 'remaining'"><b>{{ formatMoney(remaining(record)) }}</b></template>

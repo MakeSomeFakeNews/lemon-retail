@@ -24,8 +24,6 @@
       </template>
     </a-alert>
 
-    <!-- 账务利润（凭证）中本月的营业成本在月末成本核算后才结转 -->
-    <a-alert v-if="!loading && data.costWarning" type="info" show-icon class="alert" :message="data.costWarning" />
 
     <a-row :gutter="[16, 16]">
       <a-col v-for="k in kpis" :key="k.key" :xs="12" :md="8" :xl="6" :xxl="4">
@@ -139,15 +137,7 @@ const kpis = computed(() => {
     { key: 'ar', label: t('bi.cockpit.arBalance'), value: money(k.arBalance), to: '/fin/ar',
       tags: [{ label: t('bi.cockpit.overdue'), text: money(k.arOverdue), color: num(k.arOverdue) > 0 ? 'red' : '' }] },
     { key: 'ap', label: t('bi.cockpit.apBalance'), value: money(k.apBalance), to: '/fin/ap', tags: [{ label: t('bi.cockpit.monthPurchase'), text: money(k.monthPurchase) }] },
-    { key: 'openSales', label: t('bi.cockpit.openSales'), value: money(k.openSalesAmount), to: '/scm/sales', tags: [{ label: t('bi.cockpit.unshippedAmount'), text: '' }] },
-    { key: 'wo', label: t('bi.cockpit.openWo'), value: t('bi.cockpit.countN', { n: num(k.openWorkOrders) }), to: '/mes/wo',
-      tags: [{ label: t('bi.cockpit.late'), text: t('bi.cockpit.countN', { n: num(k.lateWorkOrders) }), color: num(k.lateWorkOrders) > 0 ? 'red' : '' }] },
-    { key: 'projects', label: t('bi.cockpit.activeProjects'), value: t('bi.cockpit.countN', { n: num(k.activeProjects) }), to: '/pm/project',
-      tags: [{ label: t('bi.cockpit.avgProgress'), text: percent(k.projectProgress) }] },
-    { key: 'headcount', label: t('bi.cockpit.headcount'), value: t('bi.cockpit.peopleN', { n: num(k.headcount) }), to: '/hr/employee', tags: [] },
-    { key: 'pipeline', label: t('bi.cockpit.pipeline'), value: money(k.pipeline), to: '/crm/opportunity', tags: [{ label: t('bi.cockpit.pipelineAmount'), text: '' }] },
-    { key: 'tickets', label: t('bi.cockpit.tickets'), value: t('bi.cockpit.countN', { n: num(k.openTickets) }), to: '/crm/ticket',
-      tags: [{ label: t('bi.cockpit.overtime'), text: t('bi.cockpit.countN', { n: num(k.overdueTickets) }), color: num(k.overdueTickets) > 0 ? 'red' : '' }] }
+    { key: 'openSales', label: t('bi.cockpit.openSales'), value: money(k.openSalesAmount), to: '/scm/sales', tags: [{ label: t('bi.cockpit.unshippedAmount'), text: '' }] }
   ]
 })
 
