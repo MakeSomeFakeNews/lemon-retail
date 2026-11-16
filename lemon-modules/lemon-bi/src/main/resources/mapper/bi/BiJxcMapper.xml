@@ -1,0 +1,1009 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 进销存报表：实时汇总业务表（只读）。金额为本位币，销售额 / 进货额为不含税（价税合计 - 税额），退货按负数计入净额；
+     销售成本取实时库存成本：数量 × 该单据仓库出入库的实际成本单价（库存流水上的移动加权平均成本，销售出库按出库时的均价、
+     销售退货按原出库成本）；没有成本的历史单据取单据所在期间的成本核算单价，再没有取物料的参考成本价。
+     财务「毛利分析」仍按月末成本核算的单价（用于记账），两者可能不同。
+     明细行的仓库为空时取单据表头的仓库。数据权限（scm_trade_doc 的制单人部门 + 制单人）由 Service 启用 -->
+<mapper namespace="com.lemon.erp.modules.bi.mapper.BiJxcMapper">
+
+    <!-- ============================================================ 销售 / 进货：汇总与明细 -->
+
+    <sql id="fwdKind"><choose><when test="sales">'SALES_OUT'</when><otherwise>'PURCHASE_IN'</otherwise></choose></sql>
+
+    <sql id="sign">CASE WHEN d.kind = <include refid="fwdKind"/> THEN 1 ELSE -1 END</sql>
+
+    <!-- 期间内销售出库 / 退货对应的仓库出入库单上，各物料的实际成本金额与数量（库存流水，实时移动加权平均） -->
+    <sql id="flowCost">
+        LEFT JOIN (SELECT f.doc_id, f.material_id, SUM(f.cost_amount) AS amount, SUM(f.qty) AS qty
+                   FROM wms_stock_flow f
+                   WHERE f.biz_type IN ('IN', 'OUT') AND f.cost_amount IS NOT NULL
+                     AND f.doc_id IN (SELECT fd.wms_doc_id FROM scm_trade_doc fd
+                                      WHERE fd.kind IN ('SALES_OUT', 'SALES_RETURN') AND fd.biz_date &gt;= #{q.begin} AND fd.biz_date &lt;= #{q.end})
+                   GROUP BY f.doc_id, f.material_id) fc ON fc.doc_id = d.wms_doc_id AND fc.material_id = i.material_id
+    </sql>
+
+    <!-- 销售出库单的坏账核销（应收单上的核销金额按该单不含税比例折算：核销金额 × (价税合计 − 税额) ÷ 价税合计，
+         跟随出库单的业务日期归属）与本公司承担的发运运费（已发货），按行金额比例分摊到明细，
+         从净额中扣除得到销售金额（issue #93，口径同财务「毛利分析」），不改变净额（销售收入） -->
+    <sql id="docShare">CASE WHEN d.total_amount &lt;&gt; 0 THEN i.amount / d.total_amount WHEN d.total_qty &lt;&gt; 0 THEN i.qty / d.total_qty ELSE 0 END</sql>
+    <!-- 本公司承担的运费：发运单的运费（出库单没有登记运费时，已发货）+ 出库单上本公司承担的运费 + 销售退货客户代垫的运费（issue #72），
+         出库单已登记运费时发运单从出库单带出，不重复计算 -->
+    <sql id="freightAmount">(COALESCE(sf.amount, 0) + CASE WHEN (d.kind = 'SALES_OUT' AND d.freight_bearer = 'COMPANY') OR d.kind = 'SALES_RETURN' THEN d.freight ELSE 0 END)</sql>
+    <sql id="badDebtFreight">
+        LEFT JOIN (SELECT source_id, SUM(bad_debt_amount * (amount - tax_amount) / amount) AS amount FROM fin_bill
+                   WHERE kind = 'AR' AND source_type = 'SALES_OUT' AND bad_debt_amount &lt;&gt; 0 AND amount &lt;&gt; 0 GROUP BY source_id) bd ON d.kind = 'SALES_OUT' AND bd.source_id = d.id
+        LEFT JOIN (SELECT trade_doc_id, SUM(freight) AS amount FROM scm_shipment
+                   WHERE freight_bearer = 'COMPANY' AND status &lt;&gt; 'PENDING' AND freight &gt; 0 GROUP BY trade_doc_id) sf ON d.kind = 'SALES_OUT' AND sf.trade_doc_id = d.id AND d.freight = 0
+    </sql>
+
+    <!-- 收付款折让 / 抹零（issue #89）：该出入库单生成的应收单（销售：货款，以及客户代垫运费、退货运费的应收单）/ 应付单
+         （进货：货款，以及采购运费、退货运费的应付单）在收付款时的折让累计（fin_bill.discount_amount，同一单据多次收付款累计，
+         作废收付款时扣回；本位币），按单据自身的不含税比例折算（与坏账相同），跟随出入库单的业务日期归属，按行金额比例分摊到明细；
+         退货的红字单据折让为负数。销售报表从净额中扣除得到销售金额，进货报表得到「扣折让后净进货额」，不改变净额。
+         凭证中收款折让、付款折让按含税金额计入财务费用等，利润表的毛利不扣，所以销售报表中扣除不会重复 -->
+    <sql id="settleDiscount">
+        LEFT JOIN (SELECT source_id, SUM(discount_amount * (amount - tax_amount) / amount) AS amount FROM fin_bill
+                   <choose>
+                       <when test="sales">WHERE kind = 'AR' AND source_type IN ('SALES_OUT', 'SALES_RETURN', 'SALES_FREIGHT', 'SALES_RETURN_FREIGHT')</when>
+                       <otherwise>WHERE kind = 'AP' AND source_type IN ('PURCHASE_IN', 'PURCHASE_RETURN', 'PURCHASE_FREIGHT', 'PURCHASE_RETURN_FREIGHT')</otherwise>
+                   </choose>
+                     AND discount_amount &lt;&gt; 0 AND amount &lt;&gt; 0 GROUP BY source_id) sd ON sd.source_id = d.id
+    </sql>
+
+    <!-- 本行分摊的整单优惠（不含税）：含税的分摊额按行税率折算、每行舍入到分（issue #93），各层合计都由行累加、彼此一致；货款（优惠前，不含税）= 不含税金额 + 本项 -->
+    <sql id="lineDiscount">ROUND(i.discount_share * 100 / (100 + i.tax_rate), 2)</sql>
+    <sql id="lineGoods">(i.amount - i.tax_amount + <include refid="lineDiscount"/>)</sql>
+
+    <!-- 销售成本单价：实时出库成本 → 期间核算单价 → 参考成本价 -->
+    <sql id="saleUnitCost">COALESCE(fc.amount / NULLIF(fc.qty, 0), mc.unit_cost, m.ref_cost, 0)</sql>
+
+    <sql id="tradeFrom">
+        FROM scm_trade_doc_item i
+        JOIN scm_trade_doc d ON d.id = i.doc_id
+        JOIN scm_order o ON o.id = d.order_id
+        JOIN wms_material m ON m.id = i.material_id
+        <choose>
+            <when test="sales">
+                LEFT JOIN scm_customer p ON p.id = d.partner_id
+                LEFT JOIN fin_material_cost mc ON mc.material_id = i.material_id AND mc.period = YEAR(d.biz_date) * 100 + MONTH(d.biz_date)
+                <include refid="flowCost"/>
+                <include refid="badDebtFreight"/>
+            </when>
+            <otherwise>LEFT JOIN scm_supplier p ON p.id = d.partner_id</otherwise>
+        </choose>
+        <include refid="settleDiscount"/>
+    </sql>
+
+    <sql id="tradeWhere">
+        WHERE d.kind IN <choose><when test="sales">('SALES_OUT', 'SALES_RETURN')</when><otherwise>('PURCHASE_IN', 'PURCHASE_RETURN')</otherwise></choose>
+          AND d.biz_date &gt;= #{q.begin} AND d.biz_date &lt;= #{q.end}
+        <if test="q.partnerId != null">AND d.partner_id = #{q.partnerId}</if>
+        <if test="sales and q.salesmanId != null">AND o.salesman_id = #{q.salesmanId}</if>
+        <if test="sales and q.noSalesman">AND o.salesman_id IS NULL</if>
+        <if test="q.materialId != null">AND i.material_id = #{q.materialId}</if>
+        <if test="q.docId != null">AND d.id = #{q.docId}</if>
+        <if test="q.category != null and q.category != ''">
+            <choose>
+                <when test="q.categoryExact">AND m.category = #{q.category}</when>
+                <otherwise>AND m.category IN (<include refid="com.lemon.erp.modules.wms.mapper.WmsMaterialCategoryMapper.subtreeCodes"><property name="code" value="q.category"/></include>)</otherwise>
+            </choose>
+        </if>
+        <if test="q.noCategory">AND (m.category IS NULL OR m.category = '')</if>
+        <if test="q.brand != null and q.brand != ''">AND m.brand = #{q.brand}</if>
+        <if test="q.noBrand">AND (m.brand IS NULL OR m.brand = '')</if>
+        <if test="sales and q.region != null and q.region != ''">AND p.region = #{q.region}</if>
+        <if test="sales and q.noRegion">AND (p.region IS NULL OR p.region = '')</if>
+        <if test="q.warehouseId != null">AND COALESCE(i.warehouse_id, d.warehouse_id) = #{q.warehouseId}</if>
+        <if test="q.keyword != null and q.keyword != ''">
+            AND (m.code LIKE CONCAT('%', #{q.keyword}, '%') OR m.name LIKE CONCAT('%', #{q.keyword}, '%'))
+        </if>
+    </sql>
+
+    <sql id="measures">
+        SUM(CASE WHEN d.kind = <include refid="fwdKind"/> THEN i.qty ELSE 0 END) AS "bizQty",
+        SUM(CASE WHEN d.kind = <include refid="fwdKind"/> THEN 0 ELSE i.qty END) AS "returnQty",
+        SUM(<include refid="sign"/> * i.qty) AS "netQty",
+        SUM(CASE WHEN d.kind = <include refid="fwdKind"/> THEN <include refid="lineGoods"/> ELSE 0 END) AS "bizAmount",
+        SUM(CASE WHEN d.kind = <include refid="fwdKind"/> THEN 0 ELSE <include refid="lineGoods"/> END) AS "returnAmount",
+        SUM(<include refid="sign"/> * <include refid="lineDiscount"/>) AS "discount",
+        SUM(<include refid="sign"/> * i.discount_share) AS "discountTaxed",
+        SUM(<include refid="sign"/> * (i.amount - i.tax_amount)) AS "netAmount",
+        SUM(<include refid="sign"/> * i.amount) AS "taxedAmount",
+        <choose>
+            <when test="sales">
+                SUM(<include refid="sign"/> * i.qty * <include refid="saleUnitCost"/>) AS "cost",
+                SUM(CASE WHEN fc.amount IS NULL AND mc.unit_cost IS NULL THEN 1 ELSE 0 END) AS "missingCost",
+                SUM(COALESCE(bd.amount, 0) * <include refid="docShare"/>) AS "badDebt",
+                SUM(<include refid="freightAmount"/> * <include refid="docShare"/>) AS "freight",
+            </when>
+            <otherwise>0 AS "cost", 0 AS "missingCost",</otherwise>
+        </choose>
+        SUM(COALESCE(sd.amount, 0) * <include refid="docShare"/>) AS "settleDiscount",
+        COUNT(DISTINCT d.id) AS "docCount"
+    </sql>
+
+    <sql id="dimKey">
+        <choose>
+            <when test="dim == 'CATEGORY'">COALESCE(m.category, '')</when>
+            <when test="dim == 'BRAND'">COALESCE(m.brand, '')</when>
+            <when test="dim == 'REGION'">COALESCE(p.region, '')</when>
+            <when test="dim == 'CUSTOMER' or dim == 'SUPPLIER'">d.partner_id</when>
+            <when test="dim == 'SALESMAN'">o.salesman_id</when>
+            <when test="dim == 'MATERIAL'">i.material_id</when>
+            <when test="dim == 'DAY'">d.biz_date</when>
+            <otherwise>YEAR(d.biz_date) * 100 + MONTH(d.biz_date)</otherwise>
+        </choose>
+    </sql>
+
+    <select id="selectSummary" resultType="com.lemon.erp.modules.bi.dto.JxcViews$SummaryRow">
+        SELECT <include refid="dimKey"/> AS "groupKey",
+               <choose>
+                   <when test="dim == 'CUSTOMER' or dim == 'SUPPLIER'">p.name</when>
+                   <when test="dim == 'SALESMAN'">u.nickname</when>
+                   <when test="dim == 'MATERIAL'">CONCAT(m.code, ' ', m.name)</when>
+                   <otherwise>NULL</otherwise>
+               </choose> AS "groupName",
+               <include refid="measures"/>
+        <include refid="tradeFrom"/>
+        <if test="dim == 'SALESMAN'">LEFT JOIN sys_user u ON u.id = o.salesman_id</if>
+        <include refid="tradeWhere"/>
+        GROUP BY <include refid="dimKey"/>
+        <choose>
+            <when test="dim == 'CUSTOMER' or dim == 'SUPPLIER'">, p.name</when>
+            <when test="dim == 'SALESMAN'">, u.nickname</when>
+            <when test="dim == 'MATERIAL'">, m.code, m.name</when>
+        </choose>
+        <choose>
+            <when test="dim == 'DAY' or dim == 'MONTH'">ORDER BY 1</when>
+            <otherwise>ORDER BY SUM(<include refid="sign"/> * (i.amount - i.tax_amount)) DESC, 1</otherwise>
+        </choose>
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectTotal" resultType="com.lemon.erp.modules.bi.dto.JxcViews$SummaryRow">
+        SELECT <include refid="measures"/>
+        <include refid="tradeFrom"/>
+        <include refid="tradeWhere"/>
+    </select>
+
+    <!-- 明细：每行带本行分摊的整单优惠、坏账、运费、收付款折让（都按行金额比例），由 Service 按显示方式（汇总到底部 / 分摊到各行，
+         issue #93）计算行上的金额；汇总到底部时的调整行取同一条件的合计（selectTotal），按商品、类别等筛选时即所选明细分摊的部分 -->
+    <sql id="detailSelect">
+        SELECT d.id AS "docId", d.doc_no AS "docNo", d.kind AS "kind", d.biz_date AS "bizDate", p.name AS "partnerName",
+               <if test="sales">u.nickname AS "salesmanName",</if>
+               w.name AS "warehouseName", m.code AS "materialCode", m.name AS "materialName", m.spec AS "spec", m.unit AS "unit",
+               m.category AS "category", m.brand AS "brand",
+               <include refid="sign"/> * i.qty AS "qty", i.price AS "price", i.gross_price AS "grossPrice",
+               <include refid="sign"/> * (i.amount - i.tax_amount) AS "amount",
+               <include refid="sign"/> * i.amount AS "taxedAmount",
+               <include refid="sign"/> * <include refid="lineDiscount"/> AS "discount",
+               <include refid="sign"/> * i.discount_share AS "discountTaxed",
+               <if test="sales">
+                   <include refid="sign"/> * i.qty * <include refid="saleUnitCost"/> AS "cost",
+                   CASE WHEN fc.amount IS NULL AND mc.unit_cost IS NULL THEN 0 ELSE 1 END AS "costed",
+                   COALESCE(bd.amount, 0) * <include refid="docShare"/> AS "badDebt",
+                   <include refid="freightAmount"/> * <include refid="docShare"/> AS "freight",
+               </if>
+               COALESCE(sd.amount, 0) * <include refid="docShare"/> AS "settleDiscount",
+               i.remark AS "remark"
+        <include refid="tradeFrom"/>
+        <if test="sales">LEFT JOIN sys_user u ON u.id = o.salesman_id</if>
+        LEFT JOIN wms_warehouse w ON w.id = COALESCE(i.warehouse_id, d.warehouse_id)
+        <include refid="tradeWhere"/>
+        ORDER BY d.biz_date, d.id, i.id
+    </sql>
+
+    <select id="selectDetail" resultType="com.lemon.erp.modules.bi.dto.JxcViews$DetailRow">
+        <include refid="detailSelect"/>
+    </select>
+
+    <select id="selectDetailList" resultType="com.lemon.erp.modules.bi.dto.JxcViews$DetailRow">
+        <include refid="detailSelect"/>
+        LIMIT #{limit}
+    </select>
+
+    <!-- 单据列表：与明细相同的取数和筛选条件，按出入库单汇总（只含符合条件的明细行），各单合计 = 汇总行 -->
+    <sql id="docSelect">
+        SELECT d.id AS "docId", d.doc_no AS "docNo", d.kind AS "kind", d.biz_date AS "bizDate", p.name AS "partnerName",
+               <if test="sales">u.nickname AS "salesmanName",</if>
+               w.name AS "warehouseName", d.remark AS "remark",
+               COUNT(*) AS "lineCount",
+               SUM(<include refid="sign"/> * i.qty) AS "qty",
+               SUM(<include refid="sign"/> * (i.amount - i.tax_amount)) AS "amount",
+               SUM(<include refid="sign"/> * i.amount) AS "taxedAmount",
+               SUM(<include refid="sign"/> * <include refid="lineDiscount"/>) AS "discount",
+               SUM(COALESCE(sd.amount, 0) * <include refid="docShare"/>) AS "settleDiscount"
+               <if test="sales">,
+                   SUM(<include refid="sign"/> * i.qty * <include refid="saleUnitCost"/>) AS "cost",
+                   SUM(CASE WHEN fc.amount IS NULL AND mc.unit_cost IS NULL THEN 1 ELSE 0 END) AS "missingCost",
+                   SUM(COALESCE(bd.amount, 0) * <include refid="docShare"/>) AS "badDebt",
+                   SUM(<include refid="freightAmount"/> * <include refid="docShare"/>) AS "freight"
+               </if>
+        <include refid="tradeFrom"/>
+        <if test="sales">LEFT JOIN sys_user u ON u.id = o.salesman_id</if>
+        LEFT JOIN wms_warehouse w ON w.id = d.warehouse_id
+        <include refid="tradeWhere"/>
+        GROUP BY d.id, d.doc_no, d.kind, d.biz_date, p.name, w.name, d.remark<if test="sales">, u.nickname</if>
+        ORDER BY d.biz_date, d.id
+    </sql>
+
+    <select id="selectDocs" resultType="com.lemon.erp.modules.bi.dto.JxcViews$DocRow">
+        <include refid="docSelect"/>
+    </select>
+
+    <select id="selectDocList" resultType="com.lemon.erp.modules.bi.dto.JxcViews$DocRow">
+        <include refid="docSelect"/>
+        LIMIT #{limit}
+    </select>
+
+    <!-- ============================================================ 经营状况：资金流 -->
+
+    <select id="selectSettlementByMonth" resultType="com.lemon.erp.modules.bi.dto.JxcViews$CashRow">
+        SELECT YEAR(settle_date) * 100 + MONTH(settle_date) AS "period",
+               SUM(CASE WHEN kind = 'RECEIPT' THEN amount ELSE 0 END) AS "receipt",
+               SUM(CASE WHEN kind = 'PAYMENT' THEN amount ELSE 0 END) AS "payment"
+        FROM fin_settlement
+        WHERE status = 'APPROVED' AND settle_date &gt;= #{begin} AND settle_date &lt;= #{end}
+          AND NOT EXISTS (SELECT 1 FROM fin_note_log l WHERE l.settlement_id = fin_settlement.id)
+        GROUP BY YEAR(settle_date) * 100 + MONTH(settle_date)
+    </select>
+
+    <!-- 票据的资金收付：收票、背书、开票不是现金（上面的收付款不含票据业务生成的），托收、贴现（扣除贴现息）计收款，应付票据兑付计付款 -->
+    <select id="selectNoteCashByMonth" resultType="com.lemon.erp.modules.bi.dto.JxcViews$CashRow">
+        SELECT YEAR(action_date) * 100 + MONTH(action_date) AS "period",
+               SUM(CASE WHEN action IN ('COLLECT', 'DISCOUNT') THEN amount - interest ELSE 0 END) AS "receipt",
+               SUM(CASE WHEN action = 'PAY' THEN amount ELSE 0 END) AS "payment"
+        FROM fin_note_log
+        WHERE action IN ('COLLECT', 'DISCOUNT', 'PAY') AND action_date &gt;= #{begin} AND action_date &lt;= #{end}
+        GROUP BY YEAR(action_date) * 100 + MONTH(action_date)
+    </select>
+
+    <select id="selectAdvanceByMonth" resultType="com.lemon.erp.modules.bi.dto.JxcViews$CashRow">
+        SELECT YEAR(advance_date) * 100 + MONTH(advance_date) AS "period",
+               SUM(CASE WHEN kind = 'RECEIPT' THEN amount ELSE 0 END) AS "receipt",
+               SUM(CASE WHEN kind = 'PAYMENT' THEN amount ELSE 0 END) AS "payment"
+        FROM fin_advance
+        WHERE advance_date &gt;= #{begin} AND advance_date &lt;= #{end}
+        GROUP BY YEAR(advance_date) * 100 + MONTH(advance_date)
+    </select>
+
+    <!-- ============================================================ 资产状况 -->
+
+    <!-- 物料的最新单位成本：实时移动加权均价（wms_material_cost），没有时取最近一期成本核算的单价，再没有取参考成本价 -->
+    <sql id="latestCost">
+        COALESCE((SELECT rc.unit_cost FROM wms_material_cost rc WHERE rc.material_id = m.id),
+                 (SELECT lc.unit_cost FROM fin_material_cost lc
+                  WHERE lc.material_id = m.id AND lc.unit_cost &gt; 0
+                  ORDER BY lc.period DESC LIMIT 1), m.ref_cost, 0)
+    </sql>
+
+    <!-- 截至日的库存金额 = 库存流水成本累计。以当前库存（当前库存 × 最新单位成本，与库存查询一致）为基准，减去业务日期晚于
+         截至日的流水（数量、成本金额；没有成本金额的按最新单位成本），流水完整时与从头累计相同，又能避免物料实时成本初始化
+         （升级、首次变动）与历史流水之间的差额，截至今天时与当前结果一致。流水日期取单据业务日期（与经营历史相同）。
+         estimated = 1 表示用到了升级前回填的近似成本流水。供应商寄售仓的货物不属于本公司存货 -->
+    <select id="selectInventory" resultType="com.lemon.erp.modules.bi.dto.JxcViews$InventoryRow">
+        SELECT x.warehouse_id AS "warehouseId", w.name AS "warehouseName", x.category AS "category",
+               SUM(x.qty) AS "qty", SUM(x.amount) AS "amount", MAX(x.estimated) AS "estimated"
+        FROM (
+            SELECT t.warehouse_id, m.category, t.qty - t.later_qty AS qty,
+                   (t.qty - t.later_unpriced) * <include refid="latestCost"/> - t.later_amount AS amount, t.estimated
+            FROM (SELECT u.warehouse_id, u.material_id, SUM(u.qty) AS qty, SUM(u.later_qty) AS later_qty,
+                         SUM(u.later_amount) AS later_amount, SUM(u.later_unpriced) AS later_unpriced, MAX(u.estimated) AS estimated
+                  FROM (SELECT s.warehouse_id, s.material_id, s.qty, 0 AS later_qty, 0 AS later_amount, 0 AS later_unpriced, 0 AS estimated
+                        FROM wms_stock s
+                        UNION ALL
+                        SELECT f.warehouse_id, f.material_id, 0, f.qty, COALESCE(f.cost_amount, 0),
+                               CASE WHEN f.cost_amount IS NULL THEN f.qty ELSE 0 END, f.cost_estimated
+                        FROM wms_stock_flow f
+                        LEFT JOIN wms_stock_doc sd ON f.biz_type IN ('IN', 'OUT', 'TRANSFER') AND sd.id = f.doc_id
+                        LEFT JOIN wms_check ck ON f.biz_type = 'CHECK' AND ck.id = f.doc_id
+                        WHERE COALESCE(CASE WHEN f.qty &gt; 0 THEN sd.receive_date END, sd.biz_date, ck.biz_date, CAST(f.create_time AS DATE)) &gt; #{asOf}) u
+                  GROUP BY u.warehouse_id, u.material_id) t
+            JOIN wms_material m ON m.id = t.material_id
+            WHERE t.qty - t.later_qty &lt;&gt; 0 OR t.later_amount &lt;&gt; 0
+        ) x
+        JOIN wms_warehouse w ON w.id = x.warehouse_id
+        WHERE w.type &lt;&gt; 'CONSIGN_IN'
+        GROUP BY x.warehouse_id, w.name, x.category
+    </select>
+
+    <!-- 各应收应付单截至日的未核销金额 = 当前未核销 + 截至日之后的核销（已生效收付款的核销金额 + 折让、预收预付冲抵、坏账核销），
+         只取单据日期不晚于截至日的单据（含退货、冲账单等红字单据）。预收预付冲抵取单据一方的本位币（bill_amount，
+         与单据的已核销一致，外币单据可能与预收预付一方的 amount 不同）；坏账核销的日期、金额取其凭证 -->
+    <sql id="billOpen">
+        SELECT b.id, b.kind, b.partner_id, b.due_date,
+               b.amount - b.settled_amount + COALESCE(si.amount, 0) + COALESCE(bd.amount, 0)
+                   + COALESCE(aa.amount, 0) AS open_amount
+        FROM fin_bill b
+        LEFT JOIN (SELECT i.bill_id, SUM(i.amount + i.discount) AS amount
+                   FROM fin_settlement_item i JOIN fin_settlement s ON s.id = i.settlement_id
+                   WHERE s.status = 'APPROVED' AND s.settle_date &gt; #{asOf}
+                   GROUP BY i.bill_id) si ON si.bill_id = b.id
+        LEFT JOIN (SELECT p.bill_id, SUM(p.bill_amount) AS amount
+                   FROM fin_advance_apply p
+                   WHERE p.apply_date &gt; #{asOf}
+                   GROUP BY p.bill_id) aa ON aa.bill_id = b.id
+        LEFT JOIN (SELECT v.source_no, SUM(v.total_debit) AS amount
+                   FROM fin_voucher v
+                   WHERE v.source_type = 'BAD_DEBT' AND v.reversal_of IS NULL AND v.voucher_date &gt; #{asOf}
+                   GROUP BY v.source_no) bd ON bd.source_no = b.bill_no
+        WHERE b.bill_date &lt;= #{asOf}
+    </sql>
+
+    <!-- 预收预付截至日的余额 = 当前余额 + 截至日之后的冲抵，只取收付日期不晚于截至日的 -->
+    <sql id="advanceOpen">
+        SELECT a.kind, a.amount - a.used_amount + COALESCE(aa.amount, 0) AS open_amount
+        FROM fin_advance a
+        LEFT JOIN (SELECT p.advance_id, SUM(p.amount) AS amount
+                   FROM fin_advance_apply p
+                   WHERE p.apply_date &gt; #{asOf}
+                   GROUP BY p.advance_id) aa ON aa.advance_id = a.id
+        WHERE a.advance_date &lt;= #{asOf}
+    </sql>
+
+    <select id="selectBalances" resultType="com.lemon.erp.modules.bi.dto.JxcViews$Balances">
+        SELECT
+            (SELECT COALESCE(SUM(o.open_amount), 0) FROM (<include refid="billOpen"/>) o WHERE o.kind = 'AR') AS "arBalance",
+            (SELECT COALESCE(SUM(o.open_amount), 0) FROM (<include refid="billOpen"/>) o
+             WHERE o.kind = 'AR' AND o.due_date &lt; #{asOf}) AS "arOverdue",
+            (SELECT COALESCE(SUM(o.open_amount), 0) FROM (<include refid="billOpen"/>) o WHERE o.kind = 'AP') AS "apBalance",
+            (SELECT COALESCE(SUM(o.open_amount), 0) FROM (<include refid="advanceOpen"/>) o WHERE o.kind = 'RECEIPT') AS "advanceReceived",
+            (SELECT COALESCE(SUM(o.open_amount), 0) FROM (<include refid="advanceOpen"/>) o WHERE o.kind = 'PAYMENT') AS "advancePaid",
+            <!-- 截至日持有的应收票据：已收票，且没有在截至日之前贴现、托收、拒付或背书（背书的付款已生效） -->
+            (SELECT COALESCE(SUM(n.amount), 0) FROM fin_note n
+             WHERE n.kind = 'RECEIVABLE'
+               AND EXISTS (SELECT 1 FROM fin_note_log l WHERE l.note_id = n.id AND l.action = 'RECEIVE' AND l.action_date &lt;= #{asOf})
+               AND NOT EXISTS (SELECT 1 FROM fin_note_log l LEFT JOIN fin_settlement s ON s.id = l.settlement_id
+                               WHERE l.note_id = n.id AND l.action_date &lt;= #{asOf}
+                                 AND (l.action IN ('DISCOUNT', 'COLLECT', 'DISHONOR') OR (l.action = 'ENDORSE' AND s.status = 'APPROVED')))
+            ) AS "notesReceivable",
+            <!-- 截至日未兑付的应付票据：已开出（付款已生效），且没有在截至日之前兑付 -->
+            (SELECT COALESCE(SUM(n.amount), 0) FROM fin_note n
+             WHERE n.kind = 'PAYABLE'
+               AND EXISTS (SELECT 1 FROM fin_note_log l JOIN fin_settlement s ON s.id = l.settlement_id
+                           WHERE l.note_id = n.id AND l.action = 'ISSUE' AND l.action_date &lt;= #{asOf} AND s.status = 'APPROVED')
+               AND NOT EXISTS (SELECT 1 FROM fin_note_log l WHERE l.note_id = n.id AND l.action = 'PAY' AND l.action_date &lt;= #{asOf})
+            ) AS "notesPayable"
+    </select>
+
+    <!-- 截至日已生效、还没有生成凭证的收付款（不含票据业务生成的，票据单独计入应收应付票据）：资金余额取自凭证，不含这些收付款 -->
+    <select id="selectUnvouchered" resultType="com.lemon.erp.modules.bi.dto.JxcViews$Unvouchered">
+        SELECT COUNT(*) AS "count",
+               COALESCE(SUM(CASE WHEN s.kind = 'RECEIPT' THEN s.amount ELSE 0 END), 0) AS "receipt",
+               COALESCE(SUM(CASE WHEN s.kind = 'PAYMENT' THEN s.amount ELSE 0 END), 0) AS "payment"
+        FROM fin_settlement s
+        WHERE s.status = 'APPROVED' AND s.voucher_id IS NULL AND s.settle_date &lt;= #{asOf}
+          AND NOT EXISTS (SELECT 1 FROM fin_note_log l WHERE l.settlement_id = s.id)
+    </select>
+
+    <select id="selectTopBalances" resultType="com.lemon.erp.modules.bi.dto.JxcViews$PartnerBalance">
+        SELECT o.partner_id AS "partnerId", p.name AS "partnerName", SUM(o.open_amount) AS "amount"
+        FROM (<include refid="billOpen"/>) o
+        <choose>
+            <when test="kind == 'AR'">LEFT JOIN scm_customer p ON p.id = o.partner_id</when>
+            <otherwise>LEFT JOIN scm_supplier p ON p.id = o.partner_id</otherwise>
+        </choose>
+        WHERE o.kind = #{kind}
+        GROUP BY o.partner_id, p.name
+        HAVING SUM(o.open_amount) &gt; 0
+        ORDER BY SUM(o.open_amount) DESC, o.partner_id
+        LIMIT #{limit}
+    </select>
+
+    <!-- ============================================================ 商品分析 -->
+
+    <!-- 期间内各物料的净销量、净销售额（不含税）、销售成本 -->
+    <sql id="periodSales">
+        SELECT i.material_id,
+               SUM(CASE WHEN d.kind = 'SALES_OUT' THEN i.qty ELSE -i.qty END) AS qty,
+               SUM(CASE WHEN d.kind = 'SALES_OUT' THEN 1 ELSE -1 END * (i.amount - i.tax_amount)) AS amount,
+               SUM(CASE WHEN d.kind = 'SALES_OUT' THEN 1 ELSE -1 END * i.qty * COALESCE(fc.amount / NULLIF(fc.qty, 0), mc.unit_cost, sm.ref_cost, 0)) AS cost
+        FROM scm_trade_doc_item i
+        JOIN scm_trade_doc d ON d.id = i.doc_id
+        JOIN wms_material sm ON sm.id = i.material_id
+        LEFT JOIN fin_material_cost mc ON mc.material_id = i.material_id AND mc.period = YEAR(d.biz_date) * 100 + MONTH(d.biz_date)
+        <include refid="flowCost"/>
+        WHERE d.kind IN ('SALES_OUT', 'SALES_RETURN') AND d.biz_date &gt;= #{q.begin} AND d.biz_date &lt;= #{q.end}
+        <if test="q.warehouseId != null">AND COALESCE(i.warehouse_id, d.warehouse_id) = #{q.warehouseId}</if>
+        GROUP BY i.material_id
+    </sql>
+
+    <!-- 当前库存（不含供应商寄售仓）与可用库存（再去掉不良品仓、客户寄售仓和冻结数量） -->
+    <sql id="stock">
+        SELECT s.material_id, SUM(s.qty) AS qty,
+               SUM(CASE WHEN w.type IN ('DEFECT', 'CONSIGN_OUT') THEN 0 ELSE s.qty - s.frozen_qty END) AS available
+        FROM wms_stock s
+        JOIN wms_warehouse w ON w.id = s.warehouse_id
+        WHERE w.type &lt;&gt; 'CONSIGN_IN'
+        <if test="q.warehouseId != null">AND s.warehouse_id = #{q.warehouseId}</if>
+        GROUP BY s.material_id
+    </sql>
+
+    <sql id="materialFilters">
+        AND m.is_template = 0
+        <if test="q.category != null and q.category != ''">
+            <choose>
+                <when test="q.categoryExact">AND m.category = #{q.category}</when>
+                <otherwise>AND m.category IN (<include refid="com.lemon.erp.modules.wms.mapper.WmsMaterialCategoryMapper.subtreeCodes"><property name="code" value="q.category"/></include>)</otherwise>
+            </choose>
+        </if>
+        <if test="q.brand != null and q.brand != ''">AND m.brand = #{q.brand}</if>
+        <if test="q.keyword != null and q.keyword != ''">
+            AND (m.code LIKE CONCAT('%', #{q.keyword}, '%') OR m.name LIKE CONCAT('%', #{q.keyword}, '%'))
+        </if>
+    </sql>
+
+    <select id="selectGoodsTop" resultType="com.lemon.erp.modules.bi.dto.JxcViews$GoodsRow">
+        SELECT m.id AS material_id, m.code AS code, m.name AS name, m.spec AS spec, m.unit AS unit, m.category AS category, m.brand AS brand,
+               sl.qty AS sales_qty, sl.amount AS sales_amount, sl.cost AS cost, COALESCE(st.qty, 0) AS stock_qty
+        FROM (<include refid="periodSales"/>) sl
+        JOIN wms_material m ON m.id = sl.material_id
+        LEFT JOIN (<include refid="stock"/>) st ON st.material_id = m.id
+        WHERE sl.qty &gt; 0
+        <include refid="materialFilters"/>
+        ORDER BY
+        <choose>
+            <when test="q.rankBy.name() == 'QTY'">sl.qty</when>
+            <when test="q.rankBy.name() == 'PROFIT'">sl.amount - sl.cost</when>
+            <otherwise>sl.amount</otherwise>
+        </choose> DESC, m.code
+    </select>
+
+    <!-- 滞销：有库存、期间净销量不超过阈值 -->
+    <select id="selectGoodsSlow" resultType="com.lemon.erp.modules.bi.dto.JxcViews$GoodsRow">
+        SELECT x.* FROM (
+            SELECT m.id AS material_id, m.code AS code, m.name AS name, m.spec AS spec, m.unit AS unit, m.category AS category, m.brand AS brand,
+                   COALESCE(sl.qty, 0) AS sales_qty, COALESCE(sl.amount, 0) AS sales_amount, st.qty AS stock_qty,
+                   st.qty * <include refid="latestCost"/> AS stock_amount, ls.last_date AS last_sale_date
+            FROM wms_material m
+            JOIN (<include refid="stock"/>) st ON st.material_id = m.id
+            LEFT JOIN (<include refid="periodSales"/>) sl ON sl.material_id = m.id
+            LEFT JOIN (SELECT i.material_id, MAX(d.biz_date) AS last_date
+                       FROM scm_trade_doc_item i
+                       JOIN scm_trade_doc d ON d.id = i.doc_id
+                       WHERE d.kind = 'SALES_OUT' AND d.biz_date &lt;= #{q.end}
+                       GROUP BY i.material_id) ls ON ls.material_id = m.id
+            WHERE st.qty &gt; 0 AND COALESCE(sl.qty, 0) &lt;= #{q.slowQty}
+            <include refid="materialFilters"/>
+        ) x
+        ORDER BY x.stock_amount DESC, x.code
+    </select>
+
+    <!-- 积压：有库存、期间有销售，可销天数（库存 / 日均销量）超过阈值；没有销售的在滞销中 -->
+    <select id="selectGoodsOverstock" resultType="com.lemon.erp.modules.bi.dto.JxcViews$GoodsRow">
+        SELECT x.* FROM (
+            SELECT m.id AS material_id, m.code AS code, m.name AS name, m.spec AS spec, m.unit AS unit, m.category AS category, m.brand AS brand,
+                   sl.qty AS sales_qty, sl.amount AS sales_amount, st.qty AS stock_qty,
+                   st.qty * <include refid="latestCost"/> AS stock_amount
+            FROM wms_material m
+            JOIN (<include refid="stock"/>) st ON st.material_id = m.id
+            JOIN (<include refid="periodSales"/>) sl ON sl.material_id = m.id
+            WHERE st.qty &gt; 0 AND sl.qty &gt; 0 AND st.qty * #{days} &gt; sl.qty * #{q.overstockDays}
+            <include refid="materialFilters"/>
+        ) x
+        ORDER BY x.stock_qty / x.sales_qty DESC, x.code
+    </select>
+
+    <!-- orderKind 由 include 的 property 静态替换（SALES / PURCHASE），不是请求参数 -->
+    <sql id="openOrders">
+        SELECT oi.material_id, SUM(oi.qty - oi.done_qty + oi.replenish_qty) AS qty
+        FROM scm_order_item oi
+        JOIN scm_order oo ON oo.id = oi.order_id
+        WHERE oo.kind = '${orderKind}' AND oo.status IN ('APPROVED', 'PARTIAL') AND oi.qty - oi.done_qty + oi.replenish_qty &gt; 0
+        GROUP BY oi.material_id
+    </sql>
+
+    <!-- 缺货用的安全库存（库存下限）：选了仓库且物料为分仓库预警时取该仓库的下限，否则取物料上的（分仓库时为各仓库之和） -->
+    <sql id="shortageSafety">
+        <choose>
+            <when test="q.warehouseId != null">CASE WHEN m.alert_mode = 'WAREHOUSE' THEN wl.min_qty ELSE m.safety_stock END</when>
+            <otherwise>m.safety_stock</otherwise>
+        </choose>
+    </sql>
+
+    <!-- 缺货：可用库存低于安全库存，或不够未出库的销售订单 -->
+    <select id="selectGoodsShortage" resultType="com.lemon.erp.modules.bi.dto.JxcViews$GoodsRow">
+        SELECT x.* FROM (
+            SELECT m.id AS material_id, m.code AS code, m.name AS name, m.spec AS spec, m.unit AS unit, m.category AS category, m.brand AS brand,
+                   <include refid="shortageSafety"/> AS safety_stock, COALESCE(st.qty, 0) AS stock_qty, COALESCE(st.available, 0) AS available_qty,
+                   COALESCE(so.qty, 0) AS so_open, COALESCE(po.qty, 0) AS po_open
+            FROM wms_material m
+            LEFT JOIN (<include refid="stock"/>) st ON st.material_id = m.id
+            LEFT JOIN (<include refid="openOrders"><property name="orderKind" value="SALES"/></include>) so ON so.material_id = m.id
+            LEFT JOIN (<include refid="openOrders"><property name="orderKind" value="PURCHASE"/></include>) po ON po.material_id = m.id
+            <if test="q.warehouseId != null">LEFT JOIN wms_material_warehouse_limit wl ON wl.material_id = m.id AND wl.warehouse_id = #{q.warehouseId}</if>
+            WHERE m.status = 1
+            <include refid="materialFilters"/>
+        ) x
+        WHERE (x.safety_stock &gt; 0 AND x.available_qty &lt; x.safety_stock) OR x.available_qty &lt; x.so_open
+        ORDER BY COALESCE(x.safety_stock, 0) + x.so_open - x.available_qty DESC, x.code
+    </select>
+
+    <!-- 期初（开始日期之前）、期末（截至结束日期）库存数量，按单据业务日期（在途调拨的调入按收货日期）；不选仓库时不计调拨 -->
+    <sql id="flows">
+        SELECT f.material_id,
+               SUM(CASE WHEN COALESCE(CASE WHEN f.qty &gt; 0 THEN sd.receive_date END, sd.biz_date, ck.biz_date, CAST(f.create_time AS DATE)) &lt; #{q.begin} THEN f.qty ELSE 0 END) AS open_qty,
+               SUM(f.qty) AS close_qty
+        FROM wms_stock_flow f
+        JOIN wms_warehouse wh ON wh.id = f.warehouse_id
+        LEFT JOIN wms_stock_doc sd ON f.biz_type IN ('IN', 'OUT', 'TRANSFER') AND sd.id = f.doc_id
+        LEFT JOIN wms_check ck ON f.biz_type = 'CHECK' AND ck.id = f.doc_id
+        WHERE COALESCE(CASE WHEN f.qty &gt; 0 THEN sd.receive_date END, sd.biz_date, ck.biz_date, CAST(f.create_time AS DATE)) &lt;= #{q.end} AND wh.type &lt;&gt; 'CONSIGN_IN'
+        <choose>
+            <when test="q.warehouseId != null">AND f.warehouse_id = #{q.warehouseId}</when>
+            <otherwise>AND f.biz_type &lt;&gt; 'TRANSFER'</otherwise>
+        </choose>
+        GROUP BY f.material_id
+    </sql>
+
+    <!-- 周转：周转最慢的在前（有库存没有销售的排最前，没有库存只有销售的排最后） -->
+    <select id="selectGoodsTurnover" resultType="com.lemon.erp.modules.bi.dto.JxcViews$GoodsRow">
+        SELECT x.* FROM (
+            SELECT m.id AS material_id, m.code AS code, m.name AS name, m.spec AS spec, m.unit AS unit, m.category AS category, m.brand AS brand,
+                   COALESCE(fl.open_qty, 0) AS open_qty, COALESCE(fl.close_qty, 0) AS close_qty,
+                   COALESCE(sl.qty, 0) AS sales_qty, COALESCE(sl.amount, 0) AS sales_amount, COALESCE(sl.cost, 0) AS cost
+            FROM wms_material m
+            LEFT JOIN (<include refid="flows"/>) fl ON fl.material_id = m.id
+            LEFT JOIN (<include refid="periodSales"/>) sl ON sl.material_id = m.id
+            WHERE (fl.material_id IS NOT NULL OR sl.material_id IS NOT NULL)
+            <include refid="materialFilters"/>
+        ) x
+        WHERE x.open_qty &lt;&gt; 0 OR x.close_qty &lt;&gt; 0 OR x.sales_qty &lt;&gt; 0
+        ORDER BY CASE WHEN x.open_qty + x.close_qty &gt; 0 THEN x.sales_qty / (x.open_qty + x.close_qty) ELSE 999999999 END, x.code
+    </select>
+
+    <!-- ============================================================ 积压分析、库存分析共用的片段 -->
+
+    <!-- 库存流水的业务日期：单据业务日期，在途调拨的调入按收货日期（与经营历史、资产状况相同）；
+         flowDocs 为需要的关联（流水别名 f） -->
+    <sql id="flowDocs">
+        LEFT JOIN wms_stock_doc sd ON f.biz_type IN ('IN', 'OUT', 'TRANSFER') AND sd.id = f.doc_id
+        LEFT JOIN wms_check ck ON f.biz_type = 'CHECK' AND ck.id = f.doc_id
+    </sql>
+    <sql id="flowDate">COALESCE(CASE WHEN f.qty &gt; 0 THEN sd.receive_date END, sd.biz_date, ck.biz_date, CAST(f.create_time AS DATE))</sql>
+
+    <!-- 商品条件（物料别名 m）：非多规格款式，类别含下级，品牌，商品描述（编码 / 名称 / 规格包含，或检索列包含规范化的关键字） -->
+    <sql id="goodsFilters">
+        AND m.is_template = 0
+        <if test="q.category != null and q.category != ''">
+            AND m.category IN (<include refid="com.lemon.erp.modules.wms.mapper.WmsMaterialCategoryMapper.subtreeCodes"><property name="code" value="q.category"/></include>)
+        </if>
+        <if test="q.brand != null and q.brand != ''">AND m.brand = #{q.brand}</if>
+        <if test="q.keyword != null and q.keyword.trim() != ''">
+            AND (m.code LIKE CONCAT('%', #{q.keyword}, '%') OR m.name LIKE CONCAT('%', #{q.keyword}, '%')
+                 OR m.spec LIKE CONCAT('%', #{q.keyword}, '%')
+                 <if test="q.searchNorm != ''">OR m.search_key LIKE CONCAT('%', #{q.searchNorm}, '%')</if>)
+        </if>
+    </sql>
+
+    <!-- 期间净数量（按物料、仓库）：销售为 销售出库 − 销售退货（口径同销售报表），进货为 采购入库 − 采购退货；
+         仓库取明细行的仓库，为空取表头仓库。property fwd / back 为正向、退货的种类（静态替换），from / to 为日期参数的表达式 -->
+    <sql id="netTradeQty">
+        SELECT i.material_id, COALESCE(i.warehouse_id, d.warehouse_id) AS warehouse_id,
+               SUM(CASE WHEN d.kind = '${fwd}' THEN i.qty ELSE -i.qty END) AS qty
+        FROM scm_trade_doc_item i
+        JOIN scm_trade_doc d ON d.id = i.doc_id
+        WHERE d.kind IN ('${fwd}', '${back}') AND d.biz_date &gt;= #{${from}} AND d.biz_date &lt;= #{${to}}
+        GROUP BY i.material_id, COALESCE(i.warehouse_id, d.warehouse_id)
+    </sql>
+    <!-- 同上按物料合计（所选仓库，properties 同 netTradeQty） -->
+    <sql id="netTradeQtyByMaterial">
+        SELECT t.material_id, SUM(t.qty) AS qty
+        FROM (<include refid="netTradeQty"/>) t
+        <if test="q.warehouseId != null">WHERE t.warehouse_id = #{q.warehouseId}</if>
+        GROUP BY t.material_id
+    </sql>
+
+    <!-- ============================================================ 积压分析（issue #111） -->
+
+    <!-- 截至日的库存数量（不含供应商寄售仓）= 当前库存 − 业务日期晚于截至日的流水（日期口径同资产状况的库存金额：
+         单据业务日期，在途调拨的调入按收货日期），截至今天时与库存查询一致 -->
+    <sql id="overstockStock">
+        SELECT u.material_id, SUM(u.qty) AS qty
+        FROM (SELECT s.material_id, s.qty
+              FROM wms_stock s
+              JOIN wms_warehouse w ON w.id = s.warehouse_id
+              WHERE w.type &lt;&gt; 'CONSIGN_IN'
+              <if test="q.warehouseId != null">AND s.warehouse_id = #{q.warehouseId}</if>
+              UNION ALL
+              SELECT f.material_id, -f.qty
+              FROM wms_stock_flow f
+              JOIN wms_warehouse w ON w.id = f.warehouse_id
+              <include refid="flowDocs"/>
+              WHERE w.type &lt;&gt; 'CONSIGN_IN' AND <include refid="flowDate"/> &gt; #{q.date}
+              <if test="q.warehouseId != null">AND f.warehouse_id = #{q.warehouseId}</if>) u
+        GROUP BY u.material_id
+    </sql>
+
+    <!-- 积压基数：库存上限（按总库存取物料的上限；分仓库的物料选了仓库取该仓库的上限，不选时物料上的上限即各仓库之和），
+         或期间净销量（销售出库 − 销售退货，按所选仓库，口径同销售报表；为负时按 0） -->
+    <sql id="overstockBase">
+        <choose>
+            <when test="q.base.name() == 'MAX_STOCK' and q.warehouseId != null">CASE WHEN m.alert_mode = 'WAREHOUSE' THEN wl.max_qty ELSE m.max_stock END</when>
+            <when test="q.base.name() == 'MAX_STOCK'">m.max_stock</when>
+            <otherwise>CASE WHEN sl.qty &gt; 0 THEN sl.qty ELSE 0 END</otherwise>
+        </choose>
+    </sql>
+
+    <sql id="overstockRows">
+        SELECT m.id AS material_id, m.code AS code, m.name AS name, m.spec AS spec, m.unit AS unit, m.category AS category, m.brand AS brand,
+               CAST(m.create_time AS DATE) AS create_date, ld.last_in AS last_purchase_date, ld.last_out AS last_sale_date,
+               st.qty AS stock_qty, <include refid="overstockBase"/> AS base_qty, st.qty - <include refid="overstockBase"/> AS over_qty,
+               ROUND((st.qty - <include refid="overstockBase"/>) * <include refid="latestCost"/>, 2) AS amount
+        FROM wms_material m
+        JOIN (<include refid="overstockStock"/>) st ON st.material_id = m.id
+        <choose>
+            <when test="q.base.name() == 'MAX_STOCK'">
+                <if test="q.warehouseId != null">LEFT JOIN wms_material_warehouse_limit wl ON wl.material_id = m.id AND wl.warehouse_id = #{q.warehouseId}</if>
+            </when>
+            <otherwise>
+                LEFT JOIN (<include refid="netTradeQtyByMaterial"><property name="fwd" value="SALES_OUT"/><property name="back" value="SALES_RETURN"/>
+                           <property name="from" value="q.salesBegin"/><property name="to" value="q.salesEnd"/></include>) sl ON sl.material_id = m.id
+            </otherwise>
+        </choose>
+        LEFT JOIN (SELECT i.material_id, MAX(CASE WHEN d.kind = 'PURCHASE_IN' THEN d.biz_date END) AS last_in,
+                          MAX(CASE WHEN d.kind = 'SALES_OUT' THEN d.biz_date END) AS last_out
+                   FROM scm_trade_doc_item i
+                   JOIN scm_trade_doc d ON d.id = i.doc_id
+                   WHERE d.kind IN ('PURCHASE_IN', 'SALES_OUT') AND d.biz_date &lt;= #{q.date}
+                   GROUP BY i.material_id) ld ON ld.material_id = m.id
+        WHERE st.qty &gt; 0
+        <include refid="goodsFilters"/>
+    </sql>
+
+    <select id="selectOverstock" resultType="com.lemon.erp.modules.bi.dto.JxcViews$OverstockRow">
+        SELECT x.* FROM (<include refid="overstockRows"/>) x
+        WHERE x.base_qty IS NOT NULL AND x.over_qty &gt; 0
+        ORDER BY <if test="q.costVisible">x.amount DESC, </if>x.over_qty DESC, x.code
+    </select>
+
+    <select id="selectOverstockTotal" resultType="com.lemon.erp.modules.bi.dto.JxcViews$OverstockRow">
+        SELECT COUNT(*) AS material_count, COALESCE(SUM(x.stock_qty), 0) AS stock_qty, COALESCE(SUM(x.base_qty), 0) AS base_qty,
+               COALESCE(SUM(x.over_qty), 0) AS over_qty, COALESCE(SUM(x.amount), 0) AS amount
+        FROM (<include refid="overstockRows"/>) x
+        WHERE x.base_qty IS NOT NULL AND x.over_qty &gt; 0
+    </select>
+
+    <!-- ============================================================ 库存分析：周转、滞销 / 畅销（issue #116） -->
+
+    <!-- 期初（开始日期之前）、期末（截至结束日期）的库存数量 = 当前库存 − 业务日期在其后的流水（日期口径同 flowDate，
+         与积压分析的截至日库存相同），不含供应商寄售仓，按所选仓库 -->
+    <sql id="periodStock">
+        SELECT u.material_id, SUM(u.open_qty) AS open_qty, SUM(u.close_qty) AS close_qty
+        FROM (SELECT s.material_id, s.qty AS open_qty, s.qty AS close_qty
+              FROM wms_stock s
+              JOIN wms_warehouse w ON w.id = s.warehouse_id
+              WHERE w.type &lt;&gt; 'CONSIGN_IN'
+              <if test="q.warehouseId != null">AND s.warehouse_id = #{q.warehouseId}</if>
+              UNION ALL
+              SELECT f.material_id, -f.qty, CASE WHEN <include refid="flowDate"/> &gt; #{q.end} THEN -f.qty ELSE 0 END
+              FROM wms_stock_flow f
+              JOIN wms_warehouse w ON w.id = f.warehouse_id
+              <include refid="flowDocs"/>
+              WHERE w.type &lt;&gt; 'CONSIGN_IN' AND <include refid="flowDate"/> &gt;= #{q.begin}
+              <if test="q.warehouseId != null">AND f.warehouse_id = #{q.warehouseId}</if>) u
+        GROUP BY u.material_id
+    </sql>
+
+    <!-- 周转分析计算金额的单价：零售价 / 所选批发价列（含税），成本价为库存均价（同积压分析的 latestCost）；
+         按数量时金额也按库存均价，没有「查看成本金额」时为空 -->
+    <sql id="turnoverPrice">
+        <choose>
+            <when test="q.basis.name() == 'RETAIL'">m.retail_price</when>
+            <when test="q.basis.name() == 'WHOLESALE'">
+                <choose>
+                    <when test="q.priceLevel == 1">m.wholesale_price1</when>
+                    <when test="q.priceLevel == 2">m.wholesale_price2</when>
+                    <when test="q.priceLevel == 3">m.wholesale_price3</when>
+                    <when test="q.priceLevel == 4">m.wholesale_price4</when>
+                    <when test="q.priceLevel == 5">m.wholesale_price5</when>
+                    <when test="q.priceLevel == 6">m.wholesale_price6</when>
+                    <when test="q.priceLevel == 7">m.wholesale_price7</when>
+                    <otherwise>m.wholesale_price8</otherwise>
+                </choose>
+            </when>
+            <when test="q.costVisible"><include refid="latestCost"/></when>
+            <otherwise>CAST(NULL AS DECIMAL(18, 4))</otherwise>
+        </choose>
+    </sql>
+
+    <sql id="turnoverRows">
+        SELECT x.* FROM (
+            SELECT m.id AS material_id, m.code AS code, m.name AS name, m.spec AS spec, m.unit AS unit, m.category AS category, m.brand AS brand,
+                   COALESCE(ps.open_qty, 0) AS open_qty, COALESCE(ps.close_qty, 0) AS close_qty, COALESCE(sl.qty, 0) AS out_qty,
+                   <include refid="turnoverPrice"/> AS price
+            FROM wms_material m
+            LEFT JOIN (<include refid="periodStock"/>) ps ON ps.material_id = m.id
+            LEFT JOIN (<include refid="netTradeQtyByMaterial"><property name="fwd" value="SALES_OUT"/><property name="back" value="SALES_RETURN"/>
+                       <property name="from" value="q.begin"/><property name="to" value="q.end"/></include>) sl ON sl.material_id = m.id
+            WHERE (ps.material_id IS NOT NULL OR sl.material_id IS NOT NULL)
+            <include refid="goodsFilters"/>
+        ) x
+        WHERE (x.open_qty &lt;&gt; 0 OR x.close_qty &lt;&gt; 0 OR x.out_qty &lt;&gt; 0)
+        <if test="q.excludeIdle">AND (x.open_qty &lt;&gt; 0 OR x.out_qty &lt;&gt; 0)</if>
+        <if test="q.outFilter != null and q.outFilter.name() == 'HAS_OUT'">AND x.out_qty &lt;&gt; 0</if>
+        <if test="q.outFilter != null and q.outFilter.name() == 'NO_OUT'">AND x.out_qty = 0</if>
+    </sql>
+
+    <!-- 周转最慢的在前（有库存没有出库的排最前，没有库存只有出库的排最后） -->
+    <select id="selectTurnover" resultType="com.lemon.erp.modules.bi.dto.JxcViews$TurnoverRow">
+        SELECT t.* FROM (<include refid="turnoverRows"/>) t
+        ORDER BY CASE WHEN t.open_qty + t.close_qty &gt; 0 THEN t.out_qty / (t.open_qty + t.close_qty) ELSE 999999999 END, t.code
+    </select>
+
+    <!-- 合计：金额只含有价格的商品 -->
+    <select id="selectTurnoverTotal" resultType="com.lemon.erp.modules.bi.dto.JxcViews$TurnoverRow">
+        SELECT COUNT(*) AS material_count, COALESCE(SUM(t.open_qty), 0) AS open_qty, COALESCE(SUM(t.close_qty), 0) AS close_qty,
+               COALESCE(SUM(t.out_qty), 0) AS out_qty, SUM(t.open_qty * t.price) AS open_amount, SUM(t.close_qty * t.price) AS close_amount,
+               SUM(t.out_qty * t.price) AS out_amount
+        FROM (<include refid="turnoverRows"/>) t
+    </select>
+
+    <!-- 滞销 / 畅销：销售比例 = 净销量 ÷ 销售基数（本期进货量，或 期初库存 + 本期进货量），基数不大于 0 的不参与 -->
+    <sql id="salesRateRows">
+        SELECT x.* FROM (
+            SELECT m.id AS material_id, m.code AS code, m.name AS name, m.spec AS spec, m.unit AS unit, m.category AS category, m.brand AS brand,
+                   COALESCE(sl.qty, 0) AS sales_qty, COALESCE(pu.qty, 0) AS purchase_qty,
+                   <choose>
+                       <when test="q.base.name() == 'OPENING_PURCHASE'">COALESCE(ps.open_qty, 0) AS open_qty, COALESCE(pu.qty, 0) + COALESCE(ps.open_qty, 0) AS base_qty</when>
+                       <otherwise>CAST(NULL AS DECIMAL(18, 4)) AS open_qty, COALESCE(pu.qty, 0) AS base_qty</otherwise>
+                   </choose>
+            FROM wms_material m
+            LEFT JOIN (<include refid="netTradeQtyByMaterial"><property name="fwd" value="SALES_OUT"/><property name="back" value="SALES_RETURN"/>
+                       <property name="from" value="q.begin"/><property name="to" value="q.end"/></include>) sl ON sl.material_id = m.id
+            LEFT JOIN (<include refid="netTradeQtyByMaterial"><property name="fwd" value="PURCHASE_IN"/><property name="back" value="PURCHASE_RETURN"/>
+                       <property name="from" value="q.begin"/><property name="to" value="q.end"/></include>) pu ON pu.material_id = m.id
+            <if test="q.base.name() == 'OPENING_PURCHASE'">LEFT JOIN (<include refid="periodStock"/>) ps ON ps.material_id = m.id</if>
+            WHERE (sl.material_id IS NOT NULL OR pu.material_id IS NOT NULL
+                   <if test="q.base.name() == 'OPENING_PURCHASE'">OR ps.material_id IS NOT NULL</if>)
+            <include refid="goodsFilters"/>
+        ) x
+        WHERE x.base_qty &gt; 0
+        <choose>
+            <when test="q.mode.name() == 'HOT'">AND x.sales_qty * 100 &gt;= #{q.ratio} * x.base_qty</when>
+            <otherwise>AND x.sales_qty * 100 &lt;= #{q.ratio} * x.base_qty</otherwise>
+        </choose>
+    </sql>
+
+    <!-- 滞销按销售比例从低到高，畅销从高到低 -->
+    <select id="selectSalesRate" resultType="com.lemon.erp.modules.bi.dto.JxcViews$SalesRateRow">
+        SELECT t.* FROM (<include refid="salesRateRows"/>) t
+        ORDER BY t.sales_qty / t.base_qty <if test="q.mode.name() == 'HOT'">DESC</if>, t.code
+    </select>
+
+    <select id="selectSalesRateTotal" resultType="com.lemon.erp.modules.bi.dto.JxcViews$SalesRateRow">
+        SELECT COUNT(*) AS material_count, COALESCE(SUM(t.sales_qty), 0) AS sales_qty, COALESCE(SUM(t.purchase_qty), 0) AS purchase_qty,
+               SUM(t.open_qty) AS open_qty, COALESCE(SUM(t.base_qty), 0) AS base_qty
+        FROM (<include refid="salesRateRows"/>) t
+    </select>
+
+    <!-- ============================================================ 库存分析：库存预警（issue #116）
+         预警口径同 wms 的 WmsMaterialWarehouseLimitMapper.materialAlerts（按总库存的物料比较所有仓库的合计，选了仓库也按合计；
+         分仓库的按仓库判断），库存改为截至日的库存 -->
+
+    <!-- 截至日各仓库、各物料的库存数量（所有仓库，与预警口径一致）= 当前库存 − 业务日期晚于截至日的流水；
+         分仓库预警设置了上下限的仓库、按总库存预警设置了上下限的物料的默认仓库，没有库存也列出（数量 0） -->
+    <sql id="alertStock">
+        SELECT u.warehouse_id, u.material_id, SUM(u.qty) AS qty
+        FROM (SELECT s.warehouse_id, s.material_id, s.qty
+              FROM wms_stock s
+              UNION ALL
+              SELECT f.warehouse_id, f.material_id, -f.qty
+              FROM wms_stock_flow f
+              <include refid="flowDocs"/>
+              WHERE <include refid="flowDate"/> &gt; #{q.date}
+              UNION ALL
+              SELECT wl.warehouse_id, wl.material_id, 0
+              FROM wms_material_warehouse_limit wl
+              JOIN wms_material lm ON lm.id = wl.material_id
+              WHERE lm.alert_mode = 'WAREHOUSE'
+              UNION ALL
+              SELECT dm.default_warehouse_id, dm.id, 0
+              FROM wms_material dm
+              WHERE dm.alert_mode = 'TOTAL' AND dm.default_warehouse_id IS NOT NULL
+                AND (dm.safety_stock IS NOT NULL OR dm.max_stock IS NOT NULL)) u
+        GROUP BY u.warehouse_id, u.material_id
+    </sql>
+
+    <!-- 截至日各物料所有仓库的库存合计（按总库存预警用），own_qty 不含供应商寄售仓（计算金额用） -->
+    <sql id="alertTotal">
+        SELECT a.material_id, SUM(a.qty) AS qty, SUM(CASE WHEN aw.type &lt;&gt; 'CONSIGN_IN' THEN a.qty ELSE 0 END) AS own_qty
+        FROM (<include refid="alertStock"/>) a
+        JOIN wms_warehouse aw ON aw.id = a.warehouse_id
+        GROUP BY a.material_id
+    </sql>
+
+    <!-- 订单数量（当前）：已审核、未出库完的销售订单（未完成数量，仓库取订单的发货仓库，没有时取物料的默认仓库）
+         + 没有引用订单的销售出库草稿（直接开单；引用订单的草稿已计入订单的未完成数量） -->
+    <sql id="alertOrders">
+        SELECT o.material_id, o.warehouse_id, SUM(o.qty) AS qty
+        FROM (SELECT oi.material_id, COALESCE(oo.warehouse_id, om.default_warehouse_id) AS warehouse_id,
+                     oi.qty - oi.done_qty + oi.replenish_qty AS qty
+              FROM scm_order_item oi
+              JOIN scm_order oo ON oo.id = oi.order_id
+              JOIN wms_material om ON om.id = oi.material_id
+              WHERE oo.kind = 'SALES' AND oo.status IN ('APPROVED', 'PARTIAL') AND oi.qty - oi.done_qty + oi.replenish_qty &gt; 0
+              UNION ALL
+              SELECT di.material_id, COALESCE(di.warehouse_id, dr.warehouse_id), di.qty
+              FROM scm_trade_draft_item di
+              JOIN scm_trade_draft dr ON dr.id = di.draft_id
+              WHERE dr.kind = 'SALES_OUT' AND dr.order_id IS NULL AND di.material_id IS NOT NULL) o
+        GROUP BY o.material_id, o.warehouse_id
+    </sql>
+
+    <!-- 截至日之前各仓库最近一次采购入库、销售出库的日期 -->
+    <sql id="alertLastDates">
+        SELECT i.material_id, COALESCE(i.warehouse_id, d.warehouse_id) AS warehouse_id,
+               MAX(CASE WHEN d.kind = 'PURCHASE_IN' THEN d.biz_date END) AS last_in,
+               MAX(CASE WHEN d.kind = 'SALES_OUT' THEN d.biz_date END) AS last_out
+        FROM scm_trade_doc_item i
+        JOIN scm_trade_doc d ON d.id = i.doc_id
+        WHERE d.kind IN ('PURCHASE_IN', 'SALES_OUT') AND d.biz_date &lt;= #{q.date}
+        GROUP BY i.material_id, COALESCE(i.warehouse_id, d.warehouse_id)
+    </sql>
+
+    <sql id="alertStockFilter">
+        <if test="q.stockFilter != null">
+            <choose>
+                <when test="q.stockFilter.name() == 'POSITIVE'">AND x.stock_qty &gt; 0</when>
+                <when test="q.stockFilter.name() == 'ZERO'">AND x.stock_qty = 0</when>
+                <when test="q.stockFilter.name() == 'NEGATIVE'">AND x.stock_qty &lt; 0</when>
+                <otherwise>AND x.stock_qty &lt;&gt; 0</otherwise>
+            </choose>
+        </if>
+    </sql>
+
+    <!-- 月销量：截至日往前一个月各仓库的净销量 -->
+    <sql id="monthSales">
+        <include refid="netTradeQty"><property name="fwd" value="SALES_OUT"/><property name="back" value="SALES_RETURN"/>
+            <property name="from" value="q.monthBegin"/><property name="to" value="q.date"/></include>
+    </sql>
+
+    <!-- 「仓库」标签页：每个仓库 + 商品一行 -->
+    <sql id="alertWarehouseRows">
+        SELECT x.* FROM (
+            SELECT a.warehouse_id AS warehouse_id, w.name AS warehouse_name, w.sort AS warehouse_sort,
+                   m.id AS material_id, m.code AS code, m.name AS name, m.spec AS spec, m.unit AS unit, m.category AS category, m.brand AS brand,
+                   m.alert_mode AS alert_mode, CAST(m.create_time AS DATE) AS create_date, ld.last_in AS last_in_date, ld.last_out AS last_sale_date,
+                   COALESCE(ms.qty, 0) AS month_qty, COALESCE(oq.qty, 0) AS order_qty,
+                   a.qty AS stock_qty, CASE WHEN w.type &lt;&gt; 'CONSIGN_IN' THEN a.qty ELSE 0 END AS own_qty,
+                   <include refid="latestCost"/> AS unit_cost, m.ref_cost AS ref_cost, m.retail_price AS retail_price,
+                   m.wholesale_price1 AS wholesale_price1, m.wholesale_price2 AS wholesale_price2, m.wholesale_price3 AS wholesale_price3,
+                   m.wholesale_price4 AS wholesale_price4, m.wholesale_price5 AS wholesale_price5, m.wholesale_price6 AS wholesale_price6,
+                   m.wholesale_price7 AS wholesale_price7, m.wholesale_price8 AS wholesale_price8,
+                   CASE WHEN m.alert_mode = 'WAREHOUSE' THEN wl.min_qty ELSE m.safety_stock END AS min_qty,
+                   CASE WHEN m.alert_mode = 'WAREHOUSE' THEN wl.max_qty ELSE m.max_stock END AS max_qty,
+                   CASE WHEN m.alert_mode = 'WAREHOUSE' THEN
+                            CASE WHEN a.qty &lt; wl.min_qty THEN 'LOW' WHEN a.qty &gt; wl.max_qty THEN 'HIGH' END
+                        WHEN COALESCE(tt.qty, 0) &lt; m.safety_stock THEN 'LOW'
+                        WHEN COALESCE(tt.qty, 0) &gt; m.max_stock THEN 'HIGH' END AS alert,
+                   CASE WHEN m.default_warehouse_id = a.warehouse_id THEN loc.code END AS location_code
+            FROM (<include refid="alertStock"/>) a
+            JOIN wms_material m ON m.id = a.material_id
+            JOIN wms_warehouse w ON w.id = a.warehouse_id
+            LEFT JOIN wms_material_warehouse_limit wl ON wl.material_id = m.id AND wl.warehouse_id = a.warehouse_id
+            LEFT JOIN (<include refid="alertTotal"/>) tt ON tt.material_id = m.id
+            LEFT JOIN wms_location loc ON loc.id = m.default_location_id
+            LEFT JOIN (<include refid="monthSales"/>) ms ON ms.material_id = m.id AND ms.warehouse_id = a.warehouse_id
+            LEFT JOIN (<include refid="alertOrders"/>) oq ON oq.material_id = m.id AND oq.warehouse_id = a.warehouse_id
+            LEFT JOIN (<include refid="alertLastDates"/>) ld ON ld.material_id = m.id AND ld.warehouse_id = a.warehouse_id
+            <where>
+                <if test="q.warehouseId != null">a.warehouse_id = #{q.warehouseId}</if>
+                <include refid="goodsFilters"/>
+            </where>
+        ) x
+        <where>
+            <include refid="alertStockFilter"/>
+            <if test="q.alertFilter != null">
+                <choose>
+                    <when test="q.alertFilter.name() == 'LOW'">AND x.alert = 'LOW'</when>
+                    <when test="q.alertFilter.name() == 'HIGH'">AND x.alert = 'HIGH'</when>
+                    <otherwise>AND x.alert IS NOT NULL</otherwise>
+                </choose>
+            </if>
+        </where>
+    </sql>
+
+    <!-- 「高于上限」「低于下限」的预警单元：分仓库预警的物料每个设置了上下限的仓库一行（所选仓库），
+         按总库存预警的物料一行（仓库为空，库存为所有仓库的合计；选了仓库时只取在该仓库有库存、流水或默认仓库为该仓库的物料） -->
+    <sql id="alertUnits">
+        SELECT a.warehouse_id AS warehouse_id, w.name AS warehouse_name, w.sort AS warehouse_sort,
+               m.id AS material_id, m.code AS code, m.name AS name, m.spec AS spec, m.unit AS unit, m.category AS category, m.brand AS brand,
+               m.alert_mode AS alert_mode, COALESCE(ms.qty, 0) AS month_qty,
+               a.qty AS stock_qty, CASE WHEN w.type &lt;&gt; 'CONSIGN_IN' THEN a.qty ELSE 0 END AS own_qty,
+               wl.min_qty AS min_qty, wl.max_qty AS max_qty, <include refid="latestCost"/> AS unit_cost
+        FROM (<include refid="alertStock"/>) a
+        JOIN wms_material m ON m.id = a.material_id
+        JOIN wms_warehouse w ON w.id = a.warehouse_id
+        JOIN wms_material_warehouse_limit wl ON wl.material_id = m.id AND wl.warehouse_id = a.warehouse_id
+        LEFT JOIN (<include refid="monthSales"/>) ms ON ms.material_id = m.id AND ms.warehouse_id = a.warehouse_id
+        WHERE m.alert_mode = 'WAREHOUSE'
+        <if test="q.warehouseId != null">AND a.warehouse_id = #{q.warehouseId}</if>
+        <include refid="goodsFilters"/>
+        UNION ALL
+        SELECT NULL, NULL, NULL,
+               m.id, m.code, m.name, m.spec, m.unit, m.category, m.brand,
+               m.alert_mode, COALESCE(mt.qty, 0),
+               COALESCE(tt.qty, 0), COALESCE(tt.own_qty, 0),
+               m.safety_stock, m.max_stock, <include refid="latestCost"/>
+        FROM wms_material m
+        LEFT JOIN (<include refid="alertTotal"/>) tt ON tt.material_id = m.id
+        LEFT JOIN (SELECT t.material_id, SUM(t.qty) AS qty FROM (<include refid="monthSales"/>) t GROUP BY t.material_id) mt ON mt.material_id = m.id
+        WHERE m.alert_mode = 'TOTAL' AND (m.safety_stock IS NOT NULL OR m.max_stock IS NOT NULL)
+        <if test="q.warehouseId != null">
+            AND (m.default_warehouse_id = #{q.warehouseId}
+                 OR EXISTS (SELECT 1 FROM wms_stock es WHERE es.material_id = m.id AND es.warehouse_id = #{q.warehouseId})
+                 OR EXISTS (SELECT 1 FROM wms_stock_flow ef WHERE ef.material_id = m.id AND ef.warehouse_id = #{q.warehouseId}))
+        </if>
+        <include refid="goodsFilters"/>
+    </sql>
+
+    <!-- 高于上限：积压数量 = 库存 − 上限；低于下限：补货数量 = 下限 − 库存 -->
+    <sql id="alertUnitRows">
+        <choose>
+            <when test="q.tab.name() == 'HIGH'">
+                SELECT x.*, x.max_qty AS base_qty, x.stock_qty - x.max_qty AS gap_qty
+                FROM (<include refid="alertUnits"/>) x
+                WHERE x.max_qty IS NOT NULL AND x.stock_qty &gt; x.max_qty
+            </when>
+            <otherwise>
+                SELECT x.*, x.min_qty AS base_qty, x.min_qty - x.stock_qty AS gap_qty
+                FROM (<include refid="alertUnits"/>) x
+                WHERE x.min_qty IS NOT NULL AND x.stock_qty &lt; x.min_qty
+            </otherwise>
+        </choose>
+        <include refid="alertStockFilter"/>
+    </sql>
+
+    <select id="selectStockAlert" resultType="com.lemon.erp.modules.bi.dto.JxcViews$StockAlertRow">
+        <choose>
+            <when test="q.tab.name() == 'WAREHOUSE'">
+                SELECT t.* FROM (<include refid="alertWarehouseRows"/>) t
+                ORDER BY t.warehouse_sort, t.warehouse_id, t.code
+            </when>
+            <otherwise>
+                SELECT t.* FROM (<include refid="alertUnitRows"/>) t
+                ORDER BY <if test="q.costVisible">t.gap_qty * t.unit_cost DESC, </if>t.gap_qty DESC, t.code, t.warehouse_sort
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="selectStockAlertTotal" resultType="com.lemon.erp.modules.bi.dto.JxcViews$StockAlertRow">
+        <choose>
+            <when test="q.tab.name() == 'WAREHOUSE'">
+                SELECT COUNT(*) AS material_count, COALESCE(SUM(t.stock_qty), 0) AS stock_qty,
+                       COALESCE(SUM(ROUND(t.own_qty * t.unit_cost, 2)), 0) AS stock_amount,
+                       COALESCE(SUM(t.month_qty), 0) AS month_qty, COALESCE(SUM(t.order_qty), 0) AS order_qty
+                FROM (<include refid="alertWarehouseRows"/>) t
+            </when>
+            <otherwise>
+                SELECT COUNT(*) AS material_count, COALESCE(SUM(t.stock_qty), 0) AS stock_qty,
+                       COALESCE(SUM(ROUND(t.own_qty * t.unit_cost, 2)), 0) AS stock_amount,
+                       COALESCE(SUM(t.month_qty), 0) AS month_qty, COALESCE(SUM(t.base_qty), 0) AS base_qty,
+                       COALESCE(SUM(t.gap_qty), 0) AS gap_qty, COALESCE(SUM(ROUND(t.gap_qty * t.unit_cost, 2)), 0) AS gap_amount
+                FROM (<include refid="alertUnitRows"/>) t
+            </otherwise>
+        </choose>
+    </select>
+
+    <!-- ============================================================ 客户 RFM -->
+
+    <select id="selectRfm" resultType="com.lemon.erp.modules.bi.dto.JxcViews$RfmRow">
+        SELECT d.partner_id AS "customerId", c.code AS "code", c.name AS "name",
+               MAX(CASE WHEN d.kind = 'SALES_OUT' THEN d.biz_date END) AS "lastDate",
+               COUNT(DISTINCT CASE WHEN d.kind = 'SALES_OUT' THEN d.id END) AS "frequency",
+               SUM(CASE WHEN d.kind = 'SALES_OUT' THEN 1 ELSE -1 END * (i.amount - i.tax_amount)) AS "monetary"
+        FROM scm_trade_doc_item i
+        JOIN scm_trade_doc d ON d.id = i.doc_id
+        JOIN scm_customer c ON c.id = d.partner_id
+        WHERE d.kind IN ('SALES_OUT', 'SALES_RETURN') AND d.biz_date &gt;= #{q.begin} AND d.biz_date &lt;= #{q.end}
+        <if test="q.region != null and q.region != ''">AND c.region = #{q.region}</if>
+        <if test="q.keyword != null and q.keyword != ''">
+            AND (c.code LIKE CONCAT('%', #{q.keyword}, '%') OR c.name LIKE CONCAT('%', #{q.keyword}, '%'))
+        </if>
+        GROUP BY d.partner_id, c.code, c.name
+        HAVING COUNT(DISTINCT CASE WHEN d.kind = 'SALES_OUT' THEN d.id END) &gt; 0
+    </select>
+
+</mapper>

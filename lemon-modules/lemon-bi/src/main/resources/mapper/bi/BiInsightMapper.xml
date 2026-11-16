@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.bi.mapper.BiInsightMapper">
+
+    <select id="selectSalesByPeriod" resultType="com.lemon.erp.modules.bi.dto.BiInsight$PeriodRow">
+        SELECT period AS "period", SUM(amount) AS "amount", SUM(cost) AS "cost", SUM(profit) AS "profit", SUM(qty) AS "qty"
+        FROM bi_fact_sales
+        WHERE period &gt;= #{fromPeriod}
+        <if test="category != null and category != ''">
+            AND category IN (<include refid="com.lemon.erp.modules.wms.mapper.WmsMaterialCategoryMapper.subtreeCodes"><property name="code" value="category"/></include>)
+        </if>
+        GROUP BY period
+        ORDER BY period
+    </select>
+
+    <select id="selectPurchaseByPeriod" resultType="com.lemon.erp.modules.bi.dto.BiInsight$PeriodRow">
+        SELECT period AS "period", SUM(amount) AS "amount"
+        FROM bi_fact_purchase
+        WHERE period &gt;= #{fromPeriod}
+        GROUP BY period
+        ORDER BY period
+    </select>
+
+    <!-- 收入：60xx、63xx 贷方 - 借方；费用：64xx、66xx、67xx、68xx 借方 - 贷方 -->
+    <select id="selectFinanceByPeriod" resultType="com.lemon.erp.modules.bi.dto.BiInsight$PeriodRow">
+        SELECT f.period AS "period",
+               SUM(CASE WHEN a.code LIKE '60%' OR a.code LIKE '63%' THEN f.credit - f.debit ELSE 0 END) AS "revenue",
+               SUM(CASE WHEN a.code LIKE '64%' OR a.code LIKE '66%' OR a.code LIKE '67%' OR a.code LIKE '68%'
+                        THEN f.debit - f.credit ELSE 0 END) AS "expense"
+        FROM bi_fact_finance f
+        JOIN fin_account a ON a.id = f.account_id
+        WHERE f.period &gt;= #{fromPeriod} AND f.category = 'PROFIT'
+        GROUP BY f.period
+        ORDER BY f.period
+    </select>
+
+    <select id="selectTopCustomers" resultType="com.lemon.erp.modules.bi.dto.BiInsight$TopItem">
+        SELECT f.customer_id AS "id", c.name AS "name", SUM(f.amount) AS "amount", SUM(f.profit) AS "profit"
+        FROM bi_fact_sales f
+        JOIN scm_customer c ON c.id = f.customer_id
+        WHERE f.biz_date &gt;= #{from}
+        GROUP BY f.customer_id, c.name
+        ORDER BY SUM(f.amount) DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectTopMaterials" resultType="com.lemon.erp.modules.bi.dto.BiInsight$TopItem">
+        SELECT f.material_id AS "id", m.name AS "name", SUM(f.qty) AS "qty", SUM(f.amount) AS "amount"
+        FROM bi_fact_sales f
+        JOIN wms_material m ON m.id = f.material_id
+        WHERE f.biz_date &gt;= #{from}
+        GROUP BY f.material_id, m.name
+        ORDER BY SUM(f.amount) DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectInventoryByCategory" resultType="com.lemon.erp.modules.bi.dto.BiInsight$InventoryCategory">
+        SELECT COALESCE(category, '') AS "category", SUM(qty) AS "qty", SUM(amount) AS "amount", CAST(MAX(snap_date) AS CHAR(10)) AS "snapDate"
+        FROM bi_fact_inventory
+        WHERE snap_date = (SELECT MAX(snap_date) FROM bi_fact_inventory)
+        GROUP BY category
+        ORDER BY SUM(amount) DESC
+    </select>
+
+    <select id="selectLive" resultType="com.lemon.erp.modules.bi.dto.BiInsight$CockpitKpi">
+        SELECT
+            (SELECT COALESCE(SUM(amount - settled_amount), 0) FROM fin_bill WHERE kind = 'AR') AS "arBalance",
+            (SELECT COALESCE(SUM(amount - settled_amount), 0) FROM fin_bill
+             WHERE kind = 'AR' AND status &lt;&gt; 'SETTLED' AND due_date &lt; #{today}) AS "arOverdue",
+            (SELECT COALESCE(SUM(amount - settled_amount), 0) FROM fin_bill WHERE kind = 'AP') AS "apBalance",
+            (SELECT COALESCE(SUM(i.price * GREATEST(i.qty - i.done_qty + i.replenish_qty, 0)), 0)
+             FROM scm_order o JOIN scm_order_item i ON i.order_id = o.id
+             WHERE o.kind = 'SALES' AND o.status IN ('APPROVED', 'PARTIAL')) AS "openSalesAmount",
+            (SELECT COUNT(*) FROM mes_work_order WHERE status IN ('RELEASED', 'STARTED')) AS "openWorkOrders",
+            (SELECT COUNT(*) FROM mes_work_order WHERE status IN ('RELEASED', 'STARTED') AND plan_end &lt; #{today}) AS "lateWorkOrders",
+            (SELECT COUNT(*) FROM pm_project WHERE status = 'ACTIVE') AS "activeProjects",
+            (SELECT AVG(progress) FROM pm_project WHERE status = 'ACTIVE') AS "projectProgress",
+            (SELECT COUNT(*) FROM hr_employee WHERE status &lt;&gt; 'LEFT') AS "headcount",
+            (SELECT COALESCE(SUM(amount), 0) FROM crm_opportunity WHERE stage NOT IN ('WON', 'LOST')) AS "pipeline",
+            (SELECT COUNT(*) FROM crm_ticket WHERE status IN ('OPEN', 'PROCESSING')) AS "openTickets",
+            (SELECT COUNT(*) FROM crm_ticket WHERE status IN ('OPEN', 'PROCESSING') AND due_time &lt; #{now}) AS "overdueTickets"
+    </select>
+
+    <select id="selectAbcSource" resultType="com.lemon.erp.modules.bi.dto.BiInsight$AbcRow">
+        SELECT f.material_id AS "materialId", m.code AS "code", m.name AS "name", m.category AS "category",
+               SUM(f.qty) AS "qty", SUM(f.cost) AS "cost", SUM(f.amount) AS "amount"
+        FROM bi_fact_sales f
+        JOIN wms_material m ON m.id = f.material_id
+        WHERE f.biz_date &gt;= #{from}
+        GROUP BY f.material_id, m.code, m.name, m.category
+        HAVING SUM(f.amount) &gt; 0
+    </select>
+
+    <!-- 物料的最近出库（不含调拨）、最早入库业务日期：出入库单、调拨单取业务日期（在途调拨的调入取收货日期），盘点取盘点日期 -->
+    <sql id="flowDates">
+        SELECT f.material_id,
+               MAX(CASE WHEN f.qty &lt; 0 AND f.biz_type &lt;&gt; 'TRANSFER'
+                        THEN COALESCE(d.biz_date, c.biz_date) END) AS last_out,
+               MIN(CASE WHEN f.qty &gt; 0
+                        THEN COALESCE(CASE WHEN f.biz_type = 'TRANSFER' THEN d.receive_date END, d.biz_date, c.biz_date) END) AS first_in
+        FROM wms_stock_flow f
+        LEFT JOIN wms_stock_doc d ON f.biz_type IN ('IN', 'OUT', 'TRANSFER') AND d.id = f.doc_id
+        LEFT JOIN wms_check c ON f.biz_type = 'CHECK' AND c.id = f.doc_id
+        GROUP BY f.material_id
+    </sql>
+
+    <select id="selectSlowMoving" resultType="com.lemon.erp.modules.bi.dto.BiInsight$SlowMovingRow">
+        SELECT s.material_id AS "materialId", m.code AS "code", m.name AS "name", m.category AS "category", m.unit AS "unit",
+               SUM(s.qty) AS "qty",
+               CAST(MAX(t.last_out) AS CHAR(10)) AS "lastOut",
+               CAST(MAX(t.first_in) AS CHAR(10)) AS "firstIn",
+               (SELECT COALESCE(SUM(i.amount), 0) FROM bi_fact_inventory i
+                WHERE i.material_id = s.material_id AND i.snap_date = (SELECT MAX(snap_date) FROM bi_fact_inventory)) AS "amount"
+        FROM wms_stock s
+        JOIN wms_material m ON m.id = s.material_id
+        LEFT JOIN (<include refid="flowDates"/>) t ON t.material_id = s.material_id
+        GROUP BY s.material_id, m.code, m.name, m.category, m.unit
+        HAVING SUM(s.qty) &gt; 0 AND (MAX(t.last_out) IS NULL OR MAX(t.last_out) &lt; #{since})
+    </select>
+
+    <select id="selectMetric" resultType="java.math.BigDecimal">
+        <choose>
+            <when test="metric == 'AR_OVERDUE'">
+                SELECT COALESCE(SUM(amount - settled_amount), 0) FROM fin_bill
+                WHERE kind = 'AR' AND status &lt;&gt; 'SETTLED' AND due_date &lt; #{today}
+            </when>
+            <!-- 库存预警口径见 wms 的 WmsMaterialWarehouseLimitMapper.materialAlerts（按总库存比较合计，分仓库按仓库判断） -->
+            <when test="metric == 'STOCK_BELOW_SAFETY'">
+                SELECT COUNT(*) FROM wms_material m
+                JOIN (<include refid="com.lemon.erp.modules.wms.mapper.WmsMaterialWarehouseLimitMapper.materialAlerts"><property name="wh" value="null"/></include>) sa ON sa.material_id = m.id
+                WHERE m.status = 1 AND sa.alert = 'LOW'
+            </when>
+            <when test="metric == 'STOCK_ABOVE_MAX'">
+                SELECT COUNT(*) FROM wms_material m
+                JOIN (<include refid="com.lemon.erp.modules.wms.mapper.WmsMaterialWarehouseLimitMapper.materialAlerts"><property name="wh" value="null"/></include>) sa ON sa.material_id = m.id
+                WHERE m.status = 1 AND (sa.alert = 'HIGH' OR sa.high_count &gt; 0)
+            </when>
+            <when test="metric == 'SLOW_MOVING'">
+                SELECT COUNT(*) FROM (
+                    SELECT s.material_id FROM wms_stock s
+                    LEFT JOIN (<include refid="flowDates"/>) t ON t.material_id = s.material_id
+                    GROUP BY s.material_id
+                    HAVING SUM(s.qty) &gt; 0 AND (MAX(t.last_out) IS NULL OR MAX(t.last_out) &lt; #{since})) x
+            </when>
+            <when test="metric == 'GROSS_MARGIN'">
+                SELECT CASE WHEN SUM(amount) &gt; 0 THEN SUM(profit) * 100 / SUM(amount) END
+                FROM bi_fact_sales WHERE period = #{period}
+            </when>
+            <when test="metric == 'TICKET_OVERDUE'">
+                SELECT COUNT(*) FROM crm_ticket WHERE status IN ('OPEN', 'PROCESSING') AND due_time &lt; #{now}
+            </when>
+            <when test="metric == 'TASK_OVERDUE'">
+                SELECT COUNT(*) FROM pm_task t JOIN pm_project p ON p.id = t.project_id
+                WHERE p.status = 'ACTIVE' AND t.status &lt;&gt; 'DONE' AND t.plan_end &lt; #{today}
+                  AND NOT EXISTS (SELECT 1 FROM pm_task s WHERE s.parent_id = t.id)
+            </when>
+            <otherwise>
+                SELECT COUNT(*) FROM mes_work_order WHERE status IN ('RELEASED', 'STARTED') AND plan_end &lt; #{today}
+            </otherwise>
+        </choose>
+    </select>
+
+</mapper>

@@ -1,0 +1,277 @@
+package com.lemon.erp.modules.bi.service;
+
+import com.lemon.erp.common.i18n.Messages;
+import com.lemon.erp.common.util.Decimals;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.lemon.erp.common.exception.BizException;
+import com.lemon.erp.framework.security.SecurityUtils;
+import com.lemon.erp.modules.bi.dto.BiInsight;
+import com.lemon.erp.modules.bi.entity.BiAlertRule;
+import com.lemon.erp.modules.bi.mapper.BiAlertRuleMapper;
+import com.lemon.erp.modules.bi.mapper.BiInsightMapper;
+import com.lemon.erp.modules.bi.model.AbcClass;
+import com.lemon.erp.modules.bi.model.BiAlertMetric;
+import com.lemon.erp.modules.fin.dto.BudgetExecution;
+import com.lemon.erp.modules.fin.service.FinBudgetService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import static com.lemon.erp.common.util.Decimals.HUNDRED;
+
+/**
+ * 决策支持：销售预测（线性趋势 + 季节指数）、ABC 分类、呆滞物料、预警规则
+ */
+@Service
+@RequiredArgsConstructor
+public class BiDecisionService {
+
+    /** 呆滞判定：超过 90 天没有出库 */
+    public static final int SLOW_DAYS = 90;
+
+    private final BiInsightMapper insightMapper;
+    private final BiAlertRuleMapper ruleMapper;
+    private final FinBudgetService budgetService;
+
+    /**
+     * 销售预测：取近 24 个月的月销售额，对最近 12 个月做最小二乘线性回归得到趋势，
+     * 有满两年数据时乘以季节指数（同月销售额 / 年均月销售额）；预测未来 months 个月
+     *
+     * @param category 物料分类，为空预测全部
+     */
+    /** 驾驶舱、决策分析汇总全公司数据（不按部门拆分），只对有「全部数据」权限的用户开放 */
+    static void requireAllData() {
+        if (!SecurityUtils.getDataScope().all()) {
+            throw new BizException("bi.error.cockpitDecisionAnalysisAggregateCompanyWide");
+        }
+    }
+
+    public BiInsight.Forecast forecast(String category, int months) {
+        requireAllData();
+        if (months < 1 || months > 12) {
+            throw new BizException("bi.error.forecastMonthsMust");
+        }
+        YearMonth thisMonth = YearMonth.now();
+        YearMonth start = thisMonth.minusMonths(23);
+        Map<Integer, BiInsight.PeriodRow> rows = BiCockpitService.byPeriod(insightMapper.selectSalesByPeriod(BiCockpitService.period(start), category));
+        // 本月未结束，只用到上月为止的完整月份
+        List<BigDecimal> series = new ArrayList<>();
+        List<BiInsight.PeriodAmount> history = new ArrayList<>();
+        for (int i = 0; i < 24; i++) {
+            YearMonth ym = start.plusMonths(i);
+            BigDecimal v = BiCockpitService.value(rows, BiCockpitService.period(ym), BiInsight.PeriodRow::getAmount);
+            if (ym.isBefore(thisMonth)) {
+                series.add(v);
+            }
+            history.add(new BiInsight.PeriodAmount(BiCockpitService.period(ym), v));
+        }
+        int n = Math.min(12, series.size());
+        List<BigDecimal> recent = series.subList(series.size() - n, series.size());
+        // y = a + b * x，x 为 0..n-1
+        double sx = 0, sy = 0, sxy = 0, sxx = 0;
+        for (int x = 0; x < n; x++) {
+            double y = recent.get(x).doubleValue();
+            sx += x;
+            sy += y;
+            sxy += x * y;
+            sxx += x * x;
+        }
+        double b = n * sxx - sx * sx == 0 ? 0 : (n * sxy - sx * sy) / (n * sxx - sx * sx);
+        double a = (sy - b * sx) / n;
+        boolean seasonal = series.stream().limit(series.size() - 12L).anyMatch(v -> v.signum() > 0) && series.size() >= 23;
+        double yearAvg = seasonal ? series.stream().mapToDouble(BigDecimal::doubleValue).average().orElse(0) : 0;
+        List<BiInsight.PeriodAmount> forecast = new ArrayList<>();
+        for (int i = 0; i < months; i++) {
+            YearMonth ym = thisMonth.plusMonths(i);
+            double trend = a + b * (n + i);
+            double index = 1;
+            if (seasonal && yearAvg > 0) {
+                // 季节指数：前两年同月的平均 / 两年月均
+                double same = 0;
+                int cnt = 0;
+                for (int k = 0; k < series.size(); k++) {
+                    if (start.plusMonths(k).getMonthValue() == ym.getMonthValue()) {
+                        same += series.get(k).doubleValue();
+                        cnt++;
+                    }
+                }
+                index = cnt == 0 || same == 0 ? 1 : (same / cnt) / yearAvg;
+            }
+            forecast.add(new BiInsight.PeriodAmount(BiCockpitService.period(ym),
+                    BigDecimal.valueOf(Math.max(0, trend * index)).setScale(2, RoundingMode.HALF_UP)));
+        }
+        return new BiInsight.Forecast(history, forecast, BigDecimal.valueOf(b).setScale(2, RoundingMode.HALF_UP), seasonal,
+                seasonal ? Messages.get("bi.text.linearTrendSeasonalIndex") : Messages.get("bi.text.linearTrendLastMonths", n));
+    }
+
+    /**
+     * ABC 分类：近一年各物料的销售成本（没有成本时用销售额）降序累计，累计占比 70% 以内 A 类、90% 以内 B 类，其余 C 类
+     */
+    public BiInsight.Abc abc() {
+        requireAllData();
+        List<BiInsight.AbcRow> rows = new ArrayList<>(insightMapper.selectAbcSource(LocalDate.now().minusYears(1)));
+        boolean useCost = rows.stream().anyMatch(r -> dec(r.getCost()).signum() > 0);
+        for (BiInsight.AbcRow r : rows) {
+            r.setValue(dec(useCost ? r.getCost() : r.getAmount()));
+        }
+        rows.sort(Comparator.comparing(BiInsight.AbcRow::getValue).reversed());
+        BigDecimal total = Decimals.sum(rows, BiInsight.AbcRow::getValue);
+        BigDecimal cum = BigDecimal.ZERO;
+        Map<AbcClass, long[]> counts = new EnumMap<>(AbcClass.class);
+        Map<AbcClass, BigDecimal> values = new EnumMap<>(AbcClass.class);
+        for (AbcClass c : AbcClass.values()) {
+            counts.put(c, new long[]{0});
+            values.put(c, BigDecimal.ZERO);
+        }
+        for (BiInsight.AbcRow r : rows) {
+            BigDecimal v = r.getValue();
+            BigDecimal before = total.signum() == 0 ? BigDecimal.ZERO : cum.multiply(HUNDRED).divide(total, 2, RoundingMode.HALF_UP);
+            cum = cum.add(v);
+            BigDecimal pct = total.signum() == 0 ? BigDecimal.ZERO : cum.multiply(HUNDRED).divide(total, 2, RoundingMode.HALF_UP);
+            AbcClass cls = AbcClass.of(before);
+            r.setShare(total.signum() == 0 ? BigDecimal.ZERO : v.multiply(HUNDRED).divide(total, 2, RoundingMode.HALF_UP));
+            r.setCumulative(pct);
+            r.setAbcClass(cls);
+            counts.get(cls)[0]++;
+            values.merge(cls, v, BigDecimal::add);
+        }
+        List<BiInsight.AbcSummary> summary = new ArrayList<>();
+        counts.forEach((c, cnt) -> summary.add(new BiInsight.AbcSummary(c, cnt[0], values.get(c),
+                total.signum() == 0 ? BigDecimal.ZERO : values.get(c).multiply(HUNDRED).divide(total, 1, RoundingMode.HALF_UP))));
+        return new BiInsight.Abc(rows, summary, useCost ? Messages.get("bi.text.costSales") : Messages.get("bi.text.sales"), total);
+    }
+
+    /** 呆滞物料：有库存但超过 days 天没有出库（按出入库单、盘点单的业务日期，补录的历史单据按其业务日期计算） */
+    public List<BiInsight.SlowMovingRow> slowMoving(int days) {
+        LocalDate today = LocalDate.now();
+        List<BiInsight.SlowMovingRow> rows = new ArrayList<>(insightMapper.selectSlowMoving(today.minusDays(days)));
+        for (BiInsight.SlowMovingRow r : rows) {
+            String since = r.getLastOut() != null ? r.getLastOut() : r.getFirstIn();
+            r.setIdleDays(since == null ? null : ChronoUnit.DAYS.between(LocalDate.parse(since.substring(0, 10)), today));
+        }
+        rows.sort(Comparator.comparing((BiInsight.SlowMovingRow r) -> dec(r.getAmount())).reversed());
+        return rows;
+    }
+
+    // ---------------------------------------------------------------- 预警
+
+    public List<BiInsight.MetricOption> metrics() {
+        List<BiInsight.MetricOption> list = new ArrayList<>();
+        for (BiAlertMetric m : BiAlertMetric.values()) {
+            list.add(new BiInsight.MetricOption(m.name(), Messages.get(m.getLabel()), Messages.get(m.getUnit())));
+        }
+        return list;
+    }
+
+    public List<BiAlertRule> rules() {
+        return ruleMapper.selectList(Wrappers.<BiAlertRule>lambdaQuery().orderByAsc(BiAlertRule::getId));
+    }
+
+    public void saveRule(Long id, BiAlertRule rule) {
+        if (BiAlertMetric.of(rule.getMetric()) == null) {
+            throw new BizException("bi.error.invalidMetric");
+        }
+        if (rule.getEnabled() == null) rule.setEnabled(1);
+        // 同名规则会在预警列表中重复出现（如演示数据、手工再建一条内置规则），名称不能重复
+        String name = rule.getName() == null ? null : rule.getName().trim();
+        if (name != null && ruleMapper.exists(Wrappers.<BiAlertRule>lambdaQuery().eq(BiAlertRule::getName, name)
+                .ne(id != null, BiAlertRule::getId, id))) {
+            throw new BizException("bi.error.alertRuleNameExists", name);
+        }
+        rule.setName(name);
+        rule.setId(id);
+        if (id == null) {
+            ruleMapper.insert(rule);
+        } else {
+            if (ruleMapper.selectById(id) == null) {
+                throw new BizException("bi.error.alertRuleNotFound");
+            }
+            ruleMapper.updateById(rule);
+        }
+    }
+
+    public void deleteRule(Long id) {
+        ruleMapper.deleteById(id);
+    }
+
+    /**
+     * 计算所有启用规则的指标值，返回每条规则的当前值与是否触发
+     */
+    public List<BiInsight.AlertResult> alerts() {
+        LocalDate today = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now();
+        int period = today.getYear() * 100 + today.getMonthValue();
+        Map<BiAlertMetric, BigDecimal> cache = new LinkedHashMap<>();
+        List<BiInsight.AlertResult> result = new ArrayList<>();
+        for (BiAlertRule rule : rules()) {
+            if (!Integer.valueOf(1).equals(rule.getEnabled())) {
+                continue;
+            }
+            BiAlertMetric metric = BiAlertMetric.of(rule.getMetric());
+            if (metric == null) {
+                continue;
+            }
+            BigDecimal value = cache.computeIfAbsent(metric, m -> metricValue(m, today, now, period));
+            boolean triggered = value != null && rule.getOperator().test(value, rule.getThreshold());
+            result.add(new BiInsight.AlertResult(rule.getId(), rule.getName(), metric.name(), Messages.get(metric.getLabel()),
+                    Messages.get(metric.getUnit()), rule.getOperator(), rule.getThreshold(), rule.getLevel(),
+                    value == null ? null : value.setScale(2, RoundingMode.HALF_UP), triggered, rule.getRemark()));
+        }
+        return result;
+    }
+
+    /** 预警指标的当前值（智能报告的库存快照等也使用） */
+    public BigDecimal currentValue(BiAlertMetric metric) {
+        LocalDate today = LocalDate.now();
+        return metricValue(metric, today, LocalDateTime.now(), today.getYear() * 100 + today.getMonthValue());
+    }
+
+    private BigDecimal metricValue(BiAlertMetric m, LocalDate today, LocalDateTime now, int period) {
+        return m == BiAlertMetric.BUDGET_OVERRUN ? budgetOverrun()
+                : insightMapper.selectMetric(m.name(), today, now, period, today.minusDays(SLOW_DAYS));
+    }
+
+    /** 本年累计（截至本月）执行数超过累计预算的预算科目，按超支金额降序（智能报告的预警分析使用） */
+    public List<BudgetExecution> overBudget() {
+        LocalDate today = LocalDate.now();
+        int month = today.getMonthValue();
+        List<BudgetExecution> list = new ArrayList<>();
+        for (BudgetExecution e : budgetService.execution(today.getYear(), null)) {
+            if (ytd(e.budgets(), month).signum() > 0 && ytd(e.actuals(), month).compareTo(ytd(e.budgets(), month)) > 0) {
+                list.add(e);
+            }
+        }
+        list.sort(Comparator.comparing((BudgetExecution e) -> ytd(e.actuals(), month).subtract(ytd(e.budgets(), month))).reversed());
+        return list;
+    }
+
+    /** 前 month 个月的累计 */
+    public static BigDecimal ytd(List<BigDecimal> values, int month) {
+        BigDecimal sum = BigDecimal.ZERO;
+        for (int i = 0; i < month && i < values.size(); i++) {
+            sum = sum.add(values.get(i) == null ? BigDecimal.ZERO : values.get(i));
+        }
+        return sum;
+    }
+
+    /** 本年累计（截至本月）执行数超过累计预算的预算科目数 */
+    private BigDecimal budgetOverrun() {
+        return BigDecimal.valueOf(overBudget().size());
+    }
+
+    private static BigDecimal dec(Object v) {
+        return v == null ? BigDecimal.ZERO : new BigDecimal(v.toString());
+    }
+}

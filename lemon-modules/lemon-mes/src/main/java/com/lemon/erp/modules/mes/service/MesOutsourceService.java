@@ -1,0 +1,271 @@
+package com.lemon.erp.modules.mes.service;
+
+import com.lemon.erp.modules.wms.model.StockOutType;
+import com.lemon.erp.modules.wms.model.StockInType;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.lemon.erp.common.exception.BizException;
+import com.lemon.erp.common.i18n.Messages;
+import com.lemon.erp.modules.mes.dto.OutsourceCandidate;
+import com.lemon.erp.modules.mes.dto.OutsourceStockRequest;
+import com.lemon.erp.modules.mes.entity.MesBom;
+import com.lemon.erp.modules.mes.entity.MesBomItem;
+import com.lemon.erp.modules.mes.entity.MesMaterialPlan;
+import com.lemon.erp.modules.mes.entity.MesOutsourceConsume;
+import com.lemon.erp.modules.mes.entity.MesOutsourceMaterial;
+import com.lemon.erp.modules.mes.mapper.MesOutsourceConsumeMapper;
+import com.lemon.erp.modules.mes.mapper.MesOutsourceMaterialMapper;
+import com.lemon.erp.modules.mes.model.SupplyType;
+import com.lemon.erp.modules.scm.entity.ScmOrder;
+import com.lemon.erp.modules.scm.event.TradeDocConfirmedEvent;
+import com.lemon.erp.modules.scm.model.OrderKind;
+import com.lemon.erp.modules.scm.model.TradeKind;
+import com.lemon.erp.modules.scm.service.ScmOrderService;
+import com.lemon.erp.modules.wms.dto.StockDocItemRequest;
+import com.lemon.erp.modules.wms.dto.StockDocRequest;
+import com.lemon.erp.modules.wms.model.StockBizType;
+import com.lemon.erp.modules.wms.service.StockCostService;
+import com.lemon.erp.modules.wms.service.WmsStockDocService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * 委外加工：委外采购订单（物料属性为委外的物料）按默认 BOM 展开委外用料，物料属性不是委外的自制件偶尔委外加工时，
+ * 在委外用料中手工选择订单明细生成用料（{@link #addLines}）；
+ * 发料给加工商生成委外发料出库单（成本核算计入委托加工物资），加工商退回生成委外收回入库单；
+ * 委外件收货（采购入库）时按单位用量核销用料，成本核算把核销的子件成本转入委外件
+ */
+@Service
+@RequiredArgsConstructor
+public class MesOutsourceService {
+
+    private final MesOutsourceMaterialMapper materialMapper;
+    private final MesOutsourceConsumeMapper consumeMapper;
+    private final MesBomService bomService;
+    private final MesMaterialService materialPlanService;
+    private final ScmOrderService orderService;
+    private final WmsStockDocService stockDocService;
+    private final MesStockCosts stockCosts;
+    private final StockCostService costService;
+
+    /** 委外用料（第一次查询时按订单的委外件生成） */
+    @Transactional
+    public List<MesOutsourceMaterial> materials(Long orderId) {
+        orderService.detail(OrderKind.PURCHASE, orderId);
+        ensureLines(orderId);
+        return materialMapper.selectByOrder(orderId);
+    }
+
+    /**
+     * 可以按委外加工生成用料的明细：有默认 BOM、还没有生成用料、还没有收货（委外件已自动生成，不在其中）
+     */
+    @Transactional
+    public List<OutsourceCandidate> candidates(Long orderId) {
+        orderService.detail(OrderKind.PURCHASE, orderId);
+        Set<Long> generated = ensureLines(orderId).stream().map(MesOutsourceMaterial::getOrderItemId).collect(Collectors.toSet());
+        List<Map<String, Object>> items = materialMapper.selectOrderItems(orderId);
+        Map<Long, MesBom> boms = bomService.defaultBoms(items.stream().map(i -> ((Number) i.get("materialId")).longValue()).distinct().toList());
+        return items.stream()
+                .filter(i -> !generated.contains(((Number) i.get("orderItemId")).longValue())
+                        && boms.containsKey(((Number) i.get("materialId")).longValue())
+                        && new BigDecimal(i.get("doneQty").toString()).signum() == 0)
+                .map(i -> new OutsourceCandidate(((Number) i.get("orderItemId")).longValue(), ((Number) i.get("materialId")).longValue(),
+                        (String) i.get("materialCode"), (String) i.get("materialName"), (String) i.get("spec"),
+                        new BigDecimal(i.get("qty").toString())))
+                .toList();
+    }
+
+    /**
+     * 把选中的订单明细按委外加工生成用料（按默认 BOM 展开，不要求物料属性为委外），同一产品可以有时自制、有时委外。
+     * 只能选择 {@link #candidates} 中的明细：已收货的明细生成用料后之前的收货没有核销，不允许
+     */
+    @Transactional
+    public void addLines(Long orderId, List<Long> orderItemIds) {
+        executableOrder(orderId);
+        Set<Long> allowed = candidates(orderId).stream().map(OutsourceCandidate::orderItemId).collect(Collectors.toSet());
+        Set<Long> chosen = new HashSet<>(orderItemIds);
+        if (!allowed.containsAll(chosen)) {
+            throw new BizException("mes.error.outsourceItemsNotAllowed");
+        }
+        List<Map<String, Object>> items = materialMapper.selectOrderItems(orderId).stream()
+                .filter(i -> chosen.contains(((Number) i.get("orderItemId")).longValue())).toList();
+        insertLines(orderId, items, false);
+    }
+
+    @Transactional
+    public void issue(Long orderId, OutsourceStockRequest req) {
+        ScmOrder order = executableOrder(orderId);
+        List<MesOutsourceMaterial> lines = ensureLines(orderId);
+        Map<MesOutsourceMaterial, BigDecimal> alloc = allocate(lines, req.items(), l -> l.getRequiredQty().subtract(l.getIssuedQty()), "mes.label.issue");
+        stockDocService.createConfirmed(StockBizType.OUT, new StockDocRequest(StockOutType.OUTSOURCE, req.warehouseId(), null,
+                req.bizDate(), req.remark() == null ? "委外发料 " + order.getOrderNo() : req.remark(), req.items()), order.getOrderNo()); // i18n-ignore
+        alloc.forEach((line, qty) -> materialMapper.addIssued(line.getId(), qty));
+    }
+
+    @Transactional
+    public void returnMaterials(Long orderId, OutsourceStockRequest req) {
+        ScmOrder order = orderService.detail(OrderKind.PURCHASE, orderId);
+        List<MesOutsourceMaterial> lines = ensureLines(orderId);
+        Map<MesOutsourceMaterial, BigDecimal> alloc = allocate(lines, req.items(), MesOutsourceService::atSupplier, "mes.label.return");
+        // 委外收回按该订单该子件的发料平均成本入库
+        Map<Long, BigDecimal> costs = stockCosts.outsourceIssueUnitCosts(order.getOrderNo());
+        List<StockDocItemRequest> items = req.items().stream().map(i -> i.withCost(costs.get(i.materialId()), null)).toList();
+        stockDocService.createConfirmed(StockBizType.IN, new StockDocRequest(StockInType.OUTSOURCE_RETURN, req.warehouseId(), null,
+                req.bizDate(), req.remark() == null ? "委外退料 " + order.getOrderNo() : req.remark(), items), order.getOrderNo()); // i18n-ignore
+        alloc.forEach((line, qty) -> {
+            if (materialMapper.addReturned(line.getId(), qty) == 0) {
+                throw new BizException("mes.error.returnQuantityExceedsBalanceSubcontractor");
+            }
+        });
+    }
+
+    /** 委外件收货 / 退货：按单位用量核销（退货冲回）用料，并把核销的子件成本追加到委外件的实时库存成本，与入库同一事务 */
+    @EventListener
+    public void onTradeDocConfirmed(TradeDocConfirmedEvent e) {
+        boolean in = e.kind() == TradeKind.PURCHASE_IN;
+        if (!in && e.kind() != TradeKind.PURCHASE_RETURN) {
+            return;
+        }
+        List<Map<String, Object>> items = materialMapper.selectTradeItems(e.docId());
+        if (items.isEmpty()) {
+            return;
+        }
+        Long orderId = ((Number) items.get(0).get("orderId")).longValue();
+        List<MesOutsourceMaterial> lines = ensureLines(orderId);
+        if (lines.isEmpty()) {
+            return;
+        }
+        // 委外件的实时成本 = 加工费（采购入库已按不含税单价计价）+ 核销的子件成本（按该订单的发料平均成本），退货反向冲回
+        Map<Long, BigDecimal> issueCosts = stockCosts.outsourceIssueUnitCosts((String) items.get(0).get("orderNo"));
+        Map<Long, BigDecimal> extra = new HashMap<>();
+        for (Map<String, Object> item : items) {
+            Long orderItemId = ((Number) item.get("orderItemId")).longValue();
+            BigDecimal qty = new BigDecimal(item.get("qty").toString());
+            for (MesOutsourceMaterial line : lines) {
+                if (!orderItemId.equals(line.getOrderItemId())) {
+                    continue;
+                }
+                BigDecimal consume = qty.multiply(line.getUnitQty()).setScale(4, RoundingMode.HALF_UP);
+                if (!in) {
+                    consume = consume.negate();
+                }
+                materialMapper.addConsumed(line.getId(), consume);
+                BigDecimal unit = issueCosts.get(line.getMaterialId());
+                if (unit != null) {
+                    extra.merge(line.getProductId(), consume.multiply(unit), BigDecimal::add);
+                }
+                MesOutsourceConsume c = new MesOutsourceConsume();
+                c.setOrderId(orderId);
+                c.setTradeDocId(e.docId());
+                c.setProductId(line.getProductId());
+                c.setMaterialId(line.getMaterialId());
+                c.setQty(consume);
+                c.setBizDate(e.bizDate());
+                consumeMapper.insert(c);
+            }
+        }
+        Object wmsDocId = items.get(0).get("wmsDocId");
+        if (wmsDocId != null) {
+            costService.addCost(in ? StockBizType.IN : StockBizType.OUT, ((Number) wmsDocId).longValue(), extra);
+        }
+    }
+
+    /** 加工商处结存 = 已发 - 已退 - 已核销 */
+    private static BigDecimal atSupplier(MesOutsourceMaterial l) {
+        return l.getIssuedQty().subtract(l.getReturnedQty()).subtract(l.getConsumedQty());
+    }
+
+    private ScmOrder executableOrder(Long orderId) {
+        ScmOrder order = orderService.detail(OrderKind.PURCHASE, orderId);
+        if (!order.getStatus().isExecutable()) {
+            throw new BizException("mes.error.outsourcingOrderNotApprovedPartiallyCompleted", order.getOrderNo());
+        }
+        return order;
+    }
+
+    /** 按物料把发料 / 退料数量分配到用料行（同一子件用于多个委外件时依次分配，最后一行承担超出部分） */
+    private static Map<MesOutsourceMaterial, BigDecimal> allocate(List<MesOutsourceMaterial> lines, List<StockDocItemRequest> items,
+                                                                  java.util.function.Function<MesOutsourceMaterial, BigDecimal> room,
+                                                                  String action) {
+        Map<Long, BigDecimal> byMaterial = new LinkedHashMap<>();
+        items.forEach(i -> byMaterial.merge(i.materialId(), i.qty(), BigDecimal::add));
+        Map<MesOutsourceMaterial, BigDecimal> result = new LinkedHashMap<>();
+        byMaterial.forEach((materialId, qty) -> {
+            List<MesOutsourceMaterial> candidates = lines.stream().filter(l -> l.getMaterialId().equals(materialId)).toList();
+            if (candidates.isEmpty()) {
+                throw new BizException("mes.error.materialNotOutsourcingOrderSMaterials", Messages.get(action));
+            }
+            BigDecimal left = qty;
+            for (int k = 0; k < candidates.size() && left.signum() > 0; k++) {
+                MesOutsourceMaterial l = candidates.get(k);
+                BigDecimal take = k == candidates.size() - 1 ? left : left.min(room.apply(l).max(BigDecimal.ZERO));
+                if (take.signum() > 0) {
+                    result.merge(l, take, BigDecimal::add);
+                    left = left.subtract(take);
+                }
+            }
+        });
+        return result;
+    }
+
+    /** 按订单的委外件生成用料行（已生成的不再生成） */
+    private List<MesOutsourceMaterial> ensureLines(Long orderId) {
+        List<MesOutsourceMaterial> existing = materialMapper.selectList(Wrappers.<MesOutsourceMaterial>lambdaQuery()
+                .eq(MesOutsourceMaterial::getOrderId, orderId));
+        if (!existing.isEmpty()) {
+            return existing;
+        }
+        insertLines(orderId, materialMapper.selectOrderItems(orderId), true);
+        return materialMapper.selectList(Wrappers.<MesOutsourceMaterial>lambdaQuery().eq(MesOutsourceMaterial::getOrderId, orderId));
+    }
+
+    /**
+     * 按默认 BOM 生成订单明细的用料行
+     *
+     * @param outsourceOnly 只生成物料属性为委外的明细（自动生成）；false 时不限物料属性（手工选择的明细）
+     */
+    private void insertLines(Long orderId, List<Map<String, Object>> items, boolean outsourceOnly) {
+        if (items.isEmpty()) {
+            return;
+        }
+        List<Long> materialIds = items.stream().map(i -> ((Number) i.get("materialId")).longValue()).distinct().toList();
+        Map<Long, MesMaterialPlan> plans = materialPlanService.plans(materialIds);
+        Map<Long, MesBom> boms = bomService.defaultBoms(materialIds);
+        Map<Long, List<MesBomItem>> bomItems = boms.isEmpty() ? Map.of() : bomService.items(boms.values().stream().map(MesBom::getId).toList());
+        List<MesOutsourceMaterial> lines = new ArrayList<>();
+        for (Map<String, Object> item : items) {
+            Long productId = ((Number) item.get("materialId")).longValue();
+            MesBom bom = boms.get(productId);
+            if (bom == null || outsourceOnly && MesMaterialService.supplyType(plans.get(productId), true) != SupplyType.OUTSOURCE) {
+                continue;
+            }
+            BigDecimal qty = new BigDecimal(item.get("qty").toString());
+            for (MesBomItem bi : bomItems.getOrDefault(bom.getId(), List.of())) {
+                MesOutsourceMaterial l = new MesOutsourceMaterial();
+                l.setOrderId(orderId);
+                l.setOrderItemId(((Number) item.get("orderItemId")).longValue());
+                l.setProductId(productId);
+                l.setMaterialId(bi.getMaterialId());
+                BigDecimal unit = WoBomExpander.unitQty(bi);
+                l.setUnitQty(unit.setScale(6, RoundingMode.HALF_UP));
+                l.setRequiredQty(qty.multiply(unit).setScale(4, RoundingMode.HALF_UP));
+                lines.add(l);
+            }
+        }
+        if (!lines.isEmpty()) {
+            materialMapper.insertBatch(lines);
+        }
+    }
+}

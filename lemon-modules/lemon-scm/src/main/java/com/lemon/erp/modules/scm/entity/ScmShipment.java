@@ -1,0 +1,95 @@
+package com.lemon.erp.modules.scm.entity;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.lemon.erp.common.base.BaseEntity;
+import com.lemon.erp.modules.scm.model.FreightBearer;
+import com.lemon.erp.modules.scm.model.ShipmentStatus;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+
+/**
+ * 物流发运单：由销售出库单生成，跟踪承运商、运单号与物流动态。只作为查询结果返回，新增 / 修改使用 ShipmentRequest
+ */
+@Data
+@EqualsAndHashCode(callSuper = true)
+@TableName("scm_shipment")
+public class ScmShipment extends BaseEntity {
+
+    private String shipNo;
+
+    /** 销售出库单 */
+    private Long tradeDocId;
+
+    private Long customerId;
+
+    /** 承运商，字典 scm_carrier */
+    private String carrier;
+
+    private String trackingNo;
+
+    private BigDecimal freight;
+
+    /** 运费承担：本公司承担（销售费用）/ 客户承担（代垫，计入客户应收） */
+    private FreightBearer freightBearer;
+
+    /** 承运商（供应商），有运费时生成应付单 */
+    private Long carrierSupplierId;
+
+    /** 运费应付单 */
+    private Long freightBillId;
+
+    /** 代垫运费应收单（客户承担时） */
+    private Long freightArBillId;
+
+    private String receiver;
+
+    private String phone;
+
+    private String address;
+
+    private LocalDate shipDate;
+
+    private LocalDate signDate;
+
+    /** 发运状态 */
+    private ShipmentStatus status;
+
+    private String remark;
+
+    private Long deptId;
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private Long createBy;
+
+    @TableField(exist = false)
+    private String tradeDocNo;
+
+    @TableField(exist = false)
+    private String orderNo;
+
+    @TableField(exist = false)
+    private String customerName;
+
+    @TableField(exist = false)
+    private String carrierSupplierCode;
+
+    @TableField(exist = false)
+    private String carrierSupplierName;
+
+    @TableField(exist = false)
+    private String createByName;
+
+    /** 运费已在销售出库单登记：发运单的运费从出库单带出，不能修改，发货时不再生成运费单据 */
+    @TableField(exist = false)
+    private Boolean freightOnDoc;
+
+    /** 物流动态，仅详情返回，按时间倒序 */
+    @TableField(exist = false)
+    private List<ScmShipmentTrack> tracks;
+}
