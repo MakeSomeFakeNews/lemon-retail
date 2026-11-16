@@ -46,6 +46,8 @@ public class SecurityConfig {
                         .requestMatchers("/auth/im/**").permitAll()
                         // 微信小程序登录（解除绑定需要登录）
                         .requestMatchers("/auth/miniapp/config", "/auth/miniapp/login", "/auth/miniapp/choose", "/auth/miniapp/bind").permitAll()
+                        // 微信小店消息推送：按店铺的推送 Token 校验签名（WxCallbackService）
+                        .requestMatchers("/channel/wx-shop/callback/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((req, resp, ex) ->

@@ -143,6 +143,23 @@ public class ScmOrderService {
         return orderMapper.selectById(order.getId());
     }
 
+    /**
+     * 外部渠道（微信小店等）已成交的订单：按渠道的实付单价生成并直接审核（不走审批、不应用促销、不校验限价和信用额度）。
+     * 可在没有登录用户的线程中调用（制单人、审核人为空），调用方负责事务
+     *
+     * @param source 订单来源，不能是手工、补货建议、直接开单
+     * @return 新订单 ID
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Long createExternalApproved(OrderKind kind, OrderRequest req, OrderSource source) {
+        if (source == OrderSource.MANUAL || source == OrderSource.REORDER || source == OrderSource.DIRECT) {
+            throw new IllegalArgumentException("source"); // i18n-ignore 内部错误
+        }
+        ScmOrder order = insertDraft(kind, req, source, false, false, null);
+        approveDirect(order.getId());
+        return order.getId();
+    }
+
     private ScmOrder insertDraft(OrderKind kind, OrderRequest req, OrderSource source, boolean promote, boolean checkPrice,
                                  Long salesmanId) {
         if (source == OrderSource.MANUAL || source == OrderSource.DIRECT) {
@@ -295,6 +312,10 @@ public class ScmOrderService {
     public void unapprove(OrderKind kind, Long id) {
         ScmOrder order = getAccessible(kind, id);
         checkNotDirect(order);
+        if (order.getSource() == OrderSource.WX_SHOP) {
+            // 渠道订单与线上订单关联，取消应在线上处理（售后），不能反审核修改
+            throw new BizException("scm.error.externalOrderCannotUnapprove", order.getOrderNo());
+        }
         if (orderMapper.unapprove(id) == 0) {
             throw new BizException("scm.error.orderHasReceiptsDeliveriesNotApproved");
         }

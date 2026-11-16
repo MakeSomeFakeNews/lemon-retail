@@ -319,4 +319,20 @@ export default {
   4261: 'Edit Price Adjustment', // 调价单修改
   4262: 'Delete Price Adjustment', // 调价单删除
   4263: 'Approve Price Adjustment', // 调价单审核
+  // 线上渠道（微信小店）
+  18: 'Online Channels', // 线上渠道
+  981: 'WeChat Shop', // 微信小店
+  430: 'Shop Settings', // 店铺设置
+  431: 'Product Mapping', // 商品映射
+  432: 'Channel Orders', // 渠道订单
+  433: 'After-sales', // 售后单
+  434: 'Sync Logs', // 同步日志
+  4300: 'Create Shop', // 店铺新增
+  4301: 'Edit Shop', // 店铺修改
+  4302: 'Delete Shop', // 店铺删除
+  4303: 'Sync Now', // 立即同步
+  4310: 'Edit Product Mapping', // 商品映射修改
+  4320: 'Ship & Process Orders', // 订单发货与处理
+  4321: 'View Receiver Info', // 查看收货信息
+  4330: 'Handle After-sales', // 售后处理
 }

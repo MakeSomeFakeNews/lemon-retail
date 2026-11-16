@@ -2,6 +2,12 @@
 -- 默认账号：admin / admin123（超级管理员）、test / admin123（普通用户，只有查看权限，数据权限为本部门及以下）
 -- 工作流引擎的 ACT_ 开头的表由 Flowable 启动时自动创建，不在本脚本中
 
+DROP TABLE IF EXISTS ch_wx_sync_log;
+DROP TABLE IF EXISTS ch_wx_aftersale;
+DROP TABLE IF EXISTS ch_wx_order_item;
+DROP TABLE IF EXISTS ch_wx_order;
+DROP TABLE IF EXISTS ch_wx_product;
+DROP TABLE IF EXISTS ch_wx_shop;
 DROP TABLE IF EXISTS ai_report;
 DROP TABLE IF EXISTS ai_cleanse_suggestion;
 DROP TABLE IF EXISTS ai_cleanse_task;
@@ -2658,6 +2664,174 @@ CREATE TABLE ai_report (
     KEY idx_ai_report_user (user_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '智能报告（周报 / 月报）';
 
+-- ---------------------------------------------------------------- 线上渠道：微信小店（店铺设置、商品映射、渠道订单、售后单、同步日志）
+
+CREATE TABLE ch_wx_shop (
+    id                  BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id           BIGINT        NOT NULL DEFAULT 1 COMMENT '租户ID',
+    name                VARCHAR(64)   NOT NULL COMMENT '店铺名称',
+    mode                VARCHAR(16)   NOT NULL DEFAULT 'MOCK' COMMENT '对接方式(字典 ch_wx_shop_mode) MOCK模拟店铺 LIVE微信小店接口',
+    app_id              VARCHAR(64)            DEFAULT NULL COMMENT '小店 AppID',
+    app_secret          VARCHAR(128)           DEFAULT NULL COMMENT '小店 AppSecret，不返回前端',
+    push_token          VARCHAR(64)            DEFAULT NULL COMMENT '消息推送 Token（校验推送签名），不返回前端',
+    aes_key             VARCHAR(64)            DEFAULT NULL COMMENT '消息加密密钥 EncodingAESKey（安全模式，43 位），不返回前端',
+    store_id            BIGINT        NOT NULL COMMENT '绑定门店：渠道订单、售后单归属该门店（按门店的数据权限过滤）',
+    warehouse_id        BIGINT        NOT NULL COMMENT '发货仓库（绑定门店的仓库）：库存同步、出库、退货入库',
+    customer_id         BIGINT        NOT NULL COMMENT '生成销售订单的客户（scm_customer），未选择时自动创建「微信小店顾客」',
+    return_address_id   VARCHAR(64)            DEFAULT NULL COMMENT '退货地址 ID（小店后台的地址编号，同意退货时使用）',
+    stock_sync_enabled  TINYINT       NOT NULL DEFAULT 0 COMMENT '定时同步库存 1是 0否',
+    safety_stock        DECIMAL(18,4) NOT NULL DEFAULT 0 COMMENT '安全库存：推送数量 = 可用库存 − 已付款未出库的渠道订单数量 − 安全库存',
+    stock_sync_interval INT           NOT NULL DEFAULT 30 COMMENT '库存同步间隔（分钟）',
+    order_sync_enabled  TINYINT       NOT NULL DEFAULT 1 COMMENT '定时同步订单和售后单 1是 0否',
+    auto_create_order   TINYINT       NOT NULL DEFAULT 1 COMMENT '付款后自动生成并审核销售订单 1是 0否（否则手工生成）',
+    status              TINYINT       NOT NULL DEFAULT 1 COMMENT '状态(字典 sys_common_status) 1启用 0停用：停用的店铺不同步、不处理推送',
+    stock_synced_at     DATETIME               DEFAULT NULL COMMENT '最近库存同步时间',
+    order_synced_to     DATETIME               DEFAULT NULL COMMENT '订单已同步到的时间（增量拉取的起点，向前重叠 10 分钟）',
+    aftersale_synced_to DATETIME               DEFAULT NULL COMMENT '售后单已同步到的时间',
+    remark              VARCHAR(255)           DEFAULT NULL COMMENT '备注',
+    create_by           BIGINT                 DEFAULT NULL COMMENT '创建人',
+    create_time         DATETIME               DEFAULT NULL COMMENT '创建时间',
+    update_time         DATETIME               DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_ch_wx_shop_name (name, tenant_id),
+    KEY idx_ch_wx_shop_store (store_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '微信小店店铺设置（每个租户可以有多个店铺）';
+
+CREATE TABLE ch_wx_product (
+    id               BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id        BIGINT        NOT NULL DEFAULT 1 COMMENT '租户ID',
+    shop_id          BIGINT        NOT NULL COMMENT '店铺',
+    product_id       VARCHAR(64)   NOT NULL COMMENT '小店商品 ID',
+    sku_id           VARCHAR(64)   NOT NULL COMMENT '小店 SKU ID',
+    title            VARCHAR(255)           DEFAULT NULL COMMENT '商品标题',
+    sku_attrs        VARCHAR(255)           DEFAULT NULL COMMENT '规格，如 颜色:红;尺码:L',
+    out_sku_id       VARCHAR(64)            DEFAULT NULL COMMENT '商家编码（自动匹配物料编码 / 条码）',
+    sku_code         VARCHAR(64)            DEFAULT NULL COMMENT 'SKU 编码 / 条码（商家编码匹配不到时再匹配）',
+    price            DECIMAL(18,2)          DEFAULT NULL COMMENT '小店售价（元）',
+    platform_stock   BIGINT                 DEFAULT NULL COMMENT '最近拉取时的线上库存',
+    product_status   INT                    DEFAULT NULL COMMENT '线上商品状态码',
+    material_id      BIGINT                 DEFAULT NULL COMMENT '映射的物料，为空表示未映射',
+    unit_ratio       DECIMAL(18,4) NOT NULL DEFAULT 1 COMMENT '换算：1 件 SKU = 多少基本单位（按包装条码匹配时为包装的换算率）',
+    match_manual     TINYINT       NOT NULL DEFAULT 0 COMMENT '手工映射 1是 0否：手工映射的不被自动匹配覆盖',
+    pushed_stock     BIGINT                 DEFAULT NULL COMMENT '最近推送的库存',
+    stock_push_time  DATETIME               DEFAULT NULL COMMENT '最近推送库存时间',
+    stock_error      VARCHAR(255)           DEFAULT NULL COMMENT '最近推送库存的错误',
+    removed          TINYINT       NOT NULL DEFAULT 0 COMMENT '线上已删除 1是 0否（最近一次全量同步中没有该 SKU）',
+    sync_time        DATETIME               DEFAULT NULL COMMENT '最近同步时间',
+    create_time      DATETIME               DEFAULT NULL COMMENT '创建时间',
+    update_time      DATETIME               DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_ch_wx_product_sku (shop_id, product_id, sku_id, tenant_id),
+    KEY idx_ch_wx_product_material (material_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '微信小店商品映射：小店 SKU ↔ 物料';
+
+CREATE TABLE ch_wx_order (
+    id                    BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id             BIGINT        NOT NULL DEFAULT 1 COMMENT '租户ID',
+    shop_id               BIGINT        NOT NULL COMMENT '店铺',
+    store_id              BIGINT        NOT NULL COMMENT '门店（店铺绑定的门店，写入时确定），按门店的数据权限过滤',
+    order_id              VARCHAR(64)   NOT NULL COMMENT '小店订单号',
+    status                VARCHAR(16)   NOT NULL COMMENT '订单状态(字典 ch_wx_order_status) UNPAID TO_SHIP SHIPPED COMPLETED CANCELLED',
+    platform_status       INT                    DEFAULT NULL COMMENT '线上订单状态码',
+    buyer                 VARCHAR(64)            DEFAULT NULL COMMENT '买家标识（已脱敏）',
+    receiver_name         VARCHAR(64)            DEFAULT NULL COMMENT '收货人（敏感，列表不返回，详情按权限脱敏）',
+    receiver_phone        VARCHAR(32)            DEFAULT NULL COMMENT '收货电话（敏感）',
+    receiver_address      VARCHAR(255)           DEFAULT NULL COMMENT '收货地址（敏感）',
+    goods_amount          DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '商品金额',
+    freight               DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '运费',
+    discount_amount       DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '优惠金额',
+    paid_amount           DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '实付金额（含运费）',
+    order_time            DATETIME               DEFAULT NULL COMMENT '下单时间',
+    pay_time              DATETIME               DEFAULT NULL COMMENT '付款时间',
+    platform_update_time  DATETIME               DEFAULT NULL COMMENT '线上更新时间',
+    erp_status            VARCHAR(16)   NOT NULL DEFAULT 'NONE' COMMENT 'ERP 处理状态(字典 ch_wx_erp_status) NONE PENDING UNMAPPED ORDERED OUTBOUND CLOSED FAILED',
+    erp_order_id          BIGINT                 DEFAULT NULL COMMENT '生成的销售订单（scm_order）',
+    erp_order_no          VARCHAR(32)            DEFAULT NULL COMMENT '销售订单号',
+    sales_out_id          BIGINT                 DEFAULT NULL COMMENT '销售出库单（scm_trade_doc）',
+    sales_out_no          VARCHAR(32)            DEFAULT NULL COMMENT '销售出库单号',
+    delivery_status       VARCHAR(16)   NOT NULL DEFAULT 'NONE' COMMENT '发货回传(字典 ch_wx_delivery_status) NONE PUSHING PUSHED FAILED PLATFORM',
+    delivery_company_id   VARCHAR(32)            DEFAULT NULL COMMENT '快递公司编码',
+    delivery_company_name VARCHAR(64)            DEFAULT NULL COMMENT '快递公司',
+    waybill_no            VARCHAR(64)            DEFAULT NULL COMMENT '运单号',
+    ship_time             DATETIME               DEFAULT NULL COMMENT '发货时间',
+    error_msg             VARCHAR(500)           DEFAULT NULL COMMENT '最近一次处理或回传的错误',
+    sync_time             DATETIME               DEFAULT NULL COMMENT '最近同步时间',
+    create_time           DATETIME               DEFAULT NULL COMMENT '创建时间',
+    update_time           DATETIME               DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_ch_wx_order (shop_id, order_id, tenant_id),
+    KEY idx_ch_wx_order_store (store_id, order_time),
+    KEY idx_ch_wx_order_erp (erp_order_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '微信小店渠道订单';
+
+CREATE TABLE ch_wx_order_item (
+    id                BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id         BIGINT        NOT NULL DEFAULT 1 COMMENT '租户ID',
+    wx_order_id       BIGINT        NOT NULL COMMENT '渠道订单（ch_wx_order.id）',
+    product_id        VARCHAR(64)   NOT NULL COMMENT '小店商品 ID',
+    sku_id            VARCHAR(64)   NOT NULL COMMENT '小店 SKU ID',
+    title             VARCHAR(255)           DEFAULT NULL COMMENT '商品标题',
+    sku_attrs         VARCHAR(255)           DEFAULT NULL COMMENT '规格',
+    qty               INT           NOT NULL COMMENT '数量（件）',
+    sale_price        DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '售价',
+    paid_amount       DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '本行实付（订单优惠已分摊，不含运费）',
+    refunded_qty      INT           NOT NULL DEFAULT 0 COMMENT '发货前已退款的数量（不再出库）',
+    material_id       BIGINT                 DEFAULT NULL COMMENT '生成销售订单时映射的物料',
+    unit_ratio        DECIMAL(18,4)          DEFAULT NULL COMMENT '生成销售订单时的换算率',
+    erp_order_item_id BIGINT                 DEFAULT NULL COMMENT '对应的销售订单明细',
+    PRIMARY KEY (id),
+    KEY idx_ch_wx_order_item_order (wx_order_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '微信小店渠道订单明细';
+
+CREATE TABLE ch_wx_aftersale (
+    id                    BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id             BIGINT        NOT NULL DEFAULT 1 COMMENT '租户ID',
+    shop_id               BIGINT        NOT NULL COMMENT '店铺',
+    store_id              BIGINT        NOT NULL COMMENT '门店（店铺绑定的门店），按门店的数据权限过滤',
+    aftersale_id          VARCHAR(64)   NOT NULL COMMENT '小店售后单号',
+    order_id              VARCHAR(64)            DEFAULT NULL COMMENT '小店订单号',
+    wx_order_id           BIGINT                 DEFAULT NULL COMMENT '渠道订单（ch_wx_order.id）',
+    type                  VARCHAR(16)   NOT NULL COMMENT '售后类型(字典 ch_wx_aftersale_type) REFUND仅退款 RETURN退货退款',
+    status                VARCHAR(16)   NOT NULL COMMENT '售后状态(字典 ch_wx_aftersale_status)',
+    platform_status       VARCHAR(64)            DEFAULT NULL COMMENT '线上售后状态（原值）',
+    product_id            VARCHAR(64)            DEFAULT NULL COMMENT '小店商品 ID',
+    sku_id                VARCHAR(64)            DEFAULT NULL COMMENT '小店 SKU ID',
+    title                 VARCHAR(255)           DEFAULT NULL COMMENT '商品标题（取自订单明细）',
+    qty                   INT           NOT NULL DEFAULT 0 COMMENT '售后数量（件）',
+    refund_amount         DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '退款金额（只记录，退款资金在小店结算，不生成收付款）',
+    reason                VARCHAR(255)           DEFAULT NULL COMMENT '售后原因',
+    apply_time            DATETIME               DEFAULT NULL COMMENT '申请时间',
+    platform_update_time  DATETIME               DEFAULT NULL COMMENT '线上更新时间',
+    erp_status            VARCHAR(16)   NOT NULL DEFAULT 'NONE' COMMENT 'ERP 处理状态(字典 ch_wx_aftersale_erp_status) NONE DONE SKIPPED FAILED',
+    sales_return_id       BIGINT                 DEFAULT NULL COMMENT '生成的销售退货单（scm_trade_doc）',
+    sales_return_no       VARCHAR(32)            DEFAULT NULL COMMENT '销售退货单号',
+    error_msg             VARCHAR(500)           DEFAULT NULL COMMENT '最近一次处理的错误或说明',
+    sync_time             DATETIME               DEFAULT NULL COMMENT '最近同步时间',
+    create_time           DATETIME               DEFAULT NULL COMMENT '创建时间',
+    update_time           DATETIME               DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_ch_wx_aftersale (shop_id, aftersale_id, tenant_id),
+    KEY idx_ch_wx_aftersale_order (wx_order_id),
+    KEY idx_ch_wx_aftersale_store (store_id, apply_time)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '微信小店售后单';
+
+CREATE TABLE ch_wx_sync_log (
+    id            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id     BIGINT       NOT NULL DEFAULT 1 COMMENT '租户ID',
+    shop_id       BIGINT       NOT NULL COMMENT '店铺',
+    sync_type     VARCHAR(16)  NOT NULL COMMENT '同步类型(字典 ch_wx_sync_type) PRODUCT STOCK ORDER AFTERSALE',
+    sync_trigger  VARCHAR(16)  NOT NULL COMMENT '触发方式(字典 ch_wx_sync_trigger) MANUAL SCHEDULE CALLBACK',
+    total_count   INT          NOT NULL DEFAULT 0 COMMENT '处理条数',
+    success_count INT          NOT NULL DEFAULT 0 COMMENT '成功条数',
+    fail_count    INT          NOT NULL DEFAULT 0 COMMENT '失败条数',
+    success       TINYINT      NOT NULL DEFAULT 1 COMMENT '整体成功 1是 0否（接口调用失败等中断时为 0）',
+    message       VARCHAR(500)          DEFAULT NULL COMMENT '错误信息（第一条失败的原因）',
+    duration_ms   BIGINT       NOT NULL DEFAULT 0 COMMENT '耗时（毫秒）',
+    create_time   DATETIME              DEFAULT NULL COMMENT '同步时间',
+    PRIMARY KEY (id),
+    KEY idx_ch_wx_sync_log_shop (shop_id, create_time)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '微信小店同步日志';
+
 INSERT INTO sys_tenant (id, name, admin_user_id, status, remark, create_time, update_time) VALUES
 (1, '柠檬科技', 1, 1, '平台租户（运营方），不受套餐限制', NOW(), NOW());
 
@@ -3990,3 +4164,81 @@ INSERT INTO sys_dict_type (id, name, type, kind, status, remark, create_time, up
 INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, status, builtin, create_time, update_time) VALUES
 ('wms_stock_alert_mode', '按总库存', 'TOTAL', 'blue', 1, 1, 1, NOW(), NOW()),
 ('wms_stock_alert_mode', '分仓库', 'WAREHOUSE', 'purple', 2, 1, 1, NOW(), NOW());
+
+-- ---------------------------------------------------------------- 线上渠道：微信小店（菜单、字典、授权）
+-- 订单来源增加「微信小店」（scm_order_source.WX_SHOP）：渠道订单生成并直接审核的销售订单
+-- 定时任务「微信小店同步」（channel.wxShopSync，每 5 分钟，按各店铺的设置同步库存、订单、售后）由 WxShopSyncJob 在首次启动时写入 sys_job
+INSERT INTO sys_menu (id, parent_id, name, type, path, component, perms, icon, sort, visible, status, create_time, update_time) VALUES
+(18,  0, '线上渠道', 'M', '/channel', NULL, NULL, 'GlobalOutlined', 5, 1, 1, NOW(), NOW()),
+(981, 18, '微信小店', 'M', NULL, NULL, NULL, NULL, 1, 1, 1, NOW(), NOW()),
+(430, 981, '店铺设置', 'C', 'wx-shop', 'channel/wx-shop/index', 'channel:wxShop:list', 'ShopOutlined', 1, 1, 1, NOW(), NOW()),
+(431, 981, '商品映射', 'C', 'wx-product', 'channel/wx-product/index', 'channel:wxProduct:list', 'LinkOutlined', 2, 1, 1, NOW(), NOW()),
+(432, 981, '渠道订单', 'C', 'wx-order', 'channel/wx-order/index', 'channel:wxOrder:list', 'ShoppingCartOutlined', 3, 1, 1, NOW(), NOW()),
+(433, 981, '售后单', 'C', 'wx-aftersale', 'channel/wx-aftersale/index', 'channel:wxAftersale:list', 'RollbackOutlined', 4, 1, 1, NOW(), NOW()),
+(434, 981, '同步日志', 'C', 'wx-sync-log', 'channel/wx-sync-log/index', 'channel:wxSyncLog:list', 'HistoryOutlined', 5, 1, 1, NOW(), NOW()),
+(4300, 430, '店铺新增', 'F', NULL, NULL, 'channel:wxShop:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4301, 430, '店铺修改', 'F', NULL, NULL, 'channel:wxShop:edit', NULL, 2, 1, 1, NOW(), NOW()),
+(4302, 430, '店铺删除', 'F', NULL, NULL, 'channel:wxShop:remove', NULL, 3, 1, 1, NOW(), NOW()),
+(4303, 430, '立即同步', 'F', NULL, NULL, 'channel:wxShop:sync', NULL, 4, 1, 1, NOW(), NOW()),
+(4310, 431, '商品映射修改', 'F', NULL, NULL, 'channel:wxProduct:edit', NULL, 1, 1, 1, NOW(), NOW()),
+(4320, 432, '订单发货与处理', 'F', NULL, NULL, 'channel:wxOrder:ship', NULL, 1, 1, 1, NOW(), NOW()),
+(4321, 432, '查看收货信息', 'F', NULL, NULL, 'channel:wxOrder:sensitive', NULL, 2, 1, 1, NOW(), NOW()),
+(4330, 433, '售后处理', 'F', NULL, NULL, 'channel:wxAftersale:handle', NULL, 1, 1, 1, NOW(), NOW());
+-- 普通用户只读；总经理全部
+INSERT INTO sys_role_menu (role_id, menu_id) VALUES
+(2, 18), (2, 981), (2, 430), (2, 431), (2, 432), (2, 433), (2, 434),
+(3, 18), (3, 981), (3, 430), (3, 431), (3, 432), (3, 433), (3, 434),
+(3, 4300), (3, 4301), (3, 4302), (3, 4303), (3, 4310), (3, 4320), (3, 4321), (3, 4330);
+
+INSERT INTO sys_dict_type (id, name, type, kind, status, remark, create_time, update_time) VALUES
+(250, '小店对接方式', 'ch_wx_shop_mode', 'SYSTEM', 1, '模拟店铺（未开通小店时演示、测试）或正式对接微信小店接口', NOW(), NOW()),
+(251, '渠道订单状态', 'ch_wx_order_status', 'SYSTEM', 1, '由微信小店的订单状态码映射', NOW(), NOW()),
+(252, '渠道订单处理状态', 'ch_wx_erp_status', 'SYSTEM', 1, '渠道订单在 ERP 中的处理进度：生成销售订单、出库、关闭', NOW(), NOW()),
+(253, '发货回传状态', 'ch_wx_delivery_status', 'SYSTEM', 1, 'ERP 发货后回传物流单号到小店的状态', NOW(), NOW()),
+(254, '售后类型', 'ch_wx_aftersale_type', 'SYSTEM', 1, '仅退款或退货退款', NOW(), NOW()),
+(255, '售后状态', 'ch_wx_aftersale_status', 'SYSTEM', 1, '由微信小店的售后状态映射', NOW(), NOW()),
+(256, '售后处理状态', 'ch_wx_aftersale_erp_status', 'SYSTEM', 1, '售后在 ERP 中的处理：扣减待发数量 / 关闭订单、生成销售退货', NOW(), NOW()),
+(257, '同步类型', 'ch_wx_sync_type', 'SYSTEM', 1, '微信小店同步日志的类型', NOW(), NOW()),
+(258, '同步触发方式', 'ch_wx_sync_trigger', 'SYSTEM', 1, '手工、定时任务或小店消息推送', NOW(), NOW());
+INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, status, builtin, create_time, update_time) VALUES
+('ch_wx_shop_mode', '模拟店铺', 'MOCK', 'orange', 1, 1, 1, NOW(), NOW()),
+('ch_wx_shop_mode', '微信小店', 'LIVE', 'green', 2, 1, 1, NOW(), NOW()),
+('ch_wx_order_status', '待付款', 'UNPAID', 'default', 1, 1, 1, NOW(), NOW()),
+('ch_wx_order_status', '待发货', 'TO_SHIP', 'orange', 2, 1, 1, NOW(), NOW()),
+('ch_wx_order_status', '已发货', 'SHIPPED', 'blue', 3, 1, 1, NOW(), NOW()),
+('ch_wx_order_status', '已完成', 'COMPLETED', 'green', 4, 1, 1, NOW(), NOW()),
+('ch_wx_order_status', '已取消', 'CANCELLED', 'red', 5, 1, 1, NOW(), NOW()),
+('ch_wx_erp_status', '未处理', 'NONE', 'default', 1, 1, 1, NOW(), NOW()),
+('ch_wx_erp_status', '待生成', 'PENDING', 'orange', 2, 1, 1, NOW(), NOW()),
+('ch_wx_erp_status', '待映射', 'UNMAPPED', 'volcano', 3, 1, 1, NOW(), NOW()),
+('ch_wx_erp_status', '已生成订单', 'ORDERED', 'blue', 4, 1, 1, NOW(), NOW()),
+('ch_wx_erp_status', '已出库', 'OUTBOUND', 'green', 5, 1, 1, NOW(), NOW()),
+('ch_wx_erp_status', '已关闭', 'CLOSED', 'default', 6, 1, 1, NOW(), NOW()),
+('ch_wx_erp_status', '处理失败', 'FAILED', 'red', 7, 1, 1, NOW(), NOW()),
+('ch_wx_delivery_status', '未发货', 'NONE', 'default', 1, 1, 1, NOW(), NOW()),
+('ch_wx_delivery_status', '回传中', 'PUSHING', 'processing', 2, 1, 1, NOW(), NOW()),
+('ch_wx_delivery_status', '已回传', 'PUSHED', 'green', 3, 1, 1, NOW(), NOW()),
+('ch_wx_delivery_status', '回传失败', 'FAILED', 'red', 4, 1, 1, NOW(), NOW()),
+('ch_wx_delivery_status', '小店后台发货', 'PLATFORM', 'cyan', 5, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_type', '仅退款', 'REFUND', 'orange', 1, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_type', '退货退款', 'RETURN', 'purple', 2, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '待处理', 'PENDING', 'orange', 1, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '已拒绝', 'REJECTED', 'red', 2, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '待买家退货', 'WAIT_RETURN', 'blue', 3, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '待商家收货', 'WAIT_RECEIPT', 'geekblue', 4, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '退款中', 'REFUNDING', 'processing', 5, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '已退款', 'REFUNDED', 'green', 6, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '退款失败', 'REFUND_FAILED', 'volcano', 7, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_status', '已关闭', 'CANCELLED', 'default', 8, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_erp_status', '未处理', 'NONE', 'default', 1, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_erp_status', '已处理', 'DONE', 'green', 2, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_erp_status', '无需处理', 'SKIPPED', 'cyan', 3, 1, 1, NOW(), NOW()),
+('ch_wx_aftersale_erp_status', '处理失败', 'FAILED', 'red', 4, 1, 1, NOW(), NOW()),
+('ch_wx_sync_type', '商品', 'PRODUCT', 'blue', 1, 1, 1, NOW(), NOW()),
+('ch_wx_sync_type', '库存', 'STOCK', 'green', 2, 1, 1, NOW(), NOW()),
+('ch_wx_sync_type', '订单', 'ORDER', 'orange', 3, 1, 1, NOW(), NOW()),
+('ch_wx_sync_type', '售后', 'AFTERSALE', 'purple', 4, 1, 1, NOW(), NOW()),
+('ch_wx_sync_trigger', '手工', 'MANUAL', 'default', 1, 1, 1, NOW(), NOW()),
+('ch_wx_sync_trigger', '定时任务', 'SCHEDULE', 'blue', 2, 1, 1, NOW(), NOW()),
+('ch_wx_sync_trigger', '消息推送', 'CALLBACK', 'cyan', 3, 1, 1, NOW(), NOW()),
+('scm_order_source', '微信小店', 'WX_SHOP', 'green', 11, 1, 1, NOW(), NOW());
