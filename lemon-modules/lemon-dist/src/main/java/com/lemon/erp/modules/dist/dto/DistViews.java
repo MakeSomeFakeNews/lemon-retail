@@ -94,6 +94,9 @@ public final class DistViews {
         /** 销售额（不含税）、销售退货额 */
         private BigDecimal salesAmount;
         private BigDecimal returnAmount;
+        /** 其中 POS 零售：零售出库、零售退货（含作废退回）的不含税金额 */
+        private BigDecimal retailAmount;
+        private BigDecimal retailReturnAmount;
         /** 销售净额 = 销售额 − 退货额 */
         private BigDecimal netSales;
         /** 销售成本（库存流水的实际出库成本，退货冲减） */

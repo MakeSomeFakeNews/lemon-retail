@@ -38,7 +38,9 @@ import java.util.stream.Collectors;
  *       特价超出每单限购的部分按会员价 / 门店价计算</li>
  *   <li>单行折扣、整单优惠需要 {@code pos:sale:discount}；手工优惠（改价、单行折扣、整单优惠）占取价金额的比例不能超过业务参数
  *       {@code pos.discount.maxRate}，有 {@code pos:sale:discountAny} 时不受限</li>
- *   <li>应收 = 商品金额 - 整单优惠，再按抹零规则（{@code pos.rounding}）处理；整单优惠与抹零按行金额比例分摊到各行（最后一行取余数）</li>
+ *   <li>满减 / 满折 / 满赠（{@link PosPromotionEngine}）：在取价（含特价）、单行折扣之后按整单计算，每单只应用一个，优惠按参与行金额分摊
+ *       （{@code promoShare}），赠品行单价 0 追加在末尾</li>
+ *   <li>应收 = 商品金额 - 满减优惠 - 整单优惠，再按抹零规则（{@code pos.rounding}）处理；整单优惠与抹零按扣除满减后的行金额比例分摊到非赠品行（最后一行取余数）</li>
  *   <li>最低售价：按分摊后的实收单价与供应链「价格控制」的最低销售价比较，控制方式为「禁止」时需要 {@code pos:sale:belowMin}，「提示」时只标记</li>
  * </ol>
  */
@@ -52,6 +54,7 @@ public class PosCartCalculator {
     static final String BELOW_MIN_PERM = "pos:sale:belowMin";
 
     private final PosPricingService pricingService;
+    private final PosPromotionEngine promotionEngine;
     private final WmsMaterialService materialService;
     private final ScmPriceControlService priceControlService;
     private final PermissionService permissionService;
@@ -65,7 +68,8 @@ public class PosCartCalculator {
         List<Long> ids = lines.stream().map(PosRequests.SaleLine::materialId).distinct().toList();
         Map<Long, WmsMaterial> materials = materialService.getEnabled(ids);
         materials.values().forEach(PosCartCalculator::checkSellable);
-        Map<Long, PosPricingService.Price> prices = pricingService.prices(store, member, materials, LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        Map<Long, PosPricingService.Price> prices = pricingService.prices(store, member, materials, now);
         Map<Long, List<WmsMaterialUnit>> unitCache = new HashMap<>();
 
         List<PosViews.PricedLine> priced = new ArrayList<>(lines.size());
@@ -129,12 +133,30 @@ public class PosCartCalculator {
             listTotal = listTotal.add(money(qty.multiply(line.getListPrice())));
         }
 
+        // 满减 / 满折 / 满赠：在特价（行级取价）、单行折扣之后按整单计算，每单只应用一个
+        PosPromotionEngine.Applied promo = promotionEngine.apply(store, member, priced, materials, now);
+        BigDecimal promoAmount = BigDecimal.ZERO;
+        Map<Long, WmsMaterial> allMaterials = materials;
+        if (promo != null) {
+            promoAmount = promo.discount();
+            promo.shares().forEach((i, share) -> priced.get(i).setPromoShare(share));
+            if (!promo.gifts().isEmpty()) {
+                allMaterials = new HashMap<>(materials);
+                for (Map.Entry<Long, BigDecimal> g : promo.gifts().entrySet()) {
+                    WmsMaterial gm = promo.giftMaterials().get(g.getKey());
+                    allMaterials.putIfAbsent(gm.getId(), gm);
+                    priced.add(giftLine(priced.size() + 1, gm, g.getValue()));
+                }
+            }
+        }
+
         BigDecimal amount = Decimals.sum(priced, PosViews.PricedLine::getAmount);
         BigDecimal orderDiscount = orderDiscountReq == null ? BigDecimal.ZERO : Decimals.money(orderDiscountReq);
         if (orderDiscount.signum() > 0) {
             requirePerm(DISCOUNT_PERM, "pos.error.noDiscountPerm");
         }
-        if (orderDiscount.compareTo(amount) > 0) {
+        BigDecimal afterPromo = amount.subtract(promoAmount);
+        if (orderDiscount.compareTo(afterPromo) > 0) {
             throw new BizException("pos.error.orderDiscountTooLarge");
         }
         // 手工优惠占取价金额的比例
@@ -146,12 +168,14 @@ public class PosCartCalculator {
             throw new BizException("pos.error.discountExceeded", manualRate.toPlainString(), maxRate.stripTrailingZeros().toPlainString());
         }
         PosRounding rounding = bizRules.option(PosBizRules.ROUNDING, PosRounding.class);
-        BigDecimal payable = rounding.apply(amount.subtract(orderDiscount));
-        BigDecimal roundOff = amount.subtract(orderDiscount).subtract(payable);
-        allocate(priced, orderDiscount.add(roundOff), amount);
+        BigDecimal payable = rounding.apply(afterPromo.subtract(orderDiscount));
+        BigDecimal roundOff = afterPromo.subtract(orderDiscount).subtract(payable);
+        allocate(priced, orderDiscount.add(roundOff), afterPromo);
         checkMinPrice(priced);
         BigDecimal totalQty = Decimals.sum(priced, PosViews.PricedLine::getQty);
-        return new Cart(new PosViews.Preview(priced, totalQty, listTotal, amount, orderDiscount, roundOff, payable, manualRate, member), materials);
+        return new Cart(new PosViews.Preview(priced, totalQty, listTotal, amount, orderDiscount, roundOff, payable, manualRate, member,
+                promo == null ? null : promo.promotion().getId(), promo == null ? null : promo.promotion().getName(),
+                promo == null ? null : promo.promotion().getKind(), promoAmount), allMaterials);
     }
 
     /** 行金额：特价超出每单限购的部分按 fallback（会员价 / 门店价） */
@@ -164,21 +188,55 @@ public class PosCartCalculator {
         return money(qty.multiply(unitPrice));
     }
 
-    /** 整单优惠与抹零按行金额比例分摊，最后一行取余数 */
+    /**
+     * 整单优惠与抹零按行金额（扣除满减分摊后）比例分摊到非赠品行，最后一个非赠品行取余数；赠品行实收为 0
+     */
     private static void allocate(List<PosViews.PricedLine> lines, BigDecimal share, BigDecimal total) {
+        int last = -1;
+        for (int i = 0; i < lines.size(); i++) {
+            if (!lines.get(i).isGift()) {
+                last = i;
+            }
+        }
         BigDecimal left = share;
         for (int i = 0; i < lines.size(); i++) {
             PosViews.PricedLine l = lines.get(i);
+            BigDecimal base = l.getAmount().subtract(l.getPromoShare());
             BigDecimal s;
-            if (i == lines.size() - 1) {
+            if (l.isGift()) {
+                s = BigDecimal.ZERO;
+            } else if (i == last) {
                 s = left;
             } else {
-                s = total.signum() == 0 ? BigDecimal.ZERO : money(share.multiply(l.getAmount()).divide(total, 6, RoundingMode.HALF_UP));
+                s = total.signum() == 0 ? BigDecimal.ZERO : money(share.multiply(base).divide(total, 6, RoundingMode.HALF_UP));
                 left = left.subtract(s);
             }
             l.setOrderShare(s);
-            l.setFinalAmount(l.getAmount().subtract(s));
+            l.setFinalAmount(base.subtract(s));
         }
+    }
+
+    /** 满赠的赠品行：基本单位、单价 0 */
+    private static PosViews.PricedLine giftLine(int lineNo, WmsMaterial m, BigDecimal qty) {
+        PosViews.PricedLine line = new PosViews.PricedLine();
+        BigDecimal q = qty.setScale(4, RoundingMode.HALF_UP).stripTrailingZeros();
+        line.setLineNo(lineNo);
+        line.setMaterialId(m.getId());
+        line.setMaterialCode(m.getCode());
+        line.setMaterialName(m.getName());
+        line.setSpec(m.getSpec());
+        line.setUnit(m.getUnit());
+        line.setUnitRatio(BigDecimal.ONE);
+        line.setQty(q);
+        line.setBaseQty(q.setScale(4, RoundingMode.HALF_UP));
+        line.setListPrice(BigDecimal.ZERO);
+        line.setPrice(BigDecimal.ZERO);
+        line.setPriceSource(PosPriceSource.GIFT);
+        line.setDiscountRate(Decimals.HUNDRED);
+        line.setAmount(BigDecimal.ZERO.setScale(2));
+        line.setSalePrice(BigDecimal.ZERO);
+        line.setGift(true);
+        return line;
     }
 
     private void checkMinPrice(List<PosViews.PricedLine> lines) {
@@ -191,10 +249,11 @@ public class PosCartCalculator {
         boolean allowed = permissionService.hasPerm(BELOW_MIN_PERM);
         for (PosViews.PricedLine l : lines) {
             ScmPriceControl c = controls.get(l.getMaterialId());
-            if (c == null || l.getBaseQty().signum() == 0) {
+            if (c == null || l.isGift() || l.getBaseQty().signum() == 0) {
                 continue;
             }
-            BigDecimal unit = l.getFinalAmount().divide(l.getBaseQty(), 4, RoundingMode.HALF_UP);
+            // 满减分摊不参与最低售价校验（活动由总部设置）
+            BigDecimal unit = l.getFinalAmount().add(l.getPromoShare()).divide(l.getBaseQty(), 4, RoundingMode.HALF_UP);
             if (unit.compareTo(c.getMinSalePrice()) < 0) {
                 l.setBelowMin(true);
                 if (c.getControlMode() == PriceControlMode.BLOCK && !allowed) {

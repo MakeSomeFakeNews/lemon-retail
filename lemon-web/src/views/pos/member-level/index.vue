@@ -11,6 +11,7 @@
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'discountRate'">{{ Number(record.discountRate) >= 100 ? $t('pos.level.noDiscount') : `${record.discountRate}%` }}</template>
           <template v-else-if="column.key === 'upgradeAmount'">{{ record.upgradeAmount == null ? $t('pos.level.manual') : money(record.upgradeAmount) }}</template>
+          <template v-else-if="column.key === 'pointsRate'">{{ record.pointsRate == null ? 1 : Number(record.pointsRate) }}</template>
           <template v-else-if="column.key === 'status'"><DictTag type="sys_common_status" :value="record.status" /></template>
           <template v-else-if="column.key === 'action'"><TableActions :actions="rowActions(record)" /></template>
         </template>
@@ -27,6 +28,9 @@
         </a-form-item>
         <a-form-item :label="$t('pos.level.upgradeAmount')" name="upgradeAmount" :extra="$t('pos.level.upgradeTip')">
           <a-input-number v-model:value="form.upgradeAmount" :min="0" :precision="2" class="full" />
+        </a-form-item>
+        <a-form-item :label="$t('pos.level.pointsRate')" name="pointsRate" :extra="$t('pos.level.pointsRateTip')">
+          <a-input-number v-model:value="form.pointsRate" :min="0" :max="100" :precision="2" class="full" />
         </a-form-item>
         <a-form-item :label="$t('common.field.sort')" name="sort">
           <a-input-number v-model:value="form.sort" :min="0" class="full" />
@@ -67,6 +71,7 @@ const columns = [
   { title: t('pos.level.name'), dataIndex: 'name', width: 160 },
   { title: t('pos.level.discountRate'), key: 'discountRate', width: 120 },
   { title: t('pos.level.upgradeAmount'), key: 'upgradeAmount', width: 140, align: 'right' },
+  { title: t('pos.level.pointsRate'), key: 'pointsRate', width: 100, align: 'right' },
   { title: t('pos.level.memberCount'), dataIndex: 'memberCount', width: 100, align: 'right' },
   { title: t('common.field.sort'), dataIndex: 'sort', width: 70 },
   { title: t('common.field.status'), key: 'status', width: 80 },
@@ -89,10 +94,10 @@ const rules = {
   discountRate: [{ required: true, message: t('pos.level.discountRequired') }]
 }
 const drawer = useFormDrawer({
-  emptyForm: () => ({ id: undefined, name: '', discountRate: 100, upgradeAmount: undefined, sort: 0, status: STATUS_ENABLED, remark: '' }),
+  emptyForm: () => ({ id: undefined, name: '', discountRate: 100, upgradeAmount: undefined, pointsRate: 1, sort: 0, status: STATUS_ENABLED, remark: '' }),
   create: addMemberLevel,
   update: updateMemberLevel,
-  toPayload: (f) => ({ name: f.name, discountRate: f.discountRate, upgradeAmount: f.upgradeAmount ?? null, sort: f.sort, status: f.status, remark: f.remark || null }),
+  toPayload: (f) => ({ name: f.name, discountRate: f.discountRate, upgradeAmount: f.upgradeAmount ?? null, pointsRate: f.pointsRate ?? 1, sort: f.sort, status: f.status, remark: f.remark || null }),
   onSuccess: () => load()
 })
 const { formRef, form } = drawer

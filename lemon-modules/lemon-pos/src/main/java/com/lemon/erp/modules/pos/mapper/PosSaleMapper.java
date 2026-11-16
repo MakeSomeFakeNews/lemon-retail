@@ -7,6 +7,7 @@ import com.lemon.erp.modules.pos.dto.PosViews;
 import com.lemon.erp.modules.pos.entity.PosSale;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -35,4 +36,13 @@ public interface PosSaleMapper extends BaseMapper<PosSale> {
 
     /** 原销售单是否已有退货 */
     boolean existsReturn(@Param("origSaleId") Long origSaleId);
+
+    /** 门店某营业日期储值充值的收款按支付方式 × 结算账户汇总 */
+    List<PosViews.PayRow> selectDayTopupPays(@Param("storeId") Long storeId, @Param("date") LocalDate date);
+
+    /** 原销售单的退货已扣回的积分合计（负数或 0） */
+    BigDecimal sumReturnedPoints(@Param("origSaleId") Long origSaleId);
+
+    /** 原销售单的明细是否已全部退完 */
+    boolean fullyReturned(@Param("saleId") Long saleId);
 }

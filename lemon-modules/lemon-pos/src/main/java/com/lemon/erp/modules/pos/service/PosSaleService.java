@@ -20,6 +20,7 @@ import com.lemon.erp.modules.pos.dto.PosQueries;
 import com.lemon.erp.modules.pos.dto.PosRequests;
 import com.lemon.erp.modules.pos.dto.PosViews;
 import com.lemon.erp.modules.pos.entity.PosMember;
+import com.lemon.erp.modules.pos.entity.PosMemberRule;
 import com.lemon.erp.modules.pos.entity.PosPayment;
 import com.lemon.erp.modules.pos.entity.PosSale;
 import com.lemon.erp.modules.pos.entity.PosSaleItem;
@@ -30,9 +31,11 @@ import com.lemon.erp.modules.pos.mapper.PosSaleItemMapper;
 import com.lemon.erp.modules.pos.mapper.PosSaleMapper;
 import com.lemon.erp.modules.pos.model.PayMethod;
 import com.lemon.erp.modules.pos.model.PaymentStatus;
+import com.lemon.erp.modules.pos.model.PointsType;
 import com.lemon.erp.modules.pos.model.PosPriceSource;
 import com.lemon.erp.modules.pos.model.SaleKind;
 import com.lemon.erp.modules.pos.model.SaleStatus;
+import com.lemon.erp.modules.pos.model.StoredValueType;
 import com.lemon.erp.modules.scm.service.ScmBizRules;
 import com.lemon.erp.modules.wms.dto.StockDocItemRequest;
 import com.lemon.erp.modules.wms.dto.StockDocRequest;
@@ -61,6 +64,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -90,6 +94,10 @@ public class PosSaleService {
     private final PosMemberService memberService;
     private final PosHeldSaleService heldService;
     private final PosCartCalculator calculator;
+    private final PosTenderService tenderService;
+    private final PosMemberRuleService ruleService;
+    private final PosPointsService pointsService;
+    private final PosStoredValueService storedValueService;
     private final StoreLookup storeLookup;
     private final WmsStockDocService stockDocService;
     private final WmsStockQueryService stockQueryService;
@@ -175,7 +183,8 @@ public class PosSaleService {
         PosMember member = req.memberId() == null ? null : memberService.requireActive(req.memberId());
         PosCartCalculator.Cart cart = calculator.compute(store, member, req.lines(), req.orderDiscount());
         PosViews.Preview pv = cart.preview();
-        Tenders tenders = tenders(req.tenders(), pv.payable(), terminal);
+        PosMemberRule rule = ruleService.get();
+        PosTenderService.Tenders tenders = tenderService.validate(req.tenders(), pv.payable(), terminal, member, rule);
 
         String saleNo = docNoService.next(PosDocNos.SALE);
         BigDecimal taxRate = bizRules.decimal(ScmBizRules.DEFAULT_TAX_RATE);
@@ -203,14 +212,30 @@ public class PosSaleService {
         s.setPayableAmount(pv.payable());
         s.setPaidAmount(tenders.paid());
         s.setChangeAmount(tenders.change());
+        s.setPromotionId(pv.promotionId());
+        s.setPromoAmount(pv.promoAmount());
+        BigDecimal earned = member == null ? BigDecimal.ZERO
+                : PosPointsService.earned(rule, member, pointsBase(pv, tenders.pointsAmount(), cart.materials()));
+        s.setPointsEarned(earned);
         s.setWmsDocId(stockDoc.getId());
         s.setWmsDocNo(stockDoc.getDocNo());
         s.setRemark(req.remark());
         s.setDeptId(user.deptId());
         saleMapper.insert(s);
         itemMapper.insertBatch(toItems(s.getId(), pv.lines(), taxRate));
-        savePayments(s, shift, terminal, tenders);
+        tenderService.save(s.getId(), null, s.getStoreId(), shift, terminal, tenders);
         if (member != null) {
+            // 储值、积分抵现：条件扣减（余额 / 积分不足时整单回滚）；之后记入获得的积分
+            if (tenders.storedValue().signum() > 0) {
+                storedValueService.change(member.getId(), s.getStoreId(), StoredValueType.CONSUME, tenders.storedValue().negate(), today,
+                        s.getId(), null, saleNo, null);
+            }
+            if (tenders.points().signum() > 0) {
+                pointsService.change(member.getId(), s.getStoreId(), PointsType.REDEEM, tenders.points().negate(), s.getId(), saleNo, null, false);
+            }
+            if (earned.signum() > 0) {
+                pointsService.change(member.getId(), s.getStoreId(), PointsType.EARN, earned, s.getId(), saleNo, null, true);
+            }
             memberService.addStats(member.getId(), pv.payable(), 1);
         }
         if (req.heldId() != null) {
@@ -219,82 +244,17 @@ public class PosSaleService {
         return new Result(s.getId(), List.of());
     }
 
-    /** 付款校验结果：现金应收、找零、各付款方式 */
-    private record Tenders(List<PosRequests.Tender> items, BigDecimal cashApplied, BigDecimal cashTendered, BigDecimal change,
-                           BigDecimal paid, Map<String, PosPayment> electronic) {
-    }
-
     /**
-     * 付款：非现金方式合计不能超过应收；现金应收 = 应收 - 非现金合计，顾客付款不少于现金应收，多出的找零。
-     * 微信、支付宝必须是本收银台已收款成功、还没有结算的记录，金额一致
+     * 可积分金额：不积分商品、赠品以外各行的实收合计 × (应收 − 积分抵现) ÷ 应收（积分抵现的部分不再积分）
      */
-    private Tenders tenders(List<PosRequests.Tender> list, BigDecimal payable, PosTerminal terminal) {
-        List<PosRequests.Tender> items = list == null ? List.of() : list.stream().filter(t -> t.amount().signum() > 0).toList();
-        BigDecimal nonCash = BigDecimal.ZERO;
-        BigDecimal cashTendered = null;
-        Map<String, PosPayment> electronic = new HashMap<>();
-        for (PosRequests.Tender t : items) {
-            if (!t.payMethod().available()) {
-                throw new BizException("pos.error.storedValueUnavailable");
-            }
-            if (t.payMethod() == PayMethod.CASH) {
-                if (cashTendered != null) {
-                    throw new BizException("pos.error.duplicateCashTender");
-                }
-                cashTendered = Decimals.money(t.amount());
-                continue;
-            }
-            nonCash = nonCash.add(Decimals.money(t.amount()));
-            if (t.payMethod().electronic()) {
-                PosPayment p = t.outTradeNo() == null ? null : paymentMapper.selectOne(Wrappers.<PosPayment>lambdaQuery()
-                        .eq(PosPayment::getOutTradeNo, t.outTradeNo()));
-                if (p == null || p.getStatus() != PaymentStatus.SUCCESS || p.getSaleId() != null || p.getPayMethod() != t.payMethod()
-                        || p.getAmount().compareTo(Decimals.money(t.amount())) != 0 || !Objects.equals(p.getTerminalId(), terminal.getId())) {
-                    throw new BizException("pos.error.electronicPaymentInvalid", t.outTradeNo() == null ? "" : t.outTradeNo());
-                }
-                if (electronic.put(p.getOutTradeNo(), p) != null) {
-                    throw new BizException("pos.error.electronicPaymentInvalid", p.getOutTradeNo());
-                }
-            }
+    private BigDecimal pointsBase(PosViews.Preview pv, BigDecimal pointsAmount, Map<Long, WmsMaterial> materials) {
+        if (pv.payable().signum() <= 0) {
+            return BigDecimal.ZERO;
         }
-        if (nonCash.compareTo(payable) > 0) {
-            throw new BizException("pos.error.overPaid", nonCash.toPlainString(), payable.toPlainString());
-        }
-        BigDecimal cashDue = payable.subtract(nonCash);
-        BigDecimal tendered = cashTendered == null ? BigDecimal.ZERO : cashTendered;
-        if (tendered.compareTo(cashDue) < 0) {
-            throw new BizException("pos.error.underPaid", payable.toPlainString(), nonCash.add(tendered).toPlainString());
-        }
-        if (cashDue.signum() == 0 && tendered.signum() > 0) {
-            throw new BizException("pos.error.cashNotNeeded");
-        }
-        BigDecimal change = tendered.subtract(cashDue);
-        return new Tenders(items, cashDue, tendered, change, nonCash.add(tendered), electronic);
-    }
-
-    private void savePayments(PosSale s, PosShift shift, PosTerminal terminal, Tenders tenders) {
-        for (PosRequests.Tender t : tenders.items()) {
-            Long account = terminalService.accountFor(terminal, t.payMethod());
-            if (t.payMethod().electronic()) {
-                PosPayment p = tenders.electronic().get(t.outTradeNo());
-                if (paymentMapper.bindSale(p.getId(), s.getId(), account) == 0) {
-                    throw new BizException("pos.error.electronicPaymentInvalid", t.outTradeNo());
-                }
-                continue;
-            }
-            PosPayment p = newPayment(s, shift, t.payMethod(), account);
-            if (t.payMethod() == PayMethod.CASH) {
-                p.setAmount(tenders.cashApplied());
-                p.setTendered(tenders.cashTendered());
-                p.setChangeAmount(tenders.change());
-            } else {
-                p.setAmount(Decimals.money(t.amount()));
-                p.setRefNo(t.refNo());
-            }
-            p.setStatus(PaymentStatus.SUCCESS);
-            p.setPayTime(LocalDateTime.now());
-            paymentMapper.insert(p);
-        }
+        Set<Long> excluded = ruleService.excludedMaterials(materials.values());
+        BigDecimal base = pv.lines().stream().filter(l -> !l.isGift() && !excluded.contains(l.getMaterialId()))
+                .map(PosViews.PricedLine::getFinalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return base.multiply(pv.payable().subtract(pointsAmount)).divide(pv.payable(), 2, RoundingMode.DOWN);
     }
 
     // ---------------------------------------------------------------- 退货
@@ -390,9 +350,30 @@ public class PosSaleService {
             refundIds = List.of();
         }
         if (r.getMemberId() != null) {
+            if (orig != null) {
+                deductEarnedPoints(r, orig, refund);
+            }
             memberService.addStats(r.getMemberId(), refund.negate(), 0);
         }
         return new Result(r.getId(), refundIds);
+    }
+
+    /**
+     * 退货扣回原单获得的积分：按退款占原单应收的比例（四舍五入取整），原单全部退完时扣回剩余；会员已用掉时积分可为负
+     */
+    private void deductEarnedPoints(PosSale r, PosSale orig, BigDecimal refund) {
+        BigDecimal earned = orig.getPointsEarned() == null ? BigDecimal.ZERO : orig.getPointsEarned();
+        if (earned.signum() <= 0) {
+            return;
+        }
+        BigDecimal left = earned.add(saleMapper.sumReturnedPoints(orig.getId()));
+        BigDecimal x = saleMapper.fullyReturned(orig.getId()) || orig.getPayableAmount().signum() == 0 ? left
+                : earned.multiply(refund).divide(orig.getPayableAmount(), 0, RoundingMode.HALF_UP).min(left);
+        if (x.signum() <= 0) {
+            return;
+        }
+        pointsService.change(r.getMemberId(), r.getStoreId(), PointsType.RETURN, x.negate(), r.getId(), r.getSaleNo(), null, true);
+        saleMapper.update(Wrappers.<PosSale>lambdaUpdate().set(PosSale::getPointsEarned, x.negate()).eq(PosSale::getId, r.getId()));
     }
 
     /** 原单退货的明细：可退数量按原行（条件更新防止并发超退），退款 = 原实收按数量比例，最后一次退完时取剩余金额 */
@@ -431,8 +412,10 @@ public class PosSaleService {
             i.setDiscountRate(o.getDiscountRate());
             i.setSalePrice(o.getSalePrice());
             i.setAmount(amount);
+            i.setPromoShare(BigDecimal.ZERO);
             i.setOrderShare(amount.subtract(refund));
             i.setFinalAmount(refund);
+            i.setGift(o.getGift());
             i.setTaxRate(o.getTaxRate());
             i.setSerialNos(l.serialNos() != null ? l.serialNos() : last && o.getReturnedQty().signum() == 0 ? o.getSerialNos() : null);
             i.setOrigItemId(o.getId());
@@ -537,11 +520,23 @@ public class PosSaleService {
             if (paymentMapper.addRefunded(p.getId(), x) == 0) {
                 throw new BizException("pos.error.refundExceeded", orig.getSaleNo());
             }
+            boolean full = x.compareTo(p.getAmount().subtract(p.getRefundedAmount())) == 0;
             left = left.subtract(x);
             PosPayment refund = newPayment(r, shift, p.getPayMethod(), p.getAccountId());
             refund.setAmount(x.negate());
             refund.setProvider(p.getProvider());
             refund.setOrigPaymentId(p.getId());
+            if (p.getPayMethod() == PayMethod.POINTS) {
+                // 退回抵现积分：按金额比例，退完时取剩余
+                BigDecimal used = p.getPoints() == null ? BigDecimal.ZERO : p.getPoints();
+                BigDecimal back = full ? used.subtract(paymentMapper.sumRefundedPoints(p.getId()))
+                        : used.multiply(x).divide(p.getAmount(), 0, RoundingMode.HALF_UP);
+                refund.setPoints(back.negate());
+                pointsService.change(orig.getMemberId(), r.getStoreId(), PointsType.REFUND, back, r.getId(), r.getSaleNo(), null, true);
+            } else if (p.getPayMethod() == PayMethod.STORED_VALUE) {
+                storedValueService.change(orig.getMemberId(), r.getStoreId(), StoredValueType.REFUND, x, LocalDate.now(), r.getId(), null,
+                        r.getSaleNo(), null);
+            }
             boolean electronic = p.getPayMethod().electronic();
             refund.setStatus(electronic ? PaymentStatus.PENDING : PaymentStatus.SUCCESS);
             refund.setPayTime(electronic ? null : LocalDateTime.now());
@@ -561,8 +556,15 @@ public class PosSaleService {
         return pending;
     }
 
+    /** 原路退款的顺序：积分抵现 → 聚合支付 → 储值 → 银行卡 → 现金 */
     private static int refundOrder(PosPayment p) {
-        return p.getPayMethod().electronic() ? 0 : p.getPayMethod() == PayMethod.BANK_CARD ? 1 : 2;
+        return switch (p.getPayMethod()) {
+            case POINTS -> 0;
+            case WECHAT, ALIPAY -> 1;
+            case STORED_VALUE -> 2;
+            case BANK_CARD -> 3;
+            case CASH -> 4;
+        };
     }
 
     // ---------------------------------------------------------------- 作废
@@ -597,6 +599,10 @@ public class PosSaleService {
                         Messages.get("pos.text.voidRemark", s.getSaleNo()), stockItems), s.getSaleNo());
         List<Long> pending = refundToOriginal(s, s, s.getPayableAmount(), shift, terminal);
         if (s.getMemberId() != null) {
+            if (s.getPointsEarned() != null && s.getPointsEarned().signum() > 0) {
+                pointsService.change(s.getMemberId(), s.getStoreId(), PointsType.RETURN, s.getPointsEarned().negate(), s.getId(), s.getSaleNo(),
+                        Messages.get("pos.text.voidRemark", s.getSaleNo()), true);
+            }
             memberService.addStats(s.getMemberId(), s.getPayableAmount().negate(), -1);
         }
         StatusTransitions.change(saleMapper, PosSale::getId, id, PosSale::getStatus, SaleStatus.COMPLETED, SaleStatus.VOIDED,
@@ -609,18 +615,7 @@ public class PosSaleService {
     // ---------------------------------------------------------------- 内部
 
     private PosPayment newPayment(PosSale s, PosShift shift, PayMethod method, Long accountId) {
-        PosPayment p = new PosPayment();
-        p.setSaleId(s.getId());
-        p.setStoreId(s.getStoreId());
-        p.setTerminalId(shift.getTerminalId());
-        p.setShiftId(shift.getId());
-        p.setBusinessDate(LocalDate.now());
-        p.setPayMethod(method);
-        p.setAccountId(accountId);
-        p.setChangeAmount(BigDecimal.ZERO);
-        p.setRefundedAmount(BigDecimal.ZERO);
-        p.setOutTradeNo(docNoService.next(PosDocNos.PAYMENT));
-        return p;
+        return tenderService.newPayment(s.getId(), s.getStoreId(), shift, method, accountId);
     }
 
     private static List<PosSaleItem> toItems(Long saleId, List<PosViews.PricedLine> lines, BigDecimal taxRate) {
@@ -641,8 +636,10 @@ public class PosSaleService {
             i.setDiscountRate(l.getDiscountRate());
             i.setSalePrice(l.getSalePrice());
             i.setAmount(l.getAmount());
+            i.setPromoShare(l.getPromoShare());
             i.setOrderShare(l.getOrderShare());
             i.setFinalAmount(l.getFinalAmount());
+            i.setGift(l.isGift() ? 1 : 0);
             i.setTaxRate(taxRate);
             i.setSerialNos(l.getSerialNos());
             i.setRemark(l.getRemark());

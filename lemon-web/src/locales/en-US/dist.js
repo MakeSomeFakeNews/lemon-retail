@@ -192,6 +192,8 @@ export default {
     storeType: 'Store Type',
     salesAmount: 'Sales',
     returnAmount: 'Returns',
+    retailAmount: 'incl. POS Retail',
+    retailReturnAmount: 'incl. POS Returns',
     netSales: 'Net Sales',
     cost: 'Cost of Sales',
     grossProfit: 'Gross Profit',

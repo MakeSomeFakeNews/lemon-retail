@@ -359,6 +359,22 @@ export default {
   4470: 'Close Day', // 门店日结
   4471: 'Reopen Day', // 反日结
   4500: 'Edit Payment Provider', // 支付通道修改
+  456: 'Threshold Promotions', // 满减满赠
+  451: 'Points & Stored Value Rules', // 积分储值规则
+  454: 'Stored-value Top-ups', // 储值充值单
+  452: 'Points Ledger', // 积分流水
+  453: 'Stored-value Ledger', // 储值流水
+  455: 'Stored-value Settlement', // 储值跨店结算
+  4510: 'Top Up at POS', // 收银充值
+  4511: 'Redeem Points at POS', // 积分抵现
+  4520: 'Edit Points & Stored Value Rules', // 积分储值规则修改
+  4530: 'Adjust / Clear Points', // 积分调整 / 清零
+  4540: 'Adjust Stored Value', // 储值调整
+  4550: 'Admin Top-up', // 后台充值
+  4560: 'Create Promotion', // 满减满赠新增
+  4561: 'Edit Promotion', // 满减满赠修改
+  4562: 'Delete Promotion', // 满减满赠删除
+  4563: 'Start / End Promotion', // 满减满赠开始 / 结束
   20: 'Distribution', // 配送
   460: 'Store Requisitions', // 门店要货
   461: 'Delivery & Receiving', // 配送与收货

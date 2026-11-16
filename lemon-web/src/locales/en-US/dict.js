@@ -221,6 +221,7 @@ export default {
     'TRANSFER': 'Account Transfer', // 账户调拨
     'INCOME_EXPENSE': 'Other Income / Expense', // 其他收支
     'NETTING': 'AR/AP Netting', // 应收应付对冲
+    'POS_DAILY_CLOSE': 'Store Daily Close', // 门店日结
   },
   // 核销状态
   fin_bill_status: {
@@ -472,6 +473,7 @@ export default {
     'ALIPAY': 'Alipay', // 支付宝
     'BANK_CARD': 'Bank Card', // 银行卡
     'STORED_VALUE': 'Stored Value', // 储值
+    'POINTS': 'Points', // 积分抵现
   },
   // POS 单据种类
   pos_sale_kind: {
@@ -507,6 +509,46 @@ export default {
     'SCHEME': 'Store Price', // 门店价
     'RETAIL': 'Retail Price', // 零售价
     'MANUAL': 'Manual', // 手工改价
+    'GIFT': 'Gift', // 赠品
+  },
+  // 积分变动类型
+  pos_points_type: {
+    'EARN': 'Earned', // 消费获得
+    'REDEEM': 'Redeemed', // 抵现
+    'RETURN': 'Return Deduction', // 退货扣回
+    'REFUND': 'Redemption Refund', // 退回抵现积分
+    'ADJUST': 'Adjustment', // 调整
+    'CLEAR': 'Cleared', // 清零
+  },
+  // 储值变动类型
+  pos_stored_value_type: {
+    'TOPUP': 'Top-up', // 充值
+    'BONUS': 'Bonus', // 赠送
+    'CONSUME': 'Consumed', // 消费
+    'REFUND': 'Refunded', // 退回储值
+    'ADJUST': 'Adjustment', // 调整
+  },
+  // 满减活动类型
+  pos_promotion_kind: {
+    'REDUCE': 'Spend & Save', // 满减
+    'DISCOUNT': 'Spend & Discount', // 满折
+    'GIFT': 'Spend & Gift', // 满赠
+  },
+  // 满减活动门槛
+  pos_promotion_threshold: {
+    'AMOUNT': 'Amount', // 金额
+    'QTY': 'Quantity', // 件数
+  },
+  // 满减参与商品
+  pos_promotion_range: {
+    'ALL': 'All Products', // 全部商品
+    'MATERIALS': 'Selected Products', // 指定商品
+    'CATEGORIES': 'Selected Categories', // 指定分类
+  },
+  // 商品范围类型
+  pos_goods_target_type: {
+    'MATERIAL': 'Product', // 商品
+    'CATEGORY': 'Category', // 分类
   },
   // 特价活动状态
   pos_special_status: {

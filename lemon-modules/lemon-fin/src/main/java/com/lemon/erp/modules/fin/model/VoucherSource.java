@@ -30,5 +30,7 @@ public enum VoucherSource {
     /** 其他收支单（其他收入、费用支出） */
     INCOME_EXPENSE,
     /** 应收应付对冲 */
-    NETTING
+    NETTING,
+    /** 门店日结：储值消费转收入、充值赠送（反日结时删除） */
+    POS_DAILY_CLOSE
 }

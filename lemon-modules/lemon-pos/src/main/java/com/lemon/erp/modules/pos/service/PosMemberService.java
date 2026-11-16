@@ -10,10 +10,14 @@ import com.lemon.erp.framework.store.StoreLookup;
 import com.lemon.erp.modules.pos.dto.PosQueries;
 import com.lemon.erp.modules.pos.dto.PosRequests;
 import com.lemon.erp.modules.pos.entity.PosMember;
+import com.lemon.erp.modules.pos.entity.PosPointsLog;
 import com.lemon.erp.modules.pos.entity.PosSale;
+import com.lemon.erp.modules.pos.entity.PosStoredValueLog;
 import com.lemon.erp.modules.pos.entity.PosTerminal;
 import com.lemon.erp.modules.pos.mapper.PosMemberMapper;
+import com.lemon.erp.modules.pos.mapper.PosPointsLogMapper;
 import com.lemon.erp.modules.pos.mapper.PosSaleMapper;
+import com.lemon.erp.modules.pos.mapper.PosStoredValueLogMapper;
 import com.lemon.erp.modules.pos.model.MemberGender;
 import com.lemon.erp.modules.wms.service.DocNoService;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +42,8 @@ public class PosMemberService {
 
     private final PosMemberMapper memberMapper;
     private final PosSaleMapper saleMapper;
+    private final PosStoredValueLogMapper storedValueLogMapper;
+    private final PosPointsLogMapper pointsLogMapper;
     private final PosMemberLevelService levelService;
     private final StoreLookup storeLookup;
     private final DocNoService docNoService;
@@ -144,11 +150,13 @@ public class PosMemberService {
         memberMapper.update(Wrappers.<PosMember>lambdaUpdate().set(PosMember::getStatus, status).eq(PosMember::getId, id));
     }
 
-    /** 有消费记录的会员不能删除（停用） */
+    /** 有消费、积分或储值记录的会员不能删除（停用） */
     public void delete(List<Long> ids) {
         for (Long id : ids) {
             PosMember m = get(id);
-            if (saleMapper.exists(Wrappers.<PosSale>lambdaQuery().eq(PosSale::getMemberId, id))) {
+            if (saleMapper.exists(Wrappers.<PosSale>lambdaQuery().eq(PosSale::getMemberId, id))
+                    || storedValueLogMapper.exists(Wrappers.<PosStoredValueLog>lambdaQuery().eq(PosStoredValueLog::getMemberId, id))
+                    || pointsLogMapper.exists(Wrappers.<PosPointsLog>lambdaQuery().eq(PosPointsLog::getMemberId, id))) {
                 throw new BizException("pos.error.memberInUse", m.getMemberCode());
             }
         }

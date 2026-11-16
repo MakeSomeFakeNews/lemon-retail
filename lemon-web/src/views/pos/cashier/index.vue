@@ -49,18 +49,19 @@
           row-key="key"
           size="small"
           :columns="columns"
-          :data-source="lines"
+          :data-source="tableRows"
           :pagination="false"
           :scroll="{ y: 'calc(100vh - 230px)' }"
-          :row-class-name="(r, i) => (i === current ? 'pos-row-current' : '')"
-          :custom-row="(r, i) => ({ onClick: () => (current = i) })"
+          :row-class-name="(r, i) => (r.gift ? 'pos-row-gift' : i === current ? 'pos-row-current' : '')"
+          :custom-row="(r, i) => ({ onClick: () => !r.gift && (current = i) })"
         >
           <template #bodyCell="{ column, record, index }">
             <template v-if="column.key === 'index'">{{ index + 1 }}</template>
             <template v-else-if="column.key === 'name'">
-              <div>{{ record.name }}</div>
+              <div>{{ record.name }} <a-tag v-if="record.gift" color="magenta">{{ $t('pos.cashier.gift') }}</a-tag></div>
               <div class="sub-text">{{ record.code }} {{ record.spec || '' }}</div>
             </template>
+            <template v-else-if="column.key === 'qty' && record.gift">{{ qty(record.qty) }}</template>
             <template v-else-if="column.key === 'qty'">
               <a-input-number
                 :ref="(el) => (qtyRefs[index] = el)"
@@ -81,7 +82,7 @@
             <template v-else-if="column.key === 'amount'">
               <span :class="{ 'below-min': record.belowMin }">{{ money(record.amount) }}</span>
             </template>
-            <template v-else-if="column.key === 'action'">
+            <template v-else-if="column.key === 'action' && !record.gift">
               <a-button type="text" danger size="small" @click.stop="removeLine(index)"><DeleteOutlined /></a-button>
             </template>
           </template>
@@ -90,17 +91,7 @@
 
       <!-- 右侧：会员、合计、功能键 -->
       <aside class="pos-side">
-        <div class="pos-member">
-          <template v-if="member">
-            <div class="member-name">
-              <IdcardOutlined /> {{ member.name || member.memberCode }}
-              <a-tag color="gold">{{ member.levelName || $t('pos.cashier.member') }}</a-tag>
-              <a-button type="link" size="small" @click.stop="setMember(null)">{{ $t('common.action.clear') }}</a-button>
-            </div>
-            <div class="sub-text">{{ member.memberCode }} · {{ member.phone }}</div>
-          </template>
-          <a-button v-else block @click.stop="memberRef.open()">{{ $t('pos.cashier.identifyMember') }} (F3)</a-button>
-        </div>
+        <MemberPanel :member="member" :can-topup="canTopup" @clear="setMember(null)" @identify="memberRef.open()" @topup="openTopup" />
 
         <div class="pos-totals">
           <div class="row"><span>{{ $t('pos.cashier.itemCount') }}</span><span>{{ lines.length }} / {{ qty(totalQty) }}</span></div>
@@ -109,6 +100,10 @@
           <div class="row">
             <span>{{ $t('pos.cashier.orderDiscount') }}</span>
             <a-input-number v-model:value="orderDiscount" :min="0" :precision="2" size="small" :disabled="!can('pos:sale:discount')" @change="schedulePreview" />
+          </div>
+          <div v-if="preview?.promotionId" class="row promo">
+            <span><GiftOutlined /> {{ preview.promotionName }}</span>
+            <span>{{ Number(preview.promoAmount) ? `−${money(preview.promoAmount)}` : dictLabel('pos_promotion_kind', preview.promotionKind) }}</span>
           </div>
           <div v-if="preview?.roundOff" class="row"><span>{{ $t('pos.cashier.roundOff') }}</span><span>{{ money(preview.roundOff) }}</span></div>
           <div class="row payable"><span>{{ $t('pos.cashier.payable') }}</span><span>{{ money(payable) }}</span></div>
@@ -123,7 +118,8 @@
       </aside>
     </main>
 
-    <PayDialog ref="payRef" :terminal-id="terminalId" :ctx="ctx" @paid="onPaid" @closed="refocus" />
+    <PayDialog ref="payRef" :terminal-id="terminalId" :ctx="ctx" :member="member" @paid="onPaid" @closed="refocus" />
+    <TopupDialog ref="topupRef" :terminal-id="terminalId" :ctx="ctx" @done="onTopup" @closed="refocus" />
     <ShiftModal ref="shiftRef" @changed="loadContext" @closed="refocus" />
     <HeldDrawer ref="heldRef" :terminal-id="terminalId" @resume="restore" @closed="refocus" />
     <MemberModal ref="memberRef" :terminal-id="terminalId" :can-register="can('pos:member:add') || !!ctx" @select="setMember" @closed="refocus" />
@@ -137,7 +133,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
-import { BarcodeOutlined, DeleteOutlined, IdcardOutlined, ShoppingCartOutlined } from '@ant-design/icons-vue'
+import { BarcodeOutlined, DeleteOutlined, GiftOutlined, ShoppingCartOutlined } from '@ant-design/icons-vue'
 import { cashierContext, holdSale, lookupGoods, previewSale, terminalOptions as fetchTerminals } from '@/api/pos'
 import { useDict } from '@/composables/useDict'
 import { load as loadLocal, save as saveLocal } from '@/utils/storage'
@@ -148,14 +144,17 @@ import { printReceipt } from '../printing'
 import HeldDrawer from './HeldDrawer.vue'
 import LineEditModal from './LineEditModal.vue'
 import MemberModal from './MemberModal.vue'
+import MemberPanel from './MemberPanel.vue'
 import PayDialog from './PayDialog.vue'
 import ReturnDialog from './ReturnDialog.vue'
 import ShiftModal from './ShiftModal.vue'
+import TopupDialog from './TopupDialog.vue'
 
 /**
  * 收银台（全屏、键盘优先）：扫码框始终获得焦点，扫码枪输入后回车加入购物车（同一商品同一单位累加数量）；
- * 每次修改后向后端试算（取价顺序、限购、折扣上限、抹零以后端为准），结算时选择多种支付方式、计算找零，结算后打印小票。
- * 功能键：F2 数量、F3 会员、F4 挂单、F5 取单、F6 删除行、F7 改价 / 折扣、F8 整单优惠、F9 退货、F12 结算（扫码框为空时回车也结算）、Esc 关闭弹窗
+ * 每次修改后向后端试算（取价顺序、限购、满减满赠、折扣上限、抹零以后端为准；满赠的赠品行由后端生成，只显示、不提交），
+ * 结算时选择多种支付方式（含储值、积分抵现）、计算找零，结算后打印小票。
+ * 功能键：F2 数量、F3 会员、F4 挂单、F5 取单、F6 删除行、F7 改价 / 折扣、F8 整单优惠、F9 退货、F10 储值充值、F12 结算（扫码框为空时回车也结算）、Esc 关闭弹窗
  */
 const { t } = useI18n()
 const router = useRouter()
@@ -186,6 +185,17 @@ const heldRef = ref()
 const memberRef = ref()
 const lineRef = ref()
 const returnRef = ref()
+const topupRef = ref()
+
+const canTopup = computed(() => can('pos:sale:topup') && !!shift.value)
+/** 满赠的赠品行（试算结果中 gift = true，追加在购物车之后） */
+const tableRows = computed(() => [
+  ...lines.value,
+  ...(preview.value?.lines || []).filter((l) => l.gift).map((l, i) => ({
+    key: `gift-${i}-${l.materialId}`, gift: true, materialId: l.materialId, code: l.materialCode, name: l.materialName, spec: l.spec,
+    unit: l.unit, qty: l.qty, price: l.price, priceSource: l.priceSource, amount: l.amount
+  }))
+])
 
 const columns = computed(() => [
   { title: '#', key: 'index', width: 46 },
@@ -201,7 +211,7 @@ const totalQty = computed(() => lines.value.reduce((s, l) => s + Number(l.qty ||
 const localAmount = computed(() => lines.value.reduce((s, l) => s + Number(l.amount || 0), 0))
 const payable = computed(() => (preview.value ? Number(preview.value.payable) : Math.max(0, localAmount.value - Number(orderDiscount.value || 0))))
 
-const sourceColor = (s) => ({ [PosPriceSource.SPECIAL]: 'red', [PosPriceSource.MEMBER]: 'gold', [PosPriceSource.MANUAL]: 'purple' })[s] || 'default'
+const sourceColor = (s) => ({ [PosPriceSource.SPECIAL]: 'red', [PosPriceSource.MEMBER]: 'gold', [PosPriceSource.MANUAL]: 'purple', [PosPriceSource.GIFT]: 'magenta' })[s] || 'default'
 
 const keys = computed(() => [
   { key: 'F2', label: t('pos.cashier.keyQty'), run: focusQty, disabled: current.value < 0 },
@@ -212,8 +222,19 @@ const keys = computed(() => [
   { key: 'F7', label: t('pos.cashier.keyEdit'), run: editLine, disabled: current.value < 0 || !(can('pos:sale:price') || can('pos:sale:discount')) },
   { key: 'F8', label: t('pos.cashier.keyOrderDiscount'), run: focusOrderDiscount, disabled: !can('pos:sale:discount') },
   { key: 'F9', label: t('pos.cashier.keyReturn'), run: () => returnRef.value.open(), disabled: !shift.value || !(can('pos:sale:return') || can('pos:sale:noReceiptReturn')) },
+  { key: 'F10', label: t('pos.cashier.keyTopup'), run: openTopup, disabled: !canTopup.value || !member.value },
   { key: 'F12', label: t('pos.cashier.keyCheckout'), run: checkout, disabled: !lines.value.length || !shift.value, primary: true }
 ])
+
+/** 储值充值（已识别会员、当班、有收银充值权限） */
+function openTopup() {
+  if (canTopup.value && member.value) topupRef.value.open(member.value)
+}
+
+function onTopup(r) {
+  if (member.value && member.value.id === r.memberId) member.value = { ...member.value, balance: r.balanceAfter }
+  refocus()
+}
 
 onMounted(async () => {
   window.addEventListener('keydown', onKeydown)
@@ -337,6 +358,7 @@ async function runPreview() {
     const p = await previewSale(payload())
     preview.value = p
     previewError.value = ''
+    if (p.member && member.value?.id === p.member.id) member.value = p.member
     p.lines.forEach((pl, i) => {
       const l = lines.value[i]
       if (!l || l.materialId !== pl.materialId) return
@@ -415,6 +437,7 @@ function onKeydown(e) {
     F7: editLine,
     F8: focusOrderDiscount,
     F9: () => keys.value.find((k) => k.key === 'F9')?.disabled || returnRef.value.open(),
+    F10: openTopup,
     F12: checkout
   }
   if (map[e.key]) {
@@ -490,15 +513,14 @@ function onKeydown(e) {
   flex-direction: column;
   gap: 12px;
 }
-.pos-member,
 .pos-totals,
 .pos-keys {
   background: var(--app-card-bg, #fff);
   border-radius: 8px;
   padding: 12px;
 }
-.member-name {
-  font-weight: 600;
+.pos-totals .promo {
+  color: #c41d7f;
 }
 .pos-totals .row {
   display: flex;
@@ -545,6 +567,9 @@ function onKeydown(e) {
 :deep(.pos-row-current) td {
   background: #e6f4ff !important;
 }
+:deep(.pos-row-gift) td {
+  background: #fff0f6 !important;
+}
 </style>
 
 <style>
@@ -553,5 +578,11 @@ html[data-theme='dark'] .pos-screen {
 }
 html[data-theme='dark'] .pos-screen .pos-row-current td {
   background: #111d2c !important;
+}
+html[data-theme='dark'] .pos-screen .pos-row-gift td {
+  background: #291321 !important;
+}
+html[data-theme='dark'] .pos-screen .pos-member {
+  background: #1f1f1f;
 }
 </style>

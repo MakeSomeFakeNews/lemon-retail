@@ -5,7 +5,7 @@
     <sql id="columns">
         m.id, m.member_code, m.name, m.phone, m.gender, m.birthday, m.level_id, m.store_id, m.status, m.total_amount, m.visit_count,
         m.last_visit_time, m.points, m.balance, m.remark, m.create_by, m.create_time, m.update_time,
-        l.name AS level_name, l.discount_rate, st.name AS store_name
+        l.name AS level_name, l.discount_rate, l.points_rate, st.name AS store_name
     </sql>
 
     <select id="selectPageList" resultType="com.lemon.erp.modules.pos.entity.PosMember">
@@ -46,5 +46,25 @@
                last_visit_time = NOW(), update_time = NOW()
         WHERE id = #{id}
     </update>
+
+    <update id="addPoints">
+        UPDATE pos_member SET points = points + #{points}, update_time = NOW() WHERE id = #{id}
+    </update>
+
+    <update id="deductPoints">
+        UPDATE pos_member SET points = points - #{points}, update_time = NOW() WHERE id = #{id} AND points &gt;= #{points}
+    </update>
+
+    <update id="addBalance">
+        UPDATE pos_member SET balance = balance + #{amount}, update_time = NOW() WHERE id = #{id}
+    </update>
+
+    <update id="deductBalance">
+        UPDATE pos_member SET balance = balance - #{amount}, update_time = NOW() WHERE id = #{id} AND balance &gt;= #{amount}
+    </update>
+
+    <select id="selectAccount" resultType="com.lemon.erp.modules.pos.entity.PosMember">
+        SELECT id, member_code, points, balance FROM pos_member WHERE id = #{id}
+    </select>
 
 </mapper>

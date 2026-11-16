@@ -9,12 +9,14 @@ import com.lemon.erp.modules.pos.entity.PosHeldSale;
 import com.lemon.erp.modules.pos.entity.PosMember;
 import com.lemon.erp.modules.pos.entity.PosPayment;
 import com.lemon.erp.modules.pos.entity.PosSale;
+import com.lemon.erp.modules.pos.entity.PosTopup;
 import com.lemon.erp.modules.pos.service.PosCashierService;
 import com.lemon.erp.modules.pos.service.PosHeldSaleService;
 import com.lemon.erp.modules.pos.service.PosMemberService;
 import com.lemon.erp.modules.pos.service.PosPayService;
 import com.lemon.erp.modules.pos.service.PosSaleService;
 import com.lemon.erp.modules.pos.service.PosTerminalService;
+import com.lemon.erp.modules.pos.service.PosTopupService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -44,6 +46,7 @@ public class PosCashierController {
     private final PosPayService payService;
     private final PosMemberService memberService;
     private final PosTerminalService terminalService;
+    private final PosTopupService topupService;
 
     @GetMapping("/context")
     @PreAuthorize("@ss.hasPerm('pos:cashier:list')")
@@ -96,6 +99,14 @@ public class PosCashierController {
     @PreAuthorize("@ss.hasAnyPerm('pos:cashier:list', 'pos:sale:list')")
     public R<PosSale> byNo(@RequestParam String saleNo) {
         return R.ok(saleService.findByNo(saleNo));
+    }
+
+    /** 收银台储值充值（pos:sale:topup，服务中校验），返回充值单 */
+    @PostMapping("/cashier/topup")
+    @PreAuthorize("@ss.hasPerm('pos:cashier:list')")
+    @OperLog(title = "收银充值", type = OperType.INSERT) // i18n-ignore
+    public R<PosTopup> topup(@Valid @RequestBody PosRequests.Topup req) {
+        return R.ok(topupService.detail(topupService.topupAtPos(req)));
     }
 
     // ---------------------------------------------------------------- 挂单

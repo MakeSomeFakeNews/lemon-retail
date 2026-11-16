@@ -12,13 +12,30 @@
 
     <update id="bindSale">
         UPDATE pos_payment SET sale_id = #{saleId}, account_id = #{accountId}, update_time = NOW()
-        WHERE id = #{id} AND status = 'SUCCESS' AND sale_id IS NULL
+        WHERE id = #{id} AND status = 'SUCCESS' AND sale_id IS NULL AND topup_id IS NULL
     </update>
 
     <update id="addRefunded">
         UPDATE pos_payment SET refunded_amount = refunded_amount + #{amount}, update_time = NOW()
         WHERE id = #{id} AND amount - refunded_amount &gt;= #{amount}
     </update>
+
+    <update id="bindTopup">
+        UPDATE pos_payment SET topup_id = #{topupId}, account_id = #{accountId}, update_time = NOW()
+        WHERE id = #{id} AND status = 'SUCCESS' AND sale_id IS NULL AND topup_id IS NULL
+    </update>
+
+    <select id="selectByTopupId" resultType="com.lemon.erp.modules.pos.entity.PosPayment">
+        SELECT p.*, a.name AS account_name
+        FROM pos_payment p
+        LEFT JOIN fin_account a ON a.id = p.account_id
+        WHERE p.topup_id = #{topupId}
+        ORDER BY p.id
+    </select>
+
+    <select id="sumRefundedPoints" resultType="java.math.BigDecimal">
+        SELECT COALESCE(-SUM(points), 0) FROM pos_payment WHERE orig_payment_id = #{origPaymentId} AND points IS NOT NULL
+    </select>
 
     <select id="selectForUpdate" resultType="com.lemon.erp.modules.pos.entity.PosPayment">
         SELECT * FROM pos_payment WHERE id = #{id} FOR UPDATE

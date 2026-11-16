@@ -161,6 +161,8 @@ export default {
     paid: '实收',
     change: '找零',
     payMethods: '支付方式',
+    posPromotion: '满减活动',
+    pointsEarned: '本单积分',
     goods: '商品',
     salePrice: '单价',
     shiftNo: '班次',

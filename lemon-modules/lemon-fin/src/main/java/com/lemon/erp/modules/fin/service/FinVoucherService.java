@@ -182,7 +182,7 @@ public class FinVoucherService {
 
     /** 预收预付、坏账、调拨、其他收支、应收应付对冲生成的凭证与业务单据联动，不能直接删除 */
     private static final java.util.Set<VoucherSource> UNDELETABLE_SOURCES = java.util.EnumSet.of(VoucherSource.ADVANCE,
-            VoucherSource.BAD_DEBT, VoucherSource.TRANSFER, VoucherSource.INCOME_EXPENSE, VoucherSource.NETTING);
+            VoucherSource.BAD_DEBT, VoucherSource.TRANSFER, VoucherSource.INCOME_EXPENSE, VoucherSource.NETTING, VoucherSource.POS_DAILY_CLOSE);
 
     private static String sourceLabel(VoucherSource source) {
         return switch (source) {
@@ -191,6 +191,7 @@ public class FinVoucherService {
             case TRANSFER -> "fin.label.fundTransfer";
             case INCOME_EXPENSE -> "fin.label.incomeExpenseDoc";
             case NETTING -> "fin.label.nettingDoc";
+            case POS_DAILY_CLOSE -> "fin.label.posDailyClose";
             default -> source.name();
         };
     }

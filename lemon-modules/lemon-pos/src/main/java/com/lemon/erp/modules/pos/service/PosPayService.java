@@ -200,7 +200,7 @@ public class PosPayService {
         if (p.getStatus() == PaymentStatus.PENDING) {
             provider.close(config, outTradeNo);
             update(p.getId(), PaymentStatus.PENDING, PaymentStatus.CLOSED, null, null, null);
-        } else if (p.getStatus() == PaymentStatus.SUCCESS && p.getSaleId() == null && p.getAmount().signum() > 0) {
+        } else if (p.getStatus() == PaymentStatus.SUCCESS && p.getSaleId() == null && p.getTopupId() == null && p.getAmount().signum() > 0) {
             String refundNo = tx.execute(s -> docNoService.next(PosDocNos.PAYMENT));
             PayProvider.PayResult r = provider.refund(config, outTradeNo, refundNo, p.getAmount(), p.getAmount());
             if (r.status() != PaymentStatus.SUCCESS) {
@@ -210,7 +210,7 @@ public class PosPayService {
             int n = paymentMapper.update(Wrappers.<PosPayment>lambdaUpdate().set(PosPayment::getStatus, PaymentStatus.CLOSED)
                     .set(PosPayment::getFailReason, Messages.get("pos.text.paymentCancelled"))
                     .set(PosPayment::getUpdateTime, LocalDateTime.now())
-                    .eq(PosPayment::getId, p.getId()).eq(PosPayment::getStatus, PaymentStatus.SUCCESS).isNull(PosPayment::getSaleId));
+                    .eq(PosPayment::getId, p.getId()).eq(PosPayment::getStatus, PaymentStatus.SUCCESS).isNull(PosPayment::getSaleId).isNull(PosPayment::getTopupId));
             if (n == 0) {
                 throw new BizException("pos.error.paymentAlreadySettled", outTradeNo);
             }

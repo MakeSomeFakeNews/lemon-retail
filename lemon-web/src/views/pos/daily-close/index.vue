@@ -45,7 +45,7 @@
         <a-alert v-if="summary.closed" type="warning" show-icon :message="$t('pos.daily.alreadyClosed')" class="gap" />
         <a-alert v-else-if="summary.openShifts" type="error" show-icon :message="$t('pos.daily.openShifts', { n: summary.openShifts })" class="gap" />
         <SummaryView :sales="summary.sales" :pays="summary.pays" :net-amount="summary.netAmount" :shift-count="summary.shiftCount"
-                     :expected-cash="summary.expectedCash" :counted-cash="summary.countedCash" :cash-diff="summary.cashDiff" />
+                     :expected-cash="summary.expectedCash" :counted-cash="summary.countedCash" :cash-diff="summary.cashDiff" :member="summary" />
         <a-input v-model:value="closeForm.remark" :placeholder="$t('common.field.remark')" :maxlength="255" class="gap" />
         <div class="sub-text gap">{{ $t('pos.daily.closeTip') }}</div>
       </template>
@@ -54,7 +54,8 @@
     <a-modal v-model:open="detailOpen" :title="detail ? `${detail.storeName} ${detail.businessDate}` : ''" width="720px" :footer="null">
       <template v-if="detail">
         <SummaryView :sales="detail" :pays="detail.pays" :net-amount="detail.netAmount" :shift-count="detail.shiftCount"
-                     :expected-cash="detail.expectedCash" :counted-cash="detail.countedCash" :cash-diff="detail.cashDiff" />
+                     :expected-cash="detail.expectedCash" :counted-cash="detail.countedCash" :cash-diff="detail.cashDiff"
+                     :member="{ ...detail, voucherId: detail.voucherId ?? null }" />
         <div class="sub-text gap">{{ $t('pos.daily.closedInfo', { by: detail.closedByName || '-', time: detail.closedTime || '-' }) }}</div>
         <div v-if="detail.reopenedTime" class="sub-text">{{ $t('pos.daily.reopenedInfo', { by: detail.reopenedByName || '-', time: detail.reopenedTime }) }}</div>
       </template>

@@ -1,12 +1,16 @@
 package com.lemon.erp.modules.pos.dto;
 
 import com.lemon.erp.modules.pos.entity.PosMember;
+import com.lemon.erp.modules.pos.entity.PosMemberRule;
+import com.lemon.erp.modules.pos.entity.PosPointsExclude;
 import com.lemon.erp.modules.pos.entity.PosShift;
 import com.lemon.erp.modules.pos.entity.PosTerminal;
+import com.lemon.erp.modules.pos.entity.PosTopupTier;
 import com.lemon.erp.modules.pos.model.PayMethod;
 import com.lemon.erp.modules.pos.model.PayProviderType;
 import com.lemon.erp.modules.pos.model.PosPriceSource;
 import com.lemon.erp.modules.pos.model.PosRounding;
+import com.lemon.erp.modules.pos.model.PromotionKind;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -26,9 +30,12 @@ public final class PosViews {
      * 收银台进入收银时的上下文：收银台、门店、当班班次、可用的支付方式与通道、收银相关的权限
      *
      * @param perms 当前用户在收银台可用的操作（改价、折扣、超限折扣、退货、无原单退货、作废）
+     * @param memberRule 积分与储值规则（积分抵现、储值支付、充值）
+     * @param topupTiers 充值赠送档位
      */
     public record Context(PosTerminal terminal, String storeName, PosShift shift, PayProviderType provider,
-                          List<PayMethod> payMethods, BigDecimal maxDiscountRate, PosRounding rounding, List<String> perms) {
+                          List<PayMethod> payMethods, BigDecimal maxDiscountRate, PosRounding rounding, List<String> perms,
+                          PosMemberRule memberRule, List<PosTopupTier> topupTiers) {
     }
 
     /**
@@ -68,10 +75,14 @@ public final class PosViews {
         private BigDecimal discountRate;
         private BigDecimal salePrice;
         private BigDecimal amount;
+        /** 分摊的满减 / 满折优惠 */
+        private BigDecimal promoShare = BigDecimal.ZERO;
         private BigDecimal orderShare;
         private BigDecimal finalAmount;
         /** 低于最低售价（控制方式为提示时只提示） */
         private boolean belowMin;
+        /** 满赠的赠品行（单价 0，由活动生成，前端不提交） */
+        private boolean gift;
         private String serialNos;
         private String remark;
     }
@@ -80,9 +91,12 @@ public final class PosViews {
      * 试算结果
      *
      * @param manualDiscountRate 手工优惠（改价、单行折扣、整单优惠）占取价金额的百分比，与折扣上限比较
+     * @param promotionId        应用的满减 / 满折 / 满赠活动（每单最多一个），promoAmount 为满减 / 满折优惠（满赠为 0，赠品行见 lines）
+     * 应收 = 商品金额 − 满减优惠 − 整单优惠 − 抹零
      */
     public record Preview(List<PricedLine> lines, BigDecimal totalQty, BigDecimal listAmount, BigDecimal amount, BigDecimal orderDiscount,
-                          BigDecimal roundOff, BigDecimal payable, BigDecimal manualDiscountRate, PosMember member) {
+                          BigDecimal roundOff, BigDecimal payable, BigDecimal manualDiscountRate, PosMember member,
+                          Long promotionId, String promotionName, PromotionKind promotionKind, BigDecimal promoAmount) {
     }
 
     /** 班次的收款按支付方式汇总 */
@@ -119,10 +133,12 @@ public final class PosViews {
 
     /**
      * 门店日结试算：openShifts 为还没有交班的班次数（有时不能日结）
+     * topupPays 为储值充值按支付方式 × 结算账户的收款，storedValueAmount 为本店储值消费净额（消费 − 退回），pointsAmount 为积分抵现净额
      */
     public record DailySummary(Long storeId, String storeName, LocalDate businessDate, SaleSummary sales, List<PayRow> pays,
                                BigDecimal netAmount, int shiftCount, int openShifts, BigDecimal expectedCash, BigDecimal countedCash,
-                               BigDecimal cashDiff, boolean closed) {
+                               BigDecimal cashDiff, boolean closed, int topupCount, BigDecimal topupAmount, BigDecimal bonusAmount,
+                               List<PayRow> topupPays, BigDecimal storedValueAmount, BigDecimal pointsAmount) {
     }
 
     /** 收银日报的一行：支付方式金额按 PayMethod 名称 */
@@ -190,5 +206,35 @@ public final class PosViews {
     /** 支付通道设置：密钥只返回是否已设置 */
     public record PayConfig(PayProviderType provider, String appId, String merchantNo, boolean hasApiKey, boolean hasApiSecret,
                             String notifyUrl, String remark, List<PayProviderType> providers) {
+    }
+
+    /**
+     * 储值跨店结算的一行（按门店）。结算金额 = 本店储值消费净额（消费 − 退回）− 本店充值实收：正数为总部应付门店、负数为门店应缴总部；
+     * 赠送、调整单列，不参与结算（赠送成本由总部承担，调整由财务按原因另行处理）
+     */
+    @Data
+    public static class StoredValueSettleRow {
+        private Long storeId;
+        private String storeCode;
+        private String storeName;
+        private BigDecimal topupAmount;
+        private Integer topupCount;
+        private BigDecimal bonusAmount;
+        private BigDecimal consumeAmount;
+        private BigDecimal refundAmount;
+        private BigDecimal netConsume;
+        private BigDecimal adjustAmount;
+        private BigDecimal settleAmount;
+    }
+
+    public record StoredValueSettle(List<StoredValueSettleRow> rows, StoredValueSettleRow total) {
+    }
+
+    /** 积分与储值规则：规则、不积分的商品 / 分类、充值赠送档位 */
+    public record MemberRule(PosMemberRule rule, List<PosPointsExclude> excludes, List<PosTopupTier> tiers) {
+    }
+
+    /** 积分清零结果：清零的会员数与积分 */
+    public record PointsCleared(int members, BigDecimal points) {
     }
 }

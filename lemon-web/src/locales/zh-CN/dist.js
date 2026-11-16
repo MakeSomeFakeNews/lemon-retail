@@ -192,6 +192,8 @@ export default {
     storeType: '门店类型',
     salesAmount: '销售额',
     returnAmount: '退货额',
+    retailAmount: '其中 POS 零售',
+    retailReturnAmount: '其中 POS 退货',
     netSales: '销售净额',
     cost: '销售成本',
     grossProfit: '毛利',

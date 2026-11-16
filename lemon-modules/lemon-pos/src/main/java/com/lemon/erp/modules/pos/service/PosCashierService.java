@@ -7,6 +7,7 @@ import com.lemon.erp.framework.store.StoreBrief;
 import com.lemon.erp.framework.store.StoreLookup;
 import com.lemon.erp.modules.pos.dto.PosViews;
 import com.lemon.erp.modules.pos.entity.PosMember;
+import com.lemon.erp.modules.pos.entity.PosMemberRule;
 import com.lemon.erp.modules.pos.entity.PosTerminal;
 import com.lemon.erp.modules.pos.model.PayMethod;
 import com.lemon.erp.modules.pos.model.PosRounding;
@@ -36,7 +37,7 @@ public class PosCashierService {
     /** 收银台上按权限显示的操作 */
     private static final List<String> CASHIER_PERMS = List.of(PosCartCalculator.PRICE_PERM, PosCartCalculator.DISCOUNT_PERM,
             PosCartCalculator.DISCOUNT_ANY_PERM, PosCartCalculator.BELOW_MIN_PERM, PosSaleService.RETURN_PERM, PosSaleService.NO_RECEIPT_PERM,
-            PosSaleService.VOID_PERM, "pos:member:add");
+            PosSaleService.VOID_PERM, "pos:member:add", PosTopupService.TOPUP_PERM, PosTenderService.REDEEM_PERM, PosTopupService.ADMIN_TOPUP_PERM);
 
     private final PosTerminalService terminalService;
     private final PosTerminalMapper terminalMapper;
@@ -44,6 +45,7 @@ public class PosCashierService {
     private final PosPayService payService;
     private final PosPricingService pricingService;
     private final PosMemberService memberService;
+    private final PosMemberRuleService ruleService;
     private final WmsMaterialService materialService;
     private final ScmPriceControlService priceControlService;
     private final StoreLookup storeLookup;
@@ -52,10 +54,13 @@ public class PosCashierService {
 
     public PosViews.Context context(Long terminalId) {
         PosTerminal terminal = terminalService.requireForCashier(terminalId);
-        List<PayMethod> methods = Arrays.stream(PayMethod.values()).filter(PayMethod::available).toList();
+        PosMemberRule rule = ruleService.get();
+        // 储值、积分抵现按规则是否启用
+        List<PayMethod> methods = Arrays.stream(PayMethod.values()).filter(m -> m != PayMethod.STORED_VALUE || Boolean.TRUE.equals(rule.getStoredValueEnabled()))
+                .filter(m -> m != PayMethod.POINTS || Boolean.TRUE.equals(rule.getRedeemEnabled())).toList();
         return new PosViews.Context(terminal, terminal.getStoreName(), shiftService.current(terminalId), payService.currentProvider(), methods,
                 bizRules.decimal(PosBizRules.MAX_DISCOUNT_RATE), bizRules.option(PosBizRules.ROUNDING, PosRounding.class),
-                CASHIER_PERMS.stream().filter(permissionService::hasPerm).toList());
+                CASHIER_PERMS.stream().filter(permissionService::hasPerm).toList(), rule, ruleService.tiers());
     }
 
     /**

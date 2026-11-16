@@ -517,6 +517,12 @@ export const GoodsRankBy = Object.freeze({
   PROFIT: 'PROFIT', // 毛利
 })
 
+/** com.lemon.erp.modules.pos.model.GoodsTargetType（字典 pos_goods_target_type） */
+export const GoodsTargetType = Object.freeze({
+  MATERIAL: 'MATERIAL',
+  CATEGORY: 'CATEGORY',
+})
+
 /** com.lemon.erp.modules.system.im.ImPlatform（字典 sys_im_platform） */
 export const ImPlatform = Object.freeze({
   DINGTALK: 'DINGTALK',
@@ -558,6 +564,8 @@ export const IoCategoryCode = Object.freeze({
   TRANSFER_FEE: 'TRANSFER_FEE', // 调拨费用
   RETAIL_SALES: 'RETAIL_SALES', // 零售收入
   RETAIL_REFUND: 'RETAIL_REFUND', // 零售退款
+  MEMBER_TOPUP: 'MEMBER_TOPUP', // 会员储值
+  MEMBER_BONUS: 'MEMBER_BONUS', // 储值赠送
 })
 
 /** com.lemon.erp.modules.fin.model.IoPartnerType（字典 fin_io_partner_type） */
@@ -778,6 +786,7 @@ export const PayMethod = Object.freeze({
   ALIPAY: 'ALIPAY', // 支付宝
   BANK_CARD: 'BANK_CARD', // 银行卡
   STORED_VALUE: 'STORED_VALUE', // 储值
+  POINTS: 'POINTS', // 积分抵现
 })
 
 /** com.lemon.erp.modules.pos.model.PayProviderType（字典 pos_pay_provider） */
@@ -806,6 +815,16 @@ export const PlanUnit = Object.freeze({
   MONTH: 'MONTH',
 })
 
+/** com.lemon.erp.modules.pos.model.PointsType（字典 pos_points_type） */
+export const PointsType = Object.freeze({
+  EARN: 'EARN', // 消费获得
+  REDEEM: 'REDEEM', // 积分抵现
+  RETURN: 'RETURN', // 退货 / 作废扣回获得的积分
+  REFUND: 'REFUND', // 退货 / 作废退回抵现使用的积分
+  ADJUST: 'ADJUST', // 手工调整
+  CLEAR: 'CLEAR', // 批量清零
+})
+
 /** com.lemon.erp.modules.pos.model.PosPriceSource（字典 pos_price_source） */
 export const PosPriceSource = Object.freeze({
   SPECIAL: 'SPECIAL',
@@ -813,6 +832,7 @@ export const PosPriceSource = Object.freeze({
   SCHEME: 'SCHEME',
   RETAIL: 'RETAIL',
   MANUAL: 'MANUAL',
+  GIFT: 'GIFT',
 })
 
 /** com.lemon.erp.modules.pos.model.PosReportDimension（字典 pos_report_dimension） */
@@ -870,6 +890,26 @@ export const PromoType = Object.freeze({
   DISCOUNT: 'DISCOUNT',
   REDUCE: 'REDUCE',
   GIFT: 'GIFT',
+})
+
+/** com.lemon.erp.modules.pos.model.PromotionKind（字典 pos_promotion_kind） */
+export const PromotionKind = Object.freeze({
+  REDUCE: 'REDUCE', // 满 X 减 Y
+  DISCOUNT: 'DISCOUNT', // 满 X 打 Z 折
+  GIFT: 'GIFT', // 满 X 赠商品
+})
+
+/** com.lemon.erp.modules.pos.model.PromotionRange（字典 pos_promotion_range） */
+export const PromotionRange = Object.freeze({
+  ALL: 'ALL',
+  MATERIALS: 'MATERIALS', // 指定商品
+  CATEGORIES: 'CATEGORIES', // 指定分类
+})
+
+/** com.lemon.erp.modules.pos.model.PromotionThreshold（字典 pos_promotion_threshold） */
+export const PromotionThreshold = Object.freeze({
+  AMOUNT: 'AMOUNT',
+  QTY: 'QTY',
 })
 
 /** com.lemon.erp.modules.scm.model.PurchaseFreightCost */
@@ -1137,6 +1177,15 @@ export const StoreType = Object.freeze({
   DC: 'DC', // 配送中心
 })
 
+/** com.lemon.erp.modules.pos.model.StoredValueType（字典 pos_stored_value_type） */
+export const StoredValueType = Object.freeze({
+  TOPUP: 'TOPUP', // 充值
+  BONUS: 'BONUS', // 充值赠送
+  CONSUME: 'CONSUME', // 储值支付
+  REFUND: 'REFUND', // 退货 / 作废退回储值
+  ADJUST: 'ADJUST', // 手工调整
+})
+
 /** com.lemon.erp.modules.scm.model.SupplierLevel（字典 scm_supplier_level） */
 export const SupplierLevel = Object.freeze({
   A: 'A', // A 优秀
@@ -1198,6 +1247,7 @@ export const VoucherSource = Object.freeze({
   TRANSFER: 'TRANSFER', // 账户调拨
   INCOME_EXPENSE: 'INCOME_EXPENSE', // 其他收支单
   NETTING: 'NETTING', // 应收应付对冲
+  POS_DAILY_CLOSE: 'POS_DAILY_CLOSE', // 门店日结
 })
 
 /** com.lemon.erp.modules.fin.model.VoucherStatus（字典 fin_voucher_status） */

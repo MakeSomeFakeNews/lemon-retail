@@ -29,6 +29,8 @@ public class PosDocNos {
     public static final String MEMBER = "HY";
     /** 支付单号（商户订单号、退款单号） */
     public static final String PAYMENT = "ZF";
+    /** 储值充值单 */
+    public static final String TOPUP = "CZ";
 
     @Bean
     @Order(1)
@@ -38,6 +40,7 @@ public class PosDocNos {
                 new Type(RETURN, "pos.label.returnDoc", DateFormat.YYYYMMDD, 5, ResetCycle.DAY),
                 new Type(PAYMENT, "pos.label.paymentNo", DateFormat.YYYYMMDD, 8, ResetCycle.DAY),
                 doc(SHIFT, "pos.label.shiftNo"),
+                doc(TOPUP, "pos.label.topupDoc"),
                 master(TERMINAL, "pos.label.terminalCode"),
                 master(MEMBER, "pos.label.memberCode"));
     }

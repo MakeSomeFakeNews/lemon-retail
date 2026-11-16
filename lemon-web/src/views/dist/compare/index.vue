@@ -61,13 +61,15 @@ const loading = ref(false)
 
 const pct = (v) => (v == null ? '-' : `${Number(v).toFixed(2)}%`)
 const m = (v) => money(v)
-const SUM_KEYS = ['salesAmount', 'returnAmount', 'netSales', 'cost', 'grossProfit', 'purchaseAmount', 'deliveryAmount', 'stockAmount', 'approvedQty', 'deliveredQty']
+const SUM_KEYS = ['salesAmount', 'returnAmount', 'retailAmount', 'retailReturnAmount', 'netSales', 'cost', 'grossProfit', 'purchaseAmount', 'deliveryAmount', 'stockAmount', 'approvedQty', 'deliveredQty']
 const columns = [
   { title: t('dist.common.store'), dataIndex: 'storeName', width: 160, fixed: 'left' },
   { title: t('dist.compare.storeType'), key: 'storeType', dataIndex: 'storeType', width: 100 },
   { title: t('dist.compare.region'), dataIndex: 'regionName', width: 110 },
   { title: t('dist.compare.salesAmount'), dataIndex: 'salesAmount', width: 120, align: 'right', fmt: m },
   { title: t('dist.compare.returnAmount'), dataIndex: 'returnAmount', width: 110, align: 'right', fmt: m },
+  { title: t('dist.compare.retailAmount'), dataIndex: 'retailAmount', width: 120, align: 'right', fmt: m },
+  { title: t('dist.compare.retailReturnAmount'), dataIndex: 'retailReturnAmount', width: 120, align: 'right', fmt: m },
   { title: t('dist.compare.netSales'), dataIndex: 'netSales', width: 120, align: 'right', fmt: m },
   { title: t('dist.compare.cost'), dataIndex: 'cost', width: 120, align: 'right', fmt: m },
   { title: t('dist.compare.grossProfit'), dataIndex: 'grossProfit', width: 120, align: 'right', fmt: m },

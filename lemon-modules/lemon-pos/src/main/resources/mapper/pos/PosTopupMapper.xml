@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.pos.mapper.PosTopupMapper">
+
+    <sql id="columns">
+        t.*, st.name AS store_name, pt.name AS terminal_name, m.member_code, m.name AS member_name, m.phone AS member_phone,
+        u.nickname AS create_by_name
+    </sql>
+
+    <sql id="joins">
+        LEFT JOIN store_info st ON st.id = t.store_id
+        LEFT JOIN pos_terminal pt ON pt.id = t.terminal_id
+        LEFT JOIN pos_member m ON m.id = t.member_id
+        LEFT JOIN sys_user u ON u.id = t.create_by
+    </sql>
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.pos.entity.PosTopup">
+        SELECT <include refid="columns"/>
+        FROM pos_topup t
+        <include refid="joins"/>
+        <where>
+            <if test="q.keyword != null and q.keyword != ''">
+                (t.topup_no LIKE CONCAT('%', #{q.keyword}, '%') OR m.phone = #{q.keyword} OR m.member_code = #{q.keyword})
+            </if>
+            <if test="q.storeId != null">AND t.store_id = #{q.storeId}</if>
+            <if test="q.memberId != null">AND t.member_id = #{q.memberId}</if>
+            <if test="q.begin != null">AND t.business_date &gt;= #{q.begin}</if>
+            <if test="q.end != null">AND t.business_date &lt;= #{q.end}</if>
+        </where>
+        ORDER BY t.id DESC
+    </select>
+
+    <select id="selectDetail" resultType="com.lemon.erp.modules.pos.entity.PosTopup">
+        SELECT <include refid="columns"/>
+        FROM pos_topup t
+        <include refid="joins"/>
+        WHERE t.id = #{id}
+    </select>
+
+    <select id="selectDaySummary" resultType="java.util.Map">
+        SELECT COUNT(*) AS "topupCount", COALESCE(SUM(amount), 0) AS "topupAmount", COALESCE(SUM(bonus_amount), 0) AS "bonusAmount"
+        FROM pos_topup
+        WHERE store_id = #{storeId} AND business_date = #{date}
+    </select>
+
+</mapper>

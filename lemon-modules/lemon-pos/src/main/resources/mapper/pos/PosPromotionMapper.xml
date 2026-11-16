@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.pos.mapper.PosPromotionMapper">
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.pos.entity.PosPromotion">
+        SELECT p.*, u.nickname AS create_by_name
+        FROM pos_promotion p
+        LEFT JOIN sys_user u ON u.id = p.create_by
+        <where>
+            <if test="q.keyword != null and q.keyword != ''">p.name LIKE CONCAT('%', #{q.keyword}, '%')</if>
+            <if test="q.status != null">AND p.status = #{q.status}</if>
+            <if test="q.kind != null">AND p.kind = #{q.kind}</if>
+        </where>
+        ORDER BY p.id DESC
+    </select>
+
+    <select id="selectDetail" resultType="com.lemon.erp.modules.pos.entity.PosPromotion">
+        SELECT p.*, u.nickname AS create_by_name
+        FROM pos_promotion p
+        LEFT JOIN sys_user u ON u.id = p.create_by
+        WHERE p.id = #{id}
+    </select>
+
+    <select id="selectActive" resultType="com.lemon.erp.modules.pos.entity.PosPromotion">
+        SELECT p.*
+        FROM pos_promotion p
+        WHERE p.status = 'ACTIVE' AND p.channel IN ('POS', 'ALL') AND p.begin_time &lt;= #{now} AND p.end_time &gt;= #{now}
+        ORDER BY p.priority DESC, p.id
+    </select>
+
+</mapper>

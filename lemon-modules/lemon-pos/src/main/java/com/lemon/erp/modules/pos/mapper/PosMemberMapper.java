@@ -20,4 +20,19 @@ public interface PosMemberMapper extends BaseMapper<PosMember> {
 
     /** 累加消费金额、次数（退货为负金额、次数 0），记录最近消费时间 */
     int addStats(@Param("id") Long id, @Param("amount") BigDecimal amount, @Param("visits") int visits);
+
+    /** 增加积分（可为负数：退货扣回、调整减少时允许为负，见 deductPoints） */
+    int addPoints(@Param("id") Long id, @Param("points") BigDecimal points);
+
+    /** 扣减积分：积分不足时不更新（返回 0） */
+    int deductPoints(@Param("id") Long id, @Param("points") BigDecimal points);
+
+    /** 增加储值余额 */
+    int addBalance(@Param("id") Long id, @Param("amount") BigDecimal amount);
+
+    /** 扣减储值余额：余额不足时不更新（返回 0），保证余额不为负 */
+    int deductBalance(@Param("id") Long id, @Param("amount") BigDecimal amount);
+
+    /** 当前积分、余额（本事务内更新之后读取变动后的值） */
+    PosMember selectAccount(@Param("id") Long id);
 }

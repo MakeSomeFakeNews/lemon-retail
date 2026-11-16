@@ -161,6 +161,8 @@ export default {
     paid: 'Paid',
     change: 'Change',
     payMethods: 'Payment',
+    posPromotion: 'Promotion',
+    pointsEarned: 'Points Earned',
     goods: 'Item',
     salePrice: 'Price',
     shiftNo: 'Shift',

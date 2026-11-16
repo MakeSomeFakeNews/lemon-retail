@@ -37,6 +37,11 @@ public class PosMemberLevel extends BaseEntity {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private BigDecimal upgradeAmount;
 
+    /** 积分倍率：消费积分 = 规则计算的积分 × 倍率（为空按 1） */
+    @DecimalMin(value = "0", message = "{pos.valid.pointsRateRange}")
+    @DecimalMax(value = "100", message = "{pos.valid.pointsRateRange}")
+    private BigDecimal pointsRate;
+
     private Integer sort;
 
     private EnableStatus status;

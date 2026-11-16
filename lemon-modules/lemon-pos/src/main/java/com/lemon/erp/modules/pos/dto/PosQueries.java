@@ -2,11 +2,14 @@ package com.lemon.erp.modules.pos.dto;
 
 import com.lemon.erp.common.enums.EnableStatus;
 import com.lemon.erp.modules.pos.model.DailyCloseStatus;
+import com.lemon.erp.modules.pos.model.PointsType;
 import com.lemon.erp.modules.pos.model.PosReportDimension;
+import com.lemon.erp.modules.pos.model.PromotionKind;
 import com.lemon.erp.modules.pos.model.SaleKind;
 import com.lemon.erp.modules.pos.model.SaleStatus;
 import com.lemon.erp.modules.pos.model.ShiftStatus;
 import com.lemon.erp.modules.pos.model.SpecialStatus;
+import com.lemon.erp.modules.pos.model.StoredValueType;
 import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.LocalDate;
@@ -51,5 +54,33 @@ public final class PosQueries {
     public record CashierReport(PosReportDimension groupBy, Long storeId, Long terminalId, Long cashierId,
                                 @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate begin,
                                 @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
+    }
+
+    /** 满减满赠活动 */
+    public record Promotion(String keyword, SpecialStatus status, PromotionKind kind) {
+    }
+
+    /** 储值充值单：keyword 为充值单号、会员手机号或会员号 */
+    public record Topup(String keyword, Long storeId, Long memberId,
+                        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate begin,
+                        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
+    }
+
+    /** 积分流水：keyword 为会员手机号或会员号、来源单号 */
+    public record PointsLog(String keyword, Long memberId, Long storeId, PointsType changeType,
+                            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate begin,
+                            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
+    }
+
+    /** 储值流水（营业日期范围），跨店结算报表穿透时带门店、类型 */
+    public record StoredValueLog(String keyword, Long memberId, Long storeId, StoredValueType changeType,
+                                 @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate begin,
+                                 @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
+    }
+
+    /** 储值跨店结算：营业日期范围（必填），可按门店筛选 */
+    public record StoredValueSettle(Long storeId,
+                                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate begin,
+                                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
     }
 }
