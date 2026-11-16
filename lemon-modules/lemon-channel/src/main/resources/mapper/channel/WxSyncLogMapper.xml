@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.channel.mapper.WxSyncLogMapper">
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.channel.entity.WxSyncLog">
+        SELECT l.*, s.name AS shop_name
+        FROM ch_wx_sync_log l
+        JOIN ch_wx_shop s ON s.id = l.shop_id
+        <where>
+            <if test="shopId != null">l.shop_id = #{shopId}</if>
+            <if test="syncType != null">AND l.sync_type = #{syncType}</if>
+            <if test="success != null">AND l.success = #{success}</if>
+            <if test="begin != null">AND l.create_time &gt;= #{begin}</if>
+            <if test="end != null">AND l.create_time &lt; #{end}</if>
+        </where>
+        ORDER BY l.id DESC
+    </select>
+</mapper>

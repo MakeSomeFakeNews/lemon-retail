@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.channel.mapper.WxProductMapper">
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.channel.entity.WxProduct">
+        SELECT p.*, s.name AS shop_name, m.code AS material_code, m.name AS material_name, m.spec AS material_spec,
+               m.unit AS material_unit, m.retail_price
+        FROM ch_wx_product p
+        JOIN ch_wx_shop s ON s.id = p.shop_id
+        LEFT JOIN wms_material m ON m.id = p.material_id
+        <where>
+            <if test="q.shopId != null">p.shop_id = #{q.shopId}</if>
+            <if test="q.mapped != null and q.mapped">AND p.material_id IS NOT NULL</if>
+            <if test="q.mapped != null and !q.mapped">AND p.material_id IS NULL</if>
+            <if test="q.removed == null or !q.removed">AND p.removed = 0</if>
+            <if test="q.keyword != null and q.keyword != ''">
+                AND (p.title LIKE CONCAT('%', #{q.keyword}, '%') OR p.sku_attrs LIKE CONCAT('%', #{q.keyword}, '%')
+                     OR p.out_sku_id LIKE CONCAT('%', #{q.keyword}, '%') OR p.sku_code LIKE CONCAT('%', #{q.keyword}, '%')
+                     OR m.code LIKE CONCAT('%', #{q.keyword}, '%') OR m.name LIKE CONCAT('%', #{q.keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY p.shop_id, p.product_id, p.id
+    </select>
+</mapper>
