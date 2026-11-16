@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.dist.mapper.DistDiscrepancyMapper">
+
+    <sql id="columns">
+        x.*, d.delivery_no, d.kind AS delivery_kind, d.receive_date, fs.name AS from_store_name, fw.name AS from_warehouse_name,
+        ts.name AS to_store_name, tw.name AS to_warehouse_name, m.code AS material_code, m.name AS material_name, m.spec, m.unit,
+        t.doc_no AS transfer_no, u.nickname AS create_by_name, hu.nickname AS handle_by_name
+    </sql>
+
+    <!-- 主表为配送单：数据权限规则作用于 dist_delivery（发货、收货仓库） -->
+    <sql id="from">
+        FROM dist_delivery d
+        JOIN dist_discrepancy x ON x.delivery_id = d.id
+        JOIN wms_material m ON m.id = x.material_id
+        LEFT JOIN store_info fs ON fs.id = d.from_store_id
+        LEFT JOIN wms_warehouse fw ON fw.id = d.from_warehouse_id
+        LEFT JOIN store_info ts ON ts.id = d.to_store_id
+        LEFT JOIN wms_warehouse tw ON tw.id = d.to_warehouse_id
+        LEFT JOIN wms_stock_doc t ON t.id = x.transfer_id
+        LEFT JOIN sys_user u ON u.id = x.create_by
+        LEFT JOIN sys_user hu ON hu.id = x.handle_by
+    </sql>
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.dist.entity.DistDiscrepancy">
+        SELECT <include refid="columns"/>
+        <include refid="from"/>
+        <where>
+            <if test="kind != null">d.kind = #{kind}</if>
+            <if test="q.keyword != null">AND d.delivery_no LIKE CONCAT('%', #{q.keyword}, '%')</if>
+            <if test="q.statuses != null">
+                AND x.status IN <foreach collection="q.statuses" item="st" open="(" separator="," close=")">#{st}</foreach>
+            </if>
+            <if test="q.storeId != null">AND (d.from_store_id = #{q.storeId} OR d.to_store_id = #{q.storeId})</if>
+            <if test="q.begin != null">AND d.receive_date &gt;= #{q.begin}</if>
+            <if test="q.end != null">AND d.receive_date &lt;= #{q.end}</if>
+            <if test="q.materialId != null">AND x.material_id = #{q.materialId}</if>
+        </where>
+        ORDER BY x.id DESC
+    </select>
+
+    <select id="selectByDelivery" resultType="com.lemon.erp.modules.dist.entity.DistDiscrepancy">
+        SELECT <include refid="columns"/>
+        <include refid="from"/>
+        WHERE d.id = #{deliveryId}
+        ORDER BY x.id
+    </select>
+
+</mapper>

@@ -47,7 +47,11 @@
         { "path": "pick/index", "style": { "navigationBarTitleText": "拣货" } },
         { "path": "check/index", "style": { "navigationBarTitleText": "盘点" } },
         { "path": "order/index", "style": { "navigationBarTitleText": "销售订单", "enablePullDownRefresh": true } },
-        { "path": "order/detail", "style": { "navigationBarTitleText": "订单详情" } }
+        { "path": "order/detail", "style": { "navigationBarTitleText": "订单详情" } },
+        { "path": "requisition/index", "style": { "navigationBarTitleText": "门店要货", "enablePullDownRefresh": true } },
+        { "path": "requisition/edit", "style": { "navigationBarTitleText": "要货单" } },
+        { "path": "dist-receive/index", "style": { "navigationBarTitleText": "门店收货", "enablePullDownRefresh": true } },
+        { "path": "dist-receive/detail", "style": { "navigationBarTitleText": "收货" } }
       ]
     }
   ],

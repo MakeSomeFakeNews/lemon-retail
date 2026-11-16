@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.dist.mapper.DistDeliveryItemMapper">
+
+    <insert id="insertBatch">
+        INSERT INTO dist_delivery_item (delivery_id, requisition_id, requisition_item_id, material_id, location_id, batch_no, serial_nos, qty, price, remark,
+                                        create_time, update_time) VALUES
+        <foreach collection="list" item="i" separator=",">
+            (#{i.deliveryId}, #{i.requisitionId}, #{i.requisitionItemId}, #{i.materialId}, #{i.locationId}, #{i.batchNo}, #{i.serialNos}, #{i.qty},
+             #{i.price}, #{i.remark}, NOW(), NOW())
+        </foreach>
+    </insert>
+
+</mapper>

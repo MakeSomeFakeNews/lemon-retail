@@ -1,0 +1,10 @@
+plugins {
+    id 'lemon.java-conventions'
+}
+
+description = '门店要货与配送：要货单、要货汇总、配送单（在途调拨）、门店收货与差异处理、门店退仓、门店往来、日期锁定、门店对比报表'
+
+dependencies {
+    // 门店资料（store）及其依赖的 fin → scm → wms：配送单的库存移动经 wms 调拨服务，缺货经 scm 生成采购订单
+    api project(':lemon-modules:lemon-store')
+}

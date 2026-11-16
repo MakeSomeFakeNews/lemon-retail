@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 门店要货单。库存（wms_stock）、在途调拨（wms_stock_doc）、门店（store_info）只读关联 -->
+<mapper namespace="com.lemon.erp.modules.dist.mapper.DistRequisitionMapper">
+
+    <sql id="columns">
+        r.*, s.name AS store_name, w.name AS warehouse_name, ss.name AS supply_store_name, sw.name AS supply_warehouse_name,
+        u.nickname AS create_by_name, au.nickname AS audit_by_name
+    </sql>
+
+    <sql id="joins">
+        LEFT JOIN store_info s ON s.id = r.store_id
+        LEFT JOIN wms_warehouse w ON w.id = r.warehouse_id
+        LEFT JOIN store_info ss ON ss.id = r.supply_store_id
+        LEFT JOIN wms_warehouse sw ON sw.id = r.supply_warehouse_id
+        LEFT JOIN sys_user u ON u.id = r.create_by
+        LEFT JOIN sys_user au ON au.id = r.audit_by
+    </sql>
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.dist.entity.DistRequisition">
+        SELECT <include refid="columns"/>,
+               (SELECT COUNT(*) FROM dist_requisition_item i WHERE i.requisition_id = r.id) AS item_count
+        FROM dist_requisition r
+        <include refid="joins"/>
+        <where>
+            <if test="q.keyword != null">
+                (r.req_no LIKE CONCAT('%', #{q.keyword}, '%') OR r.remark LIKE CONCAT('%', #{q.keyword}, '%'))
+            </if>
+            <if test="q.statuses != null">
+                AND r.status IN <foreach collection="q.statuses" item="st" open="(" separator="," close=")">#{st}</foreach>
+            </if>
+            <if test="q.storeId != null">AND (r.store_id = #{q.storeId} OR r.supply_store_id = #{q.storeId})</if>
+            <if test="q.toStoreId != null">AND r.store_id = #{q.toStoreId}</if>
+            <if test="q.warehouseId != null">AND r.supply_warehouse_id = #{q.warehouseId}</if>
+            <if test="q.begin != null">AND r.biz_date &gt;= #{q.begin}</if>
+            <if test="q.end != null">AND r.biz_date &lt;= #{q.end}</if>
+            <if test="q.materialId != null">
+                AND EXISTS (SELECT 1 FROM dist_requisition_item x WHERE x.requisition_id = r.id AND x.material_id = #{q.materialId})
+            </if>
+        </where>
+        ORDER BY r.id DESC
+    </select>
+
+    <select id="selectDetail" resultType="com.lemon.erp.modules.dist.entity.DistRequisition">
+        SELECT <include refid="columns"/>
+        FROM dist_requisition r
+        <include refid="joins"/>
+        WHERE r.id = #{id}
+    </select>
+
+    <select id="selectItems" resultType="com.lemon.erp.modules.dist.entity.DistRequisitionItem">
+        SELECT i.*, m.code AS material_code, m.name AS material_name, m.spec, m.unit,
+               (SELECT COALESCE(SUM(s.qty), 0) FROM wms_stock s WHERE s.warehouse_id = #{warehouseId} AND s.material_id = i.material_id) AS stock_qty,
+               (SELECT COALESCE(SUM(ti.qty), 0) FROM wms_stock_doc_item ti JOIN wms_stock_doc td ON td.id = ti.doc_id
+                WHERE td.kind = 'TRANSFER' AND td.status = 'TRANSIT' AND td.to_warehouse_id = #{warehouseId} AND ti.material_id = i.material_id) AS transit_qty,
+               (SELECT COALESCE(SUM(s.qty - s.frozen_qty), 0) FROM wms_stock s WHERE s.warehouse_id = #{supplyWarehouseId} AND s.material_id = i.material_id) AS supply_available
+        FROM dist_requisition_item i
+        JOIN wms_material m ON m.id = i.material_id
+        WHERE i.requisition_id = #{requisitionId}
+        ORDER BY i.id
+    </select>
+
+    <select id="lockById" resultType="java.lang.Long">
+        SELECT id FROM dist_requisition WHERE id = #{id} FOR UPDATE
+    </select>
+
+    <select id="selectSuggest" resultType="com.lemon.erp.modules.dist.dto.DistViews$SuggestRow">
+        SELECT m.id AS material_id,
+               COALESCE(l.min_qty, m.safety_stock, 0) AS min_qty,
+               (SELECT COALESCE(SUM(s.qty), 0) FROM wms_stock s WHERE s.warehouse_id = #{warehouseId} AND s.material_id = m.id) AS stock_qty,
+               (SELECT COALESCE(SUM(ti.qty), 0) FROM wms_stock_doc_item ti JOIN wms_stock_doc td ON td.id = ti.doc_id
+                WHERE td.kind = 'TRANSFER' AND td.status = 'TRANSIT' AND td.to_warehouse_id = #{warehouseId} AND ti.material_id = m.id) AS transit_qty,
+               <choose>
+                   <when test="supplyWarehouseId != null">
+                       (SELECT COALESCE(SUM(s.qty - s.frozen_qty), 0) FROM wms_stock s WHERE s.warehouse_id = #{supplyWarehouseId} AND s.material_id = m.id)
+                   </when>
+                   <otherwise>NULL</otherwise>
+               </choose> AS supply_available
+        FROM wms_material m
+        LEFT JOIN wms_material_warehouse_limit l ON l.material_id = m.id AND l.warehouse_id = #{warehouseId}
+        WHERE m.id IN <foreach collection="materialIds" item="mid" open="(" separator="," close=")">#{mid}</foreach>
+    </select>
+
+    <select id="selectSummary" resultType="com.lemon.erp.modules.dist.dto.DistViews$SummaryRow">
+        SELECT g.supply_warehouse_id, sw.name AS supply_warehouse_name, g.material_id,
+               m.code AS material_code, m.name AS material_name, m.spec, m.unit,
+               g.requisition_count, g.store_count, g.approved_qty, g.delivered_qty, g.pending_qty,
+               (SELECT COALESCE(SUM(s.qty - s.frozen_qty), 0) FROM wms_stock s
+                WHERE s.warehouse_id = g.supply_warehouse_id AND s.material_id = g.material_id) AS available
+        FROM (SELECT r.supply_warehouse_id, i.material_id,
+                     COUNT(DISTINCT r.id) AS requisition_count, COUNT(DISTINCT r.store_id) AS store_count,
+                     SUM(COALESCE(i.approved_qty, 0)) AS approved_qty, SUM(i.delivered_qty) AS delivered_qty,
+                     SUM(COALESCE(i.approved_qty, 0) - i.delivered_qty) AS pending_qty
+              FROM dist_requisition r
+              JOIN dist_requisition_item i ON i.requisition_id = r.id
+              WHERE r.status IN ('APPROVED', 'PARTIAL') AND COALESCE(i.approved_qty, 0) &gt; i.delivered_qty
+              <if test="supplyWarehouseId != null">AND r.supply_warehouse_id = #{supplyWarehouseId}</if>
+              GROUP BY r.supply_warehouse_id, i.material_id) g
+        JOIN wms_material m ON m.id = g.material_id
+        LEFT JOIN wms_warehouse sw ON sw.id = g.supply_warehouse_id
+        <where>
+            <if test="keyword != null and keyword != ''">
+                (m.code LIKE CONCAT('%', #{keyword}, '%') OR m.name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY g.supply_warehouse_id, m.code
+    </select>
+
+</mapper>

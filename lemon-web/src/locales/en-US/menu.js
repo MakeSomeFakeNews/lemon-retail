@@ -319,6 +319,42 @@ export default {
   4261: 'Edit Price Adjustment', // 调价单修改
   4262: 'Delete Price Adjustment', // 调价单删除
   4263: 'Approve Price Adjustment', // 调价单审核
+  20: 'Distribution', // 配送
+  460: 'Store Requisitions', // 门店要货
+  461: 'Delivery & Receiving', // 配送与收货
+  462: 'Inquiries & Reports', // 查询与报表
+  463: 'Requisitions', // 要货单
+  464: 'Requisition Review', // 要货审核
+  465: 'Delivery Orders', // 配送单
+  466: 'Store Receiving', // 门店收货
+  467: 'Store Returns', // 门店退仓
+  468: 'Receiving Discrepancies', // 收货差异
+  469: 'In-transit Inquiry', // 在途查询
+  470: 'Inter-store Ledger', // 门店往来
+  471: 'Store Comparison', // 门店对比
+  472: 'Date Lock', // 日期锁定
+  4630: 'Create Requisition', // 要货单新增
+  4631: 'Edit Requisition', // 要货单修改
+  4632: 'Delete Requisition', // 要货单删除
+  4633: 'Submit Requisition', // 要货单提交
+  4640: 'Review Requisition', // 审核要货
+  4641: 'Close Requisition', // 关闭要货
+  4642: 'Purchase Orders for Shortages', // 缺货生成采购订单
+  4650: 'Create Delivery Order', // 配送单新增
+  4651: 'Edit Delivery Order', // 配送单修改
+  4652: 'Delete Delivery Order', // 配送单删除
+  4653: 'Ship Delivery', // 配送发货
+  4654: 'Over-quantity Delivery', // 超量配送
+  4655: 'Change Delivery Price', // 修改配送价
+  4660: 'Confirm Receipt', // 确认收货
+  4670: 'Create Store Return', // 退仓单新增
+  4671: 'Edit Store Return', // 退仓单修改
+  4672: 'Delete Store Return', // 退仓单删除
+  4673: 'Approve Store Return', // 退仓审核
+  4674: 'Ship Store Return', // 退仓发货
+  4675: 'Receive Store Return', // 退仓收货
+  4680: 'Handle Discrepancy', // 差异处理
+  4720: 'Set Date Lock', // 日期锁定设置
   // 线上渠道（微信小店）
   18: 'Online Channels', // 线上渠道
   981: 'WeChat Shop', // 微信小店

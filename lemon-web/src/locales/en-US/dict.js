@@ -122,6 +122,7 @@ export default {
     WELFARE: 'Employee Welfare', // 福利领用
     RD: 'R&D Use', // 研发领用
     OFFICE: 'Office Use', // 办公领用
+    DIST_LOSS: 'Distribution Loss', // 配送差异报损
     OTHER: 'Other' // 其他
   },
   wms_out_type: {
@@ -183,6 +184,7 @@ export default {
   scm_order_source: {
     'MANUAL': 'Manual', // 手工
     'REORDER': 'Replenishment Suggestion', // 补货建议
+    'REQUISITION': 'Store Requisition', // 门店要货
     'DIRECT': 'Direct Document', // 直接开单
     'WX_SHOP': 'WeChat Shop', // 微信小店
   },
@@ -459,6 +461,49 @@ export default {
   scm_price_adjust_target: {
     'HQ': 'HQ Price', // 总部价
     'SCHEME': 'Price Scheme', // 价格方案
+  },
+  // 要货单状态
+  dist_requisition_status: {
+    'DRAFT': 'Draft', // 草稿
+    'APPROVING': 'In Approval', // 审批中
+    'SUBMITTED': 'Pending Review', // 待审核
+    'APPROVED': 'Approved', // 已审核
+    'PARTIAL': 'Partially Delivered', // 部分配送
+    'DELIVERED': 'Delivered', // 已配送
+    'CLOSED': 'Closed', // 已关闭
+  },
+  // 配送单种类
+  dist_delivery_kind: {
+    'DELIVERY': 'Delivery', // 配送
+    'RETURN': 'Store Return', // 门店退仓
+  },
+  // 配送单状态
+  dist_delivery_status: {
+    'DRAFT': 'Draft', // 草稿
+    'SUBMITTED': 'Pending Review', // 待审核
+    'APPROVED': 'Approved', // 已审核
+    'SHIPPED': 'Shipped', // 已发货
+    'RECEIVED': 'Received', // 已收货
+    'DIFF': 'Received with Differences', // 收货有差异
+    'CLOSED': 'Completed', // 已完成
+  },
+  // 收货差异种类
+  dist_discrepancy_kind: {
+    'SHORT': 'Short', // 少收
+    'DAMAGED': 'Damaged', // 破损
+    'OVER': 'Over', // 多收
+  },
+  // 收货差异状态
+  dist_discrepancy_status: {
+    'PENDING': 'Pending', // 待处理
+    'HANDLED': 'Handled', // 已处理
+  },
+  // 差异处理方式
+  dist_discrepancy_handling: {
+    'RETURN_SOURCE': 'Return to Shipper', // 退回发货方
+    'SOURCE_WRITE_OFF': 'Shipper Bears', // 发货方承担
+    'TARGET_WRITE_OFF': 'Receiver Bears', // 收货方承担
+    'ACCEPT': 'Receiver Keeps', // 收货方留用
   },
   // 小店对接方式
   ch_wx_shop_mode: {
