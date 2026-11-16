@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.pos.mapper.PosDailyClosePayMapper">
+
+    <insert id="insertBatch">
+        INSERT INTO pos_daily_close_pay (close_id, pay_method, account_id, receipt_amount, refund_amount, pay_count) VALUES
+        <foreach collection="list" item="p" separator=",">
+            (#{p.closeId}, #{p.payMethod}, #{p.accountId}, #{p.receiptAmount}, #{p.refundAmount}, #{p.payCount})
+        </foreach>
+    </insert>
+
+    <select id="selectByCloseId" resultType="com.lemon.erp.modules.pos.entity.PosDailyClosePay">
+        SELECT p.*, a.name AS account_name
+        FROM pos_daily_close_pay p
+        LEFT JOIN fin_account a ON a.id = p.account_id
+        WHERE p.close_id = #{closeId}
+        ORDER BY p.pay_method, p.id
+    </select>
+
+</mapper>

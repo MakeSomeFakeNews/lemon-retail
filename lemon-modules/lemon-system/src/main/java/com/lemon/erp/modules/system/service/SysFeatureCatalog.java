@@ -45,7 +45,11 @@ final class SysFeatureCatalog {
         /** 数据大屏 */
         SCREEN,
         /** 智能（AI） */
-        AI
+        AI,
+        /** 零售收银（POS） */
+        POS,
+        /** 会员营销 */
+        MEMBER
     }
 
     /**
@@ -98,12 +102,15 @@ final class SysFeatureCatalog {
             f(Key.BI, "system.label.businessIntelligence", "system.label.analytics", "system.label.businessCockpitPivotAnalysisCustomReports",
                     List.of(260L, 261L, 262L, 263L, 264L, 265L)),
             f(Key.SCREEN, "system.label.dataScreens", "system.label.analytics", "system.label.dataScreensShopFloorWarehousingLogistics", List.of(349L)),
-            f(Key.AI, "system.label.aiFeature", "system.label.analytics", "system.label.aiFeatureDesc", List.of(16L)));
+            f(Key.AI, "system.label.aiFeature", "system.label.analytics", "system.label.aiFeatureDesc", List.of(16L)),
+            // 零售前台：收银（收银台、班次、POS 单据、支付通道）+ 日结与报表；会员营销（会员、等级、特价活动）依赖收银
+            f(Key.POS, "system.label.posFeature", "system.label.retailFront", "system.label.posFeatureDesc", List.of(991L, 993L), Key.INVENTORY, Key.FUND),
+            f(Key.MEMBER, "system.label.memberFeature", "system.label.retailFront", "system.label.memberFeatureDesc", List.of(992L), Key.POS));
 
     static final List<Industry> INDUSTRIES = List.of(
             new Industry("RETAIL", "system.label.eCommerceRetail", "system.label.mainlyMultiChannelOrdersWarehousingShipping",
                     names(Key.PURCHASE, Key.SALES, Key.PROMOTION, Key.JXC_REPORT, Key.INVENTORY, Key.WAREHOUSE_OPS, Key.GL, Key.ARAP, Key.FUND,
-                            Key.BI, Key.SCREEN)),
+                            Key.BI, Key.SCREEN, Key.POS, Key.MEMBER)),
             new Industry("TRADING", "system.label.tradingWholesale", "system.label.mainlyPurchasingWarehousingDistributionWithoutProduction",
                     names(Key.PURCHASE, Key.SALES, Key.PROMOTION, Key.COMMISSION, Key.JXC_REPORT, Key.INVENTORY,
                             Key.WAREHOUSE_OPS, Key.GL, Key.ARAP, Key.FUND, Key.ANALYSIS, Key.BI, Key.SCREEN)),

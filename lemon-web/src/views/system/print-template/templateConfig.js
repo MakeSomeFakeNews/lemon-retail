@@ -13,7 +13,9 @@ function merge(names, saved, nameKey, extra = {}) {
 }
 
 /** 可编辑的配置：tp 为单据目录（PRINT_TYPES 中的一项），saved 为已保存的配置 */
-export function buildConfig(tp, saved = {}) {
+export function buildConfig(tp, savedConfig = {}) {
+  // 没有保存过的单据按目录中的默认纸张（如 POS 小票）
+  const saved = { ...(tp.defaults || {}), ...savedConfig }
   return {
     title: saved.title || '',
     orientation: saved.orientation || 'portrait',

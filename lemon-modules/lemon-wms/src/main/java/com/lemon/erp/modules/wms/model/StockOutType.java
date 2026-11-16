@@ -16,13 +16,15 @@ public enum StockOutType implements StockDocType {
     /** 报废出库 */
     SCRAP,
     /** 组装拆卸：组装拆卸单生成的出库单 */
-    ASSEMBLY;
+    ASSEMBLY,
+    /** 零售出库：POS 销售单生成的出库单（按当前移动加权均价出库） */
+    RETAIL;
 
     /** 手工出库允许的类型 */
     public static final Set<StockOutType> MANUAL = EnumSet.of(OTHER, SCRAP);
 
-    /** 不能发出过期批次的出库类型（报废、其他出库、采购退货可以） */
-    public static final Set<StockOutType> NO_EXPIRED = EnumSet.of(SALES);
+    /** 不能发出过期批次的出库类型（销售出库、零售出库；报废、其他出库、采购退货可以） */
+    public static final Set<StockOutType> NO_EXPIRED = EnumSet.of(SALES, RETAIL);
 
 
     @Override

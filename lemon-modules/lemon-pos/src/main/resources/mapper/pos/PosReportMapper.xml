@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.pos.mapper.PosReportMapper">
+
+    <!-- 维度：alias 为单据表（pos_sale s / pos_payment p），sh 为班次（收银员按班次的收银员） -->
+    <sql id="groupKey">
+        <choose>
+            <when test="q.groupBy.name() == 'STORE'">${alias}.store_id</when>
+            <when test="q.groupBy.name() == 'TERMINAL'">${alias}.terminal_id</when>
+            <when test="q.groupBy.name() == 'CASHIER'">sh.cashier_id</when>
+            <when test="q.groupBy.name() == 'SHIFT'">${alias}.shift_id</when>
+            <otherwise>${alias}.business_date</otherwise>
+        </choose>
+    </sql>
+    <sql id="groupName">
+        <choose>
+            <when test="q.groupBy.name() == 'STORE'">st.name</when>
+            <when test="q.groupBy.name() == 'TERMINAL'">t.name</when>
+            <when test="q.groupBy.name() == 'CASHIER'">u.nickname</when>
+            <when test="q.groupBy.name() == 'SHIFT'">sh.shift_no</when>
+            <otherwise>${alias}.business_date</otherwise>
+        </choose>
+    </sql>
+    <sql id="dimJoins">
+        JOIN pos_shift sh ON sh.id = ${alias}.shift_id
+        LEFT JOIN store_info st ON st.id = ${alias}.store_id
+        LEFT JOIN pos_terminal t ON t.id = ${alias}.terminal_id
+        LEFT JOIN sys_user u ON u.id = sh.cashier_id
+    </sql>
+    <sql id="filters">
+        AND ${alias}.business_date &gt;= #{q.begin} AND ${alias}.business_date &lt;= #{q.end}
+        <if test="q.storeId != null">AND ${alias}.store_id = #{q.storeId}</if>
+        <if test="q.terminalId != null">AND ${alias}.terminal_id = #{q.terminalId}</if>
+        <if test="q.cashierId != null">AND sh.cashier_id = #{q.cashierId}</if>
+    </sql>
+
+    <select id="selectCashierSales" resultType="com.lemon.erp.modules.pos.dto.PosViews$ReportSaleRow">
+        SELECT <include refid="groupKey"><property name="alias" value="s"/></include> AS group_key,
+               <include refid="groupName"><property name="alias" value="s"/></include> AS group_name,
+               SUM(CASE WHEN s.kind = 'SALE' AND s.status = 'COMPLETED' THEN 1 ELSE 0 END) AS sale_count,
+               SUM(CASE WHEN s.kind = 'SALE' AND s.status = 'COMPLETED' THEN s.payable_amount ELSE 0 END) AS sale_amount,
+               SUM(CASE WHEN s.kind = 'RETURN' THEN 1 ELSE 0 END) AS return_count,
+               SUM(CASE WHEN s.kind = 'RETURN' THEN s.payable_amount ELSE 0 END) AS return_amount
+        FROM pos_sale s
+        <include refid="dimJoins"><property name="alias" value="s"/></include>
+        WHERE 1 = 1 <include refid="filters"><property name="alias" value="s"/></include>
+        GROUP BY <include refid="groupKey"><property name="alias" value="s"/></include>,
+                 <include refid="groupName"><property name="alias" value="s"/></include>
+        ORDER BY 1
+    </select>
+
+    <select id="selectCashierPays" resultType="com.lemon.erp.modules.pos.dto.PosViews$ReportPayRow">
+        SELECT <include refid="groupKey"><property name="alias" value="p"/></include> AS group_key,
+               <include refid="groupName"><property name="alias" value="p"/></include> AS group_name,
+               p.pay_method, SUM(p.amount) AS amount
+        FROM pos_payment p
+        <include refid="dimJoins"><property name="alias" value="p"/></include>
+        WHERE p.status = 'SUCCESS' AND p.sale_id IS NOT NULL <include refid="filters"><property name="alias" value="p"/></include>
+        GROUP BY <include refid="groupKey"><property name="alias" value="p"/></include>,
+                 <include refid="groupName"><property name="alias" value="p"/></include>, p.pay_method
+    </select>
+
+    <select id="selectDetail" resultType="com.lemon.erp.modules.pos.dto.PosViews$DetailRow">
+        SELECT s.id AS sale_id, s.sale_no, s.kind, s.status, s.business_date, s.sale_time, st.name AS store_name, t.name AS terminal_name,
+               u.nickname AS cashier_name, m.member_code, m.name AS member_name,
+               mt.code AS material_code, mt.name AS material_name, mt.spec, i.unit,
+               CASE WHEN s.kind = 'RETURN' THEN -i.input_qty ELSE i.input_qty END AS qty,
+               i.list_price, i.sale_price,
+               CASE WHEN s.kind = 'RETURN' THEN -i.amount ELSE i.amount END AS amount,
+               CASE WHEN s.kind = 'RETURN' THEN -i.final_amount ELSE i.final_amount END AS final_amount,
+               i.price_source
+        FROM pos_sale_item i
+        JOIN pos_sale s ON s.id = i.sale_id
+        JOIN wms_material mt ON mt.id = i.material_id
+        LEFT JOIN store_info st ON st.id = s.store_id
+        LEFT JOIN pos_terminal t ON t.id = s.terminal_id
+        LEFT JOIN sys_user u ON u.id = s.create_by
+        LEFT JOIN pos_member m ON m.id = s.member_id
+        <where>
+            <if test="q.keyword != null and q.keyword != ''">
+                (s.sale_no LIKE CONCAT('%', #{q.keyword}, '%') OR mt.code LIKE CONCAT('%', #{q.keyword}, '%')
+                 OR mt.name LIKE CONCAT('%', #{q.keyword}, '%'))
+            </if>
+            <if test="q.kind != null">AND s.kind = #{q.kind}</if>
+            <if test="q.status != null">AND s.status = #{q.status}</if>
+            <if test="q.storeId != null">AND s.store_id = #{q.storeId}</if>
+            <if test="q.terminalId != null">AND s.terminal_id = #{q.terminalId}</if>
+            <if test="q.cashierId != null">AND s.create_by = #{q.cashierId}</if>
+            <if test="q.memberId != null">AND s.member_id = #{q.memberId}</if>
+            <if test="q.materialId != null">AND i.material_id = #{q.materialId}</if>
+            <if test="q.begin != null">AND s.business_date &gt;= #{q.begin}</if>
+            <if test="q.end != null">AND s.business_date &lt;= #{q.end}</if>
+        </where>
+        ORDER BY s.id DESC, i.line_no
+    </select>
+
+</mapper>

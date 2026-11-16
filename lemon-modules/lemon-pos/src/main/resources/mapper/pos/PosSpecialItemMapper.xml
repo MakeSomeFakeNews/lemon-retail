@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.pos.mapper.PosSpecialItemMapper">
+
+    <insert id="insertBatch">
+        INSERT INTO pos_special_item (special_id, material_id, special_price, discount_rate, limit_qty, create_time, update_time) VALUES
+        <foreach collection="list" item="i" separator=",">
+            (#{i.specialId}, #{i.materialId}, #{i.specialPrice}, #{i.discountRate}, #{i.limitQty}, NOW(), NOW())
+        </foreach>
+    </insert>
+
+    <select id="selectBySpecialId" resultType="com.lemon.erp.modules.pos.entity.PosSpecialItem">
+        SELECT i.*, m.code AS material_code, m.name AS material_name, m.spec, m.unit, m.retail_price
+        FROM pos_special_item i
+        JOIN wms_material m ON m.id = i.material_id
+        WHERE i.special_id = #{specialId}
+        ORDER BY i.id
+    </select>
+
+</mapper>

@@ -18,7 +18,9 @@ public enum StockInType implements StockDocType {
     /** 期初入库：系统启用时导入的期初库存，日期为启用期间的前一天 */
     OPENING,
     /** 组装拆卸：组装拆卸单生成的入库单 */
-    ASSEMBLY;
+    ASSEMBLY,
+    /** 零售退货：POS 退货、作废生成的入库单（按原零售出库的实际成本入库） */
+    RETAIL_RETURN;
 
     /** 手工入库允许的类型 */
     public static final Set<StockInType> MANUAL = EnumSet.of(OTHER, CONSIGN_IN);

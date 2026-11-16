@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.pos.mapper.PosShiftMapper">
+
+    <sql id="columns">
+        s.*, st.name AS store_name, t.name AS terminal_name, u.nickname AS cashier_name, cu.nickname AS closed_by_name
+    </sql>
+
+    <sql id="joins">
+        LEFT JOIN store_info st ON st.id = s.store_id
+        LEFT JOIN pos_terminal t ON t.id = s.terminal_id
+        LEFT JOIN sys_user u ON u.id = s.cashier_id
+        LEFT JOIN sys_user cu ON cu.id = s.closed_by
+    </sql>
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.pos.entity.PosShift">
+        SELECT <include refid="columns"/>
+        FROM pos_shift s
+        <include refid="joins"/>
+        <where>
+            <if test="q.storeId != null">s.store_id = #{q.storeId}</if>
+            <if test="q.terminalId != null">AND s.terminal_id = #{q.terminalId}</if>
+            <if test="q.cashierId != null">AND s.cashier_id = #{q.cashierId}</if>
+            <if test="q.status != null">AND s.status = #{q.status}</if>
+            <if test="q.begin != null">AND s.business_date &gt;= #{q.begin}</if>
+            <if test="q.end != null">AND s.business_date &lt;= #{q.end}</if>
+        </where>
+        ORDER BY s.id DESC
+    </select>
+
+    <select id="selectDetail" resultType="com.lemon.erp.modules.pos.entity.PosShift">
+        SELECT <include refid="columns"/>
+        FROM pos_shift s
+        <include refid="joins"/>
+        WHERE s.id = #{id}
+    </select>
+
+    <select id="selectPays" resultType="com.lemon.erp.modules.pos.dto.PosViews$PayRow">
+        SELECT p.pay_method, p.account_id, a.name AS account_name,
+               SUM(CASE WHEN p.amount &gt; 0 THEN p.amount ELSE 0 END) AS receipt_amount,
+               SUM(CASE WHEN p.amount &lt; 0 THEN -p.amount ELSE 0 END) AS refund_amount,
+               SUM(p.amount) AS amount, COUNT(*) AS pay_count
+        FROM pos_payment p
+        LEFT JOIN fin_account a ON a.id = p.account_id
+        WHERE p.shift_id = #{shiftId} AND p.status = 'SUCCESS' AND p.sale_id IS NOT NULL
+        GROUP BY p.pay_method, p.account_id, a.name
+        ORDER BY p.pay_method
+    </select>
+
+    <select id="selectSales" resultType="com.lemon.erp.modules.pos.dto.PosViews$SaleSummary">
+        SELECT COALESCE(SUM(CASE WHEN kind = 'SALE' AND status = 'COMPLETED' THEN 1 ELSE 0 END), 0) AS sale_count,
+               COALESCE(SUM(CASE WHEN kind = 'SALE' AND status = 'COMPLETED' THEN payable_amount ELSE 0 END), 0) AS sale_amount,
+               COALESCE(SUM(CASE WHEN kind = 'RETURN' THEN 1 ELSE 0 END), 0) AS return_count,
+               COALESCE(SUM(CASE WHEN kind = 'RETURN' THEN payable_amount ELSE 0 END), 0) AS return_amount,
+               COALESCE(SUM(CASE WHEN status = 'VOIDED' THEN 1 ELSE 0 END), 0) AS void_count
+        FROM pos_sale
+        WHERE shift_id = #{shiftId}
+    </select>
+
+    <select id="countUnsettled" resultType="int">
+        SELECT COUNT(*) FROM pos_payment
+        WHERE shift_id = #{shiftId}
+          AND ((status = 'SUCCESS' AND sale_id IS NULL AND amount &gt; 0) OR (amount &lt; 0 AND status = 'PENDING'))
+    </select>
+
+    <select id="countOpenUntil" resultType="int">
+        SELECT COUNT(*) FROM pos_shift
+        WHERE store_id = #{storeId} AND status = 'OPEN' AND business_date &lt;= #{date}
+    </select>
+
+</mapper>
