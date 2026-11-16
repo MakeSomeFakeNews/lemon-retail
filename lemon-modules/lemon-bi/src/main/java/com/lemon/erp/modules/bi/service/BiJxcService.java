@@ -11,6 +11,8 @@ import com.lemon.erp.modules.bi.mapper.BiJxcMapper;
 import com.lemon.erp.modules.bi.model.JxcDimension;
 import com.lemon.erp.modules.fin.dto.AdjustRow;
 import com.lemon.erp.modules.fin.model.AdjustMode;
+import com.lemon.erp.framework.store.StoreBrief;
+import com.lemon.erp.framework.store.StoreLookup;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -46,11 +48,12 @@ public class BiJxcService {
     private static final int TOP_CUSTOMERS = 10;
 
     private final BiJxcMapper jxcMapper;
+    private final StoreLookup storeLookup;
 
     // ---------------------------------------------------------------- 销售 / 进货
 
     /** 汇总；sales = true 销售报表，false 进货报表 */
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public JxcViews.Summary summary(boolean sales, JxcDimension dim, JxcQuery q) {
         prepare(sales, q, MAX_DAYS);
         if (dim == null || !dim.supports(sales)) {
@@ -63,7 +66,7 @@ public class BiJxcService {
      * 明细（分页），带汇总的筛选条件和穿透的维度取值；调整项按 {@link JxcQuery#getAdjustMode()} 汇总到底部（默认）或分摊到各行，
      * summary 为全部明细的合计（与汇总行一致）
      */
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public JxcViews.DetailPage detail(boolean sales, JxcQuery q, long current, long size) {
         prepare(sales, q, MAX_DAYS);
         boolean bottom = AdjustMode.orDefault(q.getAdjustMode()) == AdjustMode.BOTTOM;
@@ -74,7 +77,7 @@ public class BiJxcService {
     }
 
     /** 导出明细：最多 {@link #EXPORT_LIMIT} 行，调整行与合计同 {@link #detail} */
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public JxcViews.DetailExport export(boolean sales, JxcQuery q) {
         prepare(sales, q, MAX_DAYS);
         boolean bottom = AdjustMode.orDefault(q.getAdjustMode()) == AdjustMode.BOTTOM;
@@ -89,7 +92,7 @@ public class BiJxcService {
      * 单据列表（分页）：汇总项下的出入库单 / 退货单，每张一行，金额为该单中符合条件的明细合计（与明细同一取数和口径），
      * summary 为全部单据的合计（与汇总行一致）
      */
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public JxcViews.DocPage docs(boolean sales, JxcQuery q, long current, long size) {
         prepare(sales, q, MAX_DAYS);
         Page<JxcViews.DocRow> page = jxcMapper.selectDocs(Page.of(current, size), sales, q);
@@ -98,7 +101,7 @@ public class BiJxcService {
     }
 
     /** 导出单据列表：最多 {@link #EXPORT_LIMIT} 行，带全部单据的合计 */
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public JxcViews.DocExport exportDocs(boolean sales, JxcQuery q) {
         prepare(sales, q, MAX_DAYS);
         List<JxcViews.DocRow> list = jxcMapper.selectDocList(sales, q, EXPORT_LIMIT + 1);
@@ -112,7 +115,7 @@ public class BiJxcService {
     /**
      * 经营状况：销售及利润走势（按月）、资金流走势（收付款单 + 预收预付款 + 票据托收、贴现、兑付，收票、背书、开票不计入，需要「全部数据」权限）、员工销售情况、客户销售分布
      */
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public JxcViews.Business business(JxcQuery q) {
         prepare(true, q, MAX_DAYS_LONG);
         List<YearMonth> months = months(q.getBegin(), q.getEnd());
@@ -187,6 +190,14 @@ public class BiJxcService {
             }
             fillSummary(sales, r);
         });
+        if (dim == JxcDimension.STORE) {
+            Map<Long, StoreBrief> stores = storeLookup.findAll(rows.stream().filter(r -> r.getGroupKey() != null)
+                    .map(r -> Long.valueOf(r.getGroupKey())).toList());
+            rows.forEach(r -> {
+                StoreBrief store = r.getGroupKey() == null ? null : stores.get(Long.valueOf(r.getGroupKey()));
+                r.setGroupName(store == null ? null : store.name());
+            });
+        }
         return new JxcViews.Summary(rows, total(sales, q), list.size() > SUMMARY_LIMIT);
     }
 
@@ -342,6 +353,7 @@ public class BiJxcService {
                 case CUSTOMER, SUPPLIER -> q.setPartnerId(Long.valueOf(key));
                 case SALESMAN -> q.setSalesmanId(Long.valueOf(key));
                 case MATERIAL -> q.setMaterialId(Long.valueOf(key));
+                case STORE -> q.setStoreId(Long.valueOf(key));
                 case DAY -> narrow(q, LocalDate.parse(key), LocalDate.parse(key));
                 case MONTH -> {
                     int p = Integer.parseInt(key);

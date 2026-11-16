@@ -299,4 +299,24 @@ export default {
   3650: 'Maintain Item Prices', // 商品价格维护
   3651: 'Price Columns', // 价格列设置
   3652: 'View Cost Amounts', // 查看成本金额
+  17: 'Stores', // 门店
+  971: 'Store Setup', // 门店资料
+  972: 'Pricing', // 价格管理
+  420: 'Stores', // 门店管理
+  421: 'Regions', // 区域管理
+  4200: 'Create Store', // 门店新增
+  4201: 'Edit Store', // 门店修改
+  4202: 'Delete Store', // 门店删除
+  4210: 'Create Region', // 区域新增
+  4211: 'Edit Region', // 区域修改
+  4212: 'Delete Region', // 区域删除
+  425: 'Price Schemes', // 价格方案
+  426: 'Price Adjustments', // 调价单
+  4250: 'Create Price Scheme', // 价格方案新增
+  4251: 'Edit Price Scheme', // 价格方案修改
+  4252: 'Delete Price Scheme', // 价格方案删除
+  4260: 'Create Price Adjustment', // 调价单新增
+  4261: 'Edit Price Adjustment', // 调价单修改
+  4262: 'Delete Price Adjustment', // 调价单删除
+  4263: 'Approve Price Adjustment', // 调价单审核
 }

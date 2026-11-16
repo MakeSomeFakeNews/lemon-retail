@@ -177,6 +177,7 @@ const dict = useDict('sys_common_status')
 const columns = [
   { title: t('common.field.user'), key: 'username', width: 180 },
   { title: t('common.field.dept'), key: 'dept', width: 120, ellipsis: true },
+  { title: t('store.user.store'), dataIndex: 'storeName', width: 130, ellipsis: true },
   { title: t('common.field.phone'), dataIndex: 'phone', width: 130 },
   { title: t('common.field.email'), dataIndex: 'email', width: 180, ellipsis: true },
   { title: t('common.field.status'), key: 'status', width: 90 },

@@ -34,6 +34,10 @@ public class JxcQuery {
     private String region;
     /** 仓库：明细行的仓库，为空时取单据表头的仓库 */
     private Long warehouseId;
+    /** 门店：仓库属于该门店 */
+    private Long storeId;
+    /** 区域：仓库所属门店在该区域（含下级区域） */
+    private Long storeRegionId;
     /** 物料编码 / 名称 */
     private String keyword;
     /** 只取某张出入库单（单据列表穿透到该单的明细，与其他条件同时生效） */
@@ -51,6 +55,9 @@ public class JxcQuery {
     private Integer overstockDays;
 
     // ---------------------------------------------------------------- 由穿透生成，不从请求接收
+
+    /** 区域内的门店（由 storeRegionId 转换，没有门店时为空集合，查不到数据） */
+    private java.util.Set<Long> regionStoreIds;
 
     @Setter(AccessLevel.NONE)
     private boolean noCategory;

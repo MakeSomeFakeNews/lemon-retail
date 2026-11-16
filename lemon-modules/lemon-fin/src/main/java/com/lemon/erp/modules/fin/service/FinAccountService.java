@@ -3,6 +3,8 @@ package com.lemon.erp.modules.fin.service;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.lemon.erp.common.enums.EnableStatus;
 import com.lemon.erp.common.exception.BizException;
+import com.lemon.erp.framework.security.SecurityUtils;
+import com.lemon.erp.framework.store.StoreLookup;
 import com.lemon.erp.modules.fin.dto.AccountRequest;
 import com.lemon.erp.modules.fin.entity.FinAccount;
 import com.lemon.erp.modules.fin.entity.FinAccountRule;
@@ -52,6 +54,7 @@ public class FinAccountService {
     private final FinAccountRuleMapper ruleMapper;
     private final FinIoCategoryMapper ioCategoryMapper;
     private final FinIoDocMapper ioDocMapper;
+    private final StoreLookup storeLookup;
 
     /** 科目树，按编码排序 */
     public List<FinAccount> tree(String keyword) {
@@ -120,6 +123,7 @@ public class FinAccountService {
                     .set(FinAccount::getName, req.name().trim())
                     .set(FinAccount::getRemark, req.remark())
                     .set(FinAccount::getAuxItems, AuxItem.join(req.auxItems()))
+                    .set(FinAccount::getStoreId, storeOf(old.getCode(), req.storeId()))
                     .eq(FinAccount::getId, id));
             return;
         }
@@ -193,13 +197,93 @@ public class FinAccountService {
         return map;
     }
 
-    /** 结算科目：库存现金、银行存款及其下级的末级科目（收付款、发放工资） */
+    /** 结算科目：库存现金、银行存款及其下级的末级科目（收付款、发放工资）；属于门店的账户需要可管辖该门店 */
     public FinAccount requireCashAccount(Long accountId) {
         FinAccount account = requireLeaves(List.of(accountId)).get(accountId);
         if (!inScope(account.getCode(), cashCodes())) {
             throw new BizException("fin.error.settlementAccountMustCashBankDeposit");
         }
+        if (account.getStoreId() != null && !SecurityUtils.getDataScopeOrAll().canAccessStore(account.getStoreId())) {
+            throw new BizException("fin.error.accountStoreNotAccessible", account.getName());
+        }
         return account;
+    }
+
+    /**
+     * 可用的结算账户：启用的现金、银行末级科目中，各门店共用的和可管辖门店的
+     *
+     * @param storeId 只返回该门店的账户和共用账户，为空不限
+     */
+    public List<FinAccount> cashOptions(Long storeId) {
+        List<String> cash = cashCodes();
+        var scope = SecurityUtils.getDataScopeOrAll();
+        return leafOptions().stream()
+                .filter(a -> inScope(a.getCode(), cash))
+                .filter(a -> a.getStoreId() == null || (scope.canAccessStore(a.getStoreId()) && (storeId == null || storeId.equals(a.getStoreId()))))
+                .toList();
+    }
+
+    /**
+     * 新建门店时创建现金账户：库存现金科目下增加「库存现金-门店名」末级科目，归属该门店。
+     * 库存现金还是末级科目且已使用时不能增加下级，需要先手工设置明细科目
+     *
+     * @return 新科目 ID
+     */
+    public Long createStoreCashAccount(Long storeId, String storeName) {
+        FinAccount parent = accountMapper.selectOne(Wrappers.<FinAccount>lambdaQuery().eq(FinAccount::getCode, roleCode(AccountRole.CASH)));
+        if (parent == null) {
+            throw new BizException("fin.error.accountMissingAddChartAccounts", roleCode(AccountRole.CASH));
+        }
+        if (!hasChildren(parent.getId()) && usedInBooks(parent.getId())) {
+            throw new BizException("fin.error.cashAccountUsedCannotSplit", parent.getCode(), parent.getName());
+        }
+        Set<String> codes = accountMapper.selectList(Wrappers.<FinAccount>lambdaQuery().select(FinAccount::getCode)
+                .eq(FinAccount::getParentId, parent.getId())).stream().map(FinAccount::getCode).collect(Collectors.toSet());
+        String code = null;
+        for (int i = 1; i < 100; i++) {
+            String c = parent.getCode() + String.format("%02d", i);
+            if (!codes.contains(c)) {
+                code = c;
+                break;
+            }
+        }
+        if (code == null) {
+            throw new BizException("fin.error.cashAccountCodeExhausted", parent.getCode());
+        }
+        FinAccount account = new FinAccount();
+        account.setCode(code);
+        account.setName(storeName);
+        account.setParentId(parent.getId());
+        account.setCategory(parent.getCategory());
+        account.setDirection(parent.getDirection());
+        account.setStatus(EnableStatus.ENABLED);
+        account.setStoreId(storeId);
+        accountMapper.insert(account);
+        return account.getId();
+    }
+
+    /** 门店的默认结算账户必须是该门店（或共用）的启用的结算账户 */
+    public void checkStoreAccount(Long storeId, Long accountId) {
+        FinAccount account = requireCashAccount(accountId);
+        if (account.getStoreId() != null && !account.getStoreId().equals(storeId)) {
+            throw new BizException("fin.error.accountNotInStore", account.getName());
+        }
+    }
+
+    /**
+     * 新租户创建总部后，把未归属门店的现金、银行末级科目归属到总部
+     *
+     * @return 库存现金（末级时）的 ID，作为总部的默认结算账户；没有时为空
+     */
+    public Long assignCashAccountsToStore(Long storeId) {
+        List<String> cash = cashCodes();
+        List<Long> ids = listAll().stream().filter(a -> a.getLeaf() && a.getStoreId() == null && inScope(a.getCode(), cash))
+                .map(FinAccount::getId).toList();
+        if (!ids.isEmpty()) {
+            accountMapper.update(Wrappers.<FinAccount>lambdaUpdate().set(FinAccount::getStoreId, storeId).in(FinAccount::getId, ids));
+        }
+        FinAccount cashAccount = accountMapper.selectOne(Wrappers.<FinAccount>lambdaQuery().eq(FinAccount::getCode, roleCode(AccountRole.CASH)));
+        return cashAccount != null && ids.contains(cashAccount.getId()) ? cashAccount.getId() : null;
     }
 
     /**
@@ -249,6 +333,7 @@ public class FinAccountService {
         account.setName(req.name().trim());
         account.setRemark(req.remark());
         account.setAuxItems(AuxItem.join(req.auxItems()));
+        account.setStoreId(storeOf(code, req.storeId()));
         if (req.parentId() == null || req.parentId() == 0) {
             if (code.length() != 4) {
                 throw new BizException("fin.error.levelAccountCodeMustDigits");
@@ -277,6 +362,14 @@ public class FinAccountService {
         account.setParentId(parent.getId());
         account.setCategory(parent.getCategory());
         account.setDirection(req.direction() != null ? req.direction() : parent.getDirection());
+    }
+
+    /** 只有现金、银行科目可以归属门店 */
+    private Long storeOf(String code, Long storeId) {
+        if (storeId == null || !inScope(code, cashCodes())) {
+            return null;
+        }
+        return storeLookup.require(storeId).id();
     }
 
     private boolean hasChildren(Long id) {

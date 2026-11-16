@@ -12,9 +12,9 @@ import java.math.RoundingMode;
 public final class ScmConstants {
 
     /** 单据数据权限：制单人部门 + 制单人 */
-    public static final DataPermissionRule ORDER_RULE = new DataPermissionRule("scm_order", "dept_id", "create_by");
-    public static final DataPermissionRule TRADE_RULE = new DataPermissionRule("scm_trade_doc", "dept_id", "create_by");
-    public static final DataPermissionRule TRADE_DRAFT_RULE = new DataPermissionRule("scm_trade_draft", "dept_id", "create_by");
+    public static final DataPermissionRule ORDER_RULE = DataPermissionRule.withWarehouse("scm_order", "dept_id", "create_by", "warehouse_id");
+    public static final DataPermissionRule TRADE_RULE = DataPermissionRule.withWarehouse("scm_trade_doc", "dept_id", "create_by", "warehouse_id");
+    public static final DataPermissionRule TRADE_DRAFT_RULE = DataPermissionRule.withWarehouse("scm_trade_draft", "dept_id", "create_by", "warehouse_id");
 
     private ScmConstants() {
     }

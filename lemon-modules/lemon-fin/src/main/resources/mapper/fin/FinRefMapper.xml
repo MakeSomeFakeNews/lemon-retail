@@ -47,4 +47,10 @@
         END
     </select>
 
+    <select id="findStore" resultType="java.lang.String">
+        SELECT CASE
+            WHEN EXISTS (SELECT 1 FROM fin_account WHERE store_id = #{id}) THEN 'fin.label.storeSettlementAccount'
+        END
+    </select>
+
 </mapper>

@@ -53,7 +53,7 @@ import static com.lemon.erp.modules.wms.model.WmsConstants.batchOrNone;
 @RequiredArgsConstructor
 public class ScmDeliveryService {
 
-    private static final DataPermissionRule RULE = new DataPermissionRule("scm_delivery", "dept_id", "create_by");
+    private static final DataPermissionRule RULE = DataPermissionRule.withWarehouse("scm_delivery", "dept_id", "create_by", "warehouse_id");
 
     private final ScmDeliveryMapper deliveryMapper;
     private final ScmDeliveryItemMapper itemMapper;
@@ -65,7 +65,7 @@ public class ScmDeliveryService {
     private final WmsWarehouseService warehouseService;
     private final DocNoService docNoService;
 
-    @DataPermission(table = "scm_delivery", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_delivery", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public PageResult<ScmDelivery> page(long current, long size, String keyword, DeliveryStatus status, Long warehouseId, Long orderId) {
         Page<ScmDelivery> page = Page.of(current, size);
         deliveryMapper.selectPageList(page, keyword, status, warehouseId, orderId);

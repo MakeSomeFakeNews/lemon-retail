@@ -95,7 +95,7 @@ public class ScmPlanningService {
     }
 
     /** 欠交清单：销售订单为客户欠交，采购订单为供应商欠交 */
-    @DataPermission(table = "scm_order", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_order", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public PageResult<BackorderRow> backorders(long current, long size, OrderKind kind, boolean overdueOnly, String keyword,
                                                Long partnerId) {
         Page<BackorderRow> page = Page.of(current, size);

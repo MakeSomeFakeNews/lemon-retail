@@ -422,4 +422,41 @@ export default {
     'POLICY': 'Policy', // 制度
     'EVENT': 'Event', // 活动
   },
+  // 门店类型
+  store_type: {
+    'HQ': 'Headquarters', // 总部
+    'DIRECT': 'Direct Store', // 直营店
+    'FRANCHISE': 'Franchise Store', // 加盟店
+    'DC': 'Distribution Center', // 配送中心
+  },
+  // 门店状态
+  store_status: {
+    'PREPARING': 'Preparing', // 筹备
+    'OPEN': 'Open', // 营业
+    'SUSPENDED': 'Suspended', // 停业
+    'CLOSED': 'Closed', // 闭店
+  },
+  // 加盟结算方式
+  store_settle_mode: {
+    'PREPAID': 'Prepaid', // 预付货款
+    'CREDIT': 'Monthly Credit', // 月结
+  },
+  // 门店范围
+  sys_store_scope: {
+    'ALL': 'All Stores', // 全部门店
+    'ASSIGNED': 'Assigned Stores', // 指定门店
+  },
+  // 调价单状态
+  scm_price_adjust_status: {
+    'DRAFT': 'Draft', // 草稿
+    'APPROVING': 'In Approval', // 审批中
+    'APPROVED': 'Pending Effect', // 待生效
+    'EFFECTIVE': 'Effective', // 已生效
+    'VOIDED': 'Voided', // 已作废
+  },
+  // 调价对象
+  scm_price_adjust_target: {
+    'HQ': 'HQ Price', // 总部价
+    'SCHEME': 'Price Scheme', // 价格方案
+  },
 }

@@ -11,6 +11,8 @@ import com.lemon.erp.modules.wms.mapper.WmsAttributeValueMapper;
 import com.lemon.erp.modules.wms.mapper.WmsMaterialCategoryMapper;
 import com.lemon.erp.modules.wms.model.MaterialCategoryTree;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -21,6 +23,8 @@ import java.util.Map;
  * 新租户复制平台的规格属性及属性值（颜色、尺码）、物料分类（保持层级和编码），按默认设置初始化价格列
  */
 @Component
+// 在门店初始化（StoreTenantInitializer，最后执行）之前：总部的仓库、现金账户依赖这里复制的基础数据
+@Order(Ordered.LOWEST_PRECEDENCE - 100)
 @RequiredArgsConstructor
 public class WmsTenantInitializer implements TenantInitializer {
 

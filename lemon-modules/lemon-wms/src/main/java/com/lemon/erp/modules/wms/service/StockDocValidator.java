@@ -39,6 +39,7 @@ public class StockDocValidator {
     private final WmsReferenceLoader refs;
     private final DictLookup dictLookup;
     private final WmsBatchMapper batchMapper;
+    private final WmsWarehouseService warehouseService;
 
     /**
      * 收发类别：其他入库按字典 wms_in_category、其他出库和报废出库按字典 wms_out_category 校验（当前租户的业务字典），
@@ -68,6 +69,8 @@ public class StockDocValidator {
         }
         // 出库、调出允许停用的仓库和物料（清空剩余库存），入库、调入要求启用
         WmsWarehouse warehouse = refs.warehouse(warehouseId, kind == TRANSFER ? "wms.label.sourceWarehouse" : "wms.label.warehouse", kind == IN);
+        // 门店：只能使用可管辖门店的仓库，停业、闭店的门店不能开单（调拨的调入仓库可以是其他门店的）
+        warehouseService.checkUsable(warehouse);
         WmsWarehouse toWarehouse = kind == TRANSFER ? refs.warehouse(toWarehouseId, "wms.label.destinationWarehouse") : null;
         StockDocRules.checkConsignWarehouse(kind, bizType, warehouse.getType());
         if (toWarehouse != null) {
@@ -87,6 +90,7 @@ public class StockDocValidator {
                 WmsWarehouse lineWarehouse = item.getWarehouseId() == null ? warehouse
                         : lineWarehouses.computeIfAbsent(item.getWarehouseId(), id -> {
                             WmsWarehouse w = refs.warehouse(id, "wms.label.warehouse", kind == IN);
+                            warehouseService.checkUsable(w);
                             StockDocRules.checkConsignWarehouse(kind, bizType, w.getType());
                             return w;
                         });

@@ -75,7 +75,7 @@ public class ScmOrderService {
     private final ScmOrderCloseAdjuster closeAdjuster;
     private final ScmTaxRates taxRates;
 
-    @DataPermission(table = "scm_order", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_order", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public PageResult<ScmOrder> page(OrderKind kind, long current, long size, OrderQuery query) {
         Page<ScmOrder> page = Page.of(current, size);
         orderMapper.selectPageList(page, kind, query);

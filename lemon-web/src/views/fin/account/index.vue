@@ -81,6 +81,9 @@
         <a-form-item :label="$t('fin.account.aux')" name="auxItems" :extra="$t('fin.account.auxExtra')">
           <a-checkbox-group v-model:value="form.auxItems" :options="AUX_ITEMS" />
         </a-form-item>
+        <a-form-item v-if="settlementAccount" :label="$t('store.account.store')" name="storeId" :extra="$t('store.account.storeExtra')">
+          <StoreSelect v-model:value="form.storeId" :placeholder="$t('store.common.shared')" />
+        </a-form-item>
         <a-form-item :label="$t('common.field.remark')" name="remark">
           <a-input v-model:value="form.remark" :maxlength="255" />
         </a-form-item>
@@ -90,22 +93,23 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useI18n } from 'vue-i18n'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import DictTag from '@/components/DictTag.vue'
 import StatusSwitch from '@/components/StatusSwitch.vue'
+import StoreSelect from '@/components/store/StoreSelect.vue'
 import TableActions from '@/components/common/TableActions.vue'
 import { actionColumn } from '@/components/common/tableActions'
-import { accountTree, addAccount, changeAccountStatus, deleteAccount, updateAccount } from '@/api/fin'
+import { accountScopes, accountTree, addAccount, changeAccountStatus, deleteAccount, updateAccount } from '@/api/fin'
 import { useDict } from '@/composables/useDict'
 import { useUserStore } from '@/store/user'
 import { toOptions } from '@/utils/dict'
 import { AUX_ITEMS, auxItemsOf } from '@/components/fin/fin'
 import { useAction } from '@/composables/useAction'
 
-import { AccountDirection } from '@/constants/enums'
+import { AccountDirection, AccountRole } from '@/constants/enums'
 const { t } = useI18n()
 const userStore = useUserStore()
 const auxLabels = (record) => auxItemsOf(record).map((v) => AUX_ITEMS.find((a) => a.value === v)?.label).filter(Boolean)
@@ -156,6 +160,16 @@ function toggleExpand() {
 }
 onMounted(load)
 
+/** 现金、银行科目的编码（按凭证科目设置），其下的末级科目是结算账户，可以归属门店 */
+const cashCodes = ref([])
+onMounted(async () => {
+  const scopes = await accountScopes()
+  cashCodes.value = [scopes[AccountRole.CASH], scopes[AccountRole.BANK]].filter(Boolean)
+})
+const settlementAccount = computed(
+  () => !form.value.children?.length && !!form.value.code && cashCodes.value.some((c) => form.value.code.startsWith(c))
+)
+
 const formOpen = ref(false)
 const saving = ref(false)
 const formRef = ref()
@@ -173,7 +187,7 @@ const rules = {
 /** record：编辑；parent：新增下级 */
 function openForm(record, parent) {
   if (record) {
-    form.value = { ...record, parent: undefined, parentId: record.parentId || undefined, auxItems: auxItemsOf(record) }
+    form.value = { ...record, parent: undefined, parentId: record.parentId || undefined, auxItems: auxItemsOf(record), storeId: record.storeId ?? undefined }
   } else if (parent) {
     // 下级科目默认沿用上级的辅助核算
     form.value = { code: parent.code, name: '', category: parent.category, direction: parent.direction, remark: '', parent, parentId: parent.id,
@@ -188,8 +202,8 @@ async function submit() {
   await formRef.value.validate()
   saving.value = true
   try {
-    const { id, code, name, parentId, category, direction, remark, auxItems } = form.value
-    const data = { code, name, parentId: parentId || null, category, direction, remark, auxItems }
+    const { id, code, name, parentId, category, direction, remark, auxItems, storeId } = form.value
+    const data = { code, name, parentId: parentId || null, category, direction, remark, auxItems, storeId: settlementAccount.value ? storeId ?? null : null }
     id ? await updateAccount(id, data) : await addAccount(data)
     message.success(t('common.msg.saveSuccess'))
     formOpen.value = false

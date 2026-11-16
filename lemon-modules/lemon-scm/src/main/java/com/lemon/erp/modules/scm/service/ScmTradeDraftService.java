@@ -70,7 +70,7 @@ public class ScmTradeDraftService {
         return bizRules.bool(ScmBizRules.TRADE_DRAFT);
     }
 
-    @DataPermission(table = "scm_trade_draft", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_draft", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public PageResult<ScmTradeDraft> page(TradeKind kind, long current, long size, TradeDocQuery query) {
         Page<ScmTradeDraft> page = Page.of(current, size);
         draftMapper.selectPageList(page, kind, query);

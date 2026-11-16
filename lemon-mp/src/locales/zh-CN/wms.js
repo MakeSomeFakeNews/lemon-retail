@@ -178,6 +178,7 @@ export default {
     source: {
       CUSTOMER_PRICE: '客户执行价',
       PRICE_LIST: '价目表',
+      STORE_SCHEME: '门店方案价',
       PRICE_LEVEL: '等级价',
       RETAIL: '零售价',
       CONTRACT_PRICE: '合同价',

@@ -21,6 +21,7 @@ public class FinReferenceChecker implements ReferenceChecker {
             case CUSTOMER -> refMapper.findCustomer(id);
             case SUPPLIER -> refMapper.findSupplier(id);
             case USER -> refMapper.findUser(id);
+            case STORE -> refMapper.findStore(id);
             case DEPT -> refMapper.findDept(id);
             case MATERIAL_CATEGORY -> refMapper.findMaterialCategory(id);
             default -> null;

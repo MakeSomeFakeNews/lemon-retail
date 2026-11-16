@@ -56,7 +56,7 @@ public class BiOlapService {
 
     /** 数据权限规则：采购、库存不区分部门 */
     private static final Map<BiCube, DataPermissionRule> DATA_RULES = Map.of(
-            BiCube.SALES, new DataPermissionRule("bi_fact_sales", "dept_id", "owner_id"),
+            BiCube.SALES, new DataPermissionRule("bi_fact_sales", "dept_id", "owner_id", null, "warehouse_id"),
             BiCube.FINANCE, new DataPermissionRule("bi_fact_finance", "dept_id", null));
 
     public PivotResult pivot(PivotRequest req) {

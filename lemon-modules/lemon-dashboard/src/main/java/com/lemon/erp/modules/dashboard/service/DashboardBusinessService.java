@@ -25,7 +25,7 @@ import java.util.function.Supplier;
 @RequiredArgsConstructor
 public class DashboardBusinessService {
 
-    private static final DataPermissionRule ORDER_RULE = new DataPermissionRule("scm_order", "dept_id", "create_by");
+    private static final DataPermissionRule ORDER_RULE = DataPermissionRule.withWarehouse("scm_order", "dept_id", "create_by", "warehouse_id");
 
     private final DashboardMapper dashboardMapper;
     private final PermissionService permissionService;

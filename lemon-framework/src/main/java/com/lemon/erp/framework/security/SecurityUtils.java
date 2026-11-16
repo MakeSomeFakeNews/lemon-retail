@@ -33,6 +33,12 @@ public final class SecurityUtils {
         return getLoginUser().dataScope();
     }
 
+    /** 当前用户的数据权限，未登录（定时任务、异步处理等系统操作）时不限制 */
+    public static DataScope getDataScopeOrAll() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getPrincipal() instanceof LoginUser user ? user.dataScope() : DataScope.ALL;
+    }
+
     /** 当前登录用户名，未登录返回 null（不抛异常，供日志等场景使用） */
     public static String getUsernameOrNull() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();

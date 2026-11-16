@@ -7,7 +7,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
- * 按数据权限读取单条数据：有「全部数据」权限直接查询，否则在规则下查询（看不到的数据视为不存在）
+ * 按数据权限读取单条数据：有「全部数据」权限（部门、门店都不受限）直接查询，否则在规则下查询（看不到的数据视为不存在）
  */
 public final class DataScopes {
 

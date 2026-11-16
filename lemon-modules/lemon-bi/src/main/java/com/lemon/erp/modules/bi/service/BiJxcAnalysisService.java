@@ -124,7 +124,7 @@ public class BiJxcAnalysisService {
     // ---------------------------------------------------------------- 商品分析
 
     /** 畅销：期间净销量大于 0，按净销量 / 净销售额 / 毛利排序 */
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public PageResult<JxcViews.GoodsRow> top(JxcQuery q, long current, long size) {
         goodsRange(q);
         if (q.getRankBy() == null) {
@@ -134,7 +134,7 @@ public class BiJxcAnalysisService {
     }
 
     /** 滞销：有库存、期间净销量不超过 slowQty（默认 0，即没有销售） */
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public PageResult<JxcViews.GoodsRow> slow(JxcQuery q, long current, long size) {
         goodsRange(q);
         if (q.getSlowQty() == null || q.getSlowQty().signum() < 0) {
@@ -144,7 +144,7 @@ public class BiJxcAnalysisService {
     }
 
     /** 积压：可销天数 = 库存 / (期间净销量 / 期间天数) 超过 overstockDays（默认 90） */
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public PageResult<JxcViews.GoodsRow> overstock(JxcQuery q, long current, long size) {
         long days = goodsRange(q);
         if (q.getOverstockDays() == null || q.getOverstockDays() < 1) {
@@ -163,7 +163,7 @@ public class BiJxcAnalysisService {
     }
 
     /** 周转：周转次数 = 净销量 / 平均库存，周转天数 = 期间天数 / 周转次数（按数量） */
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public PageResult<JxcViews.GoodsRow> turnover(JxcQuery q, long current, long size) {
         long days = goodsRange(q);
         return page(jxcMapper.selectGoodsTurnover(Page.of(current, size), q), r -> {
@@ -181,7 +181,7 @@ public class BiJxcAnalysisService {
      *
      * @param params 页面传入的分群参数，为空的项取租户默认值（业务参数 scm.rfm.*）
      */
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public JxcViews.Rfm rfm(JxcQuery q, RfmSettings params) {
         BiJxcService.checkRange(q, BiJxcService.MAX_DAYS_LONG);
         RfmSettings settings = rfmService.settings(params);

@@ -10,6 +10,7 @@ dependencies {
     implementation project(':lemon-modules:lemon-monitor')
     implementation project(':lemon-modules:lemon-workflow')
     implementation project(':lemon-modules:lemon-dashboard')
+    implementation project(':lemon-modules:lemon-store')
     implementation project(':lemon-modules:lemon-wms')
     implementation project(':lemon-modules:lemon-scm')
     implementation project(':lemon-modules:lemon-fin')

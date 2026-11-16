@@ -53,6 +53,16 @@ public class FinAccountController {
     }
 
     /** 登录即可访问：科目范围用途（库存现金 CASH、银行存款 BANK）当前使用的科目编码，前端据此限定结算账户等可选科目 */
+    /**
+     * 登录即可访问：收付款等单据选择结算账户（共用的和可管辖门店的现金、银行末级科目）
+     *
+     * @param storeId 只返回该门店的账户和共用账户
+     */
+    @GetMapping("/cash-options")
+    public R<List<FinAccount>> cashOptions(@RequestParam(required = false) Long storeId) {
+        return R.ok(accountService.cashOptions(storeId));
+    }
+
     @GetMapping("/scopes")
     public R<Map<String, String>> scopes() {
         return R.ok(accountService.scopeCodes());

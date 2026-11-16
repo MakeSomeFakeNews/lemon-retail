@@ -5,6 +5,9 @@
         <a-form-item :label="$t('wms.common.warehouse')" name="keyword">
           <a-input v-model:value="query.keyword" :placeholder="$t('wms.flow.codeOrName')" allow-clear />
         </a-form-item>
+        <a-form-item :label="$t('store.common.store')" name="storeId">
+          <StoreSelect v-model:value="query.storeId" :placeholder="$t('common.placeholder.all')" />
+        </a-form-item>
         <a-form-item :label="$t('common.field.status')" name="status">
           <a-select v-model:value="query.status" :placeholder="$t('common.placeholder.all')" allow-clear :options="toOptions(dict.sys_common_status, true)" />
         </a-form-item>
@@ -43,6 +46,10 @@
           <template v-else-if="column.key === 'type'">
             <DictTag type="wms_warehouse_type" :value="record.type" />
             <div v-if="CONSIGN_PARTNER[record.type] && record.partnerId" class="sub-text">{{ partnerText(record) }}</div>
+          </template>
+          <template v-else-if="column.key === 'store'">
+            <span v-if="record.storeName">{{ record.storeName }}</span>
+            <span v-else class="sub-text">{{ $t('store.common.hq') }}</span>
           </template>
           <template v-else-if="column.key === 'contact'">
             <div>{{ record.contact || '-' }}</div>
@@ -96,6 +103,11 @@
               <a-select v-model:value="form.type" :options="toOptions(dict.wms_warehouse_type)" @change="form.partnerId = undefined" />
             </a-form-item>
           </a-col>
+          <a-col :xs="24" :sm="12">
+            <a-form-item :label="$t('store.common.store')" name="storeId" :extra="$t('store.common.hqDefault')">
+              <StoreSelect v-model:value="form.storeId" />
+            </a-form-item>
+          </a-col>
           <a-col v-if="CONSIGN_PARTNER[form.type]" :xs="24" :sm="12">
             <a-form-item :label="CONSIGN_PARTNER[form.type].label" name="partnerId">
               <PartnerSelect
@@ -147,6 +159,7 @@ import FormDrawer from '@/components/FormDrawer.vue'
 import SearchForm from '@/components/SearchForm.vue'
 import StatusSwitch from '@/components/StatusSwitch.vue'
 import PartnerSelect from '@/components/scm/PartnerSelect.vue'
+import StoreSelect from '@/components/store/StoreSelect.vue'
 import TableToolbar from '@/components/TableToolbar.vue'
 import { partnersByIds } from '@/api/scm/partner'
 import { addWarehouse, changeWarehouseStatus, deleteWarehouse, getWarehouse, pageWarehouse, updateWarehouse } from '@/api/wms/warehouse'
@@ -170,6 +183,7 @@ const dict = useDict('sys_common_status', 'wms_warehouse_type')
 const columns = [
   { title: t('wms.common.warehouse'), key: 'name', width: 200 },
   { title: t('common.field.type'), key: 'type', width: 150, dict: 'wms_warehouse_type' },
+  { title: t('store.common.store'), key: 'store', width: 140, ellipsis: true, dataIndex: 'storeName' },
   { title: t('wms.warehouse.address'), dataIndex: 'address', width: 240, ellipsis: true },
   { title: t('wms.warehouse.contact'), key: 'contact', width: 140 },
   { title: t('common.field.sort'), dataIndex: 'sort', width: 70 },
@@ -180,11 +194,11 @@ const columns = [
 const { checked, visibleColumns, scrollX } = useColumns(columns, 'wms-warehouse')
 const showSearch = ref(true)
 
-const query = reactive({ keyword: undefined, status: undefined })
+const query = reactive({ keyword: undefined, storeId: undefined, status: undefined })
 const { list, loading, size, pagination, load, search, onTableChange, exportAll } = useTable(pageWarehouse, query)
 
 function resetQuery() {
-  Object.assign(query, { keyword: undefined, status: undefined })
+  Object.assign(query, { keyword: undefined, storeId: undefined, status: undefined })
   search()
 }
 
@@ -223,15 +237,16 @@ const rules = {
   partnerId: [{ required: true, message: t('wms.warehouse.selectPartner') }]
 }
 const drawer = useFormDrawer({
-  emptyForm: () => ({ id: undefined, code: '', name: '', type: WarehouseType.NORMAL, partnerId: undefined, contact: '', phone: '', address: '', sort: 0, remark: '' }),
+  emptyForm: () => ({ id: undefined, code: '', name: '', type: WarehouseType.NORMAL, partnerId: undefined, storeId: undefined, contact: '', phone: '', address: '', sort: 0, remark: '' }),
   fetch: (record) => getWarehouse(record.id),
   create: addWarehouse,
   update: updateWarehouse,
-  toPayload: ({ code, name, type, partnerId, contact, phone, address, sort, remark }) => ({
+  toPayload: ({ code, name, type, partnerId, storeId, contact, phone, address, sort, remark }) => ({
     code,
     name,
-    type: type || 'NORMAL',
+    type: type || WarehouseType.NORMAL,
     partnerId: CONSIGN_PARTNER[type] ? partnerId : null,
+    storeId: storeId ?? null,
     contact,
     phone,
     address,

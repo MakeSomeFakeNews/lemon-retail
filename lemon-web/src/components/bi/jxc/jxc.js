@@ -24,9 +24,9 @@ export function rangePresets() {
 }
 
 /** 汇总维度：销售报表、进货报表 */
-export const SALES_DIMS = [JxcDimension.CATEGORY, JxcDimension.BRAND, JxcDimension.REGION, JxcDimension.CUSTOMER,
+export const SALES_DIMS = [JxcDimension.STORE, JxcDimension.CATEGORY, JxcDimension.BRAND, JxcDimension.REGION, JxcDimension.CUSTOMER,
   JxcDimension.SALESMAN, JxcDimension.MATERIAL, JxcDimension.DAY, JxcDimension.MONTH]
-export const PURCHASE_DIMS = [JxcDimension.CATEGORY, JxcDimension.BRAND, JxcDimension.SUPPLIER, JxcDimension.MATERIAL,
+export const PURCHASE_DIMS = [JxcDimension.STORE, JxcDimension.CATEGORY, JxcDimension.BRAND, JxcDimension.SUPPLIER, JxcDimension.MATERIAL,
   JxcDimension.DAY, JxcDimension.MONTH]
 
 /** 出入库单种类 → TradeDocDetail 的 kind */

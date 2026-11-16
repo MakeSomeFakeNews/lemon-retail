@@ -126,7 +126,7 @@ public class SysRoleService extends ServiceImpl<SysRoleMapper, SysRole> {
         if (type == null) {
             throw new BizException("system.valid.invalidDataPermissionValue");
         }
-        boolean operatorAll = SecurityUtils.getDataScope().all();
+        boolean operatorAll = SecurityUtils.getDataScope().allDepts();
         if (type == DataScopeType.ALL && !operatorAll) {
             throw new BizException("system.error.noPermissionAssignAllDataPermission");
         }

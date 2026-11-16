@@ -251,6 +251,8 @@ function changeWarehouse(e) {
   if (id === warehouseId.value) return
   warehouseId.value = id
   uni.setStorageSync(WAREHOUSE_KEY, id)
+  // 门店价格方案按仓库所属门店取价
+  fillPrices(rows.value)
   // 沿用表头仓库的行：库位批次、序列号跟着换
   allRows().filter((r) => !(lineWarehouse.value && r.warehouseId)).forEach((r) => {
     clearSerials(r)
@@ -421,6 +423,8 @@ async function fillPrices(list) {
   const res = await defaultPrices({
     kind: 'SALES',
     partnerId: customer.value.id,
+    // 仓库所属门店绑定了价格方案时按方案零售价
+    warehouseId: warehouseId.value || undefined,
     materialIds: targets.map((r) => r.materialId),
     qtys: targets.map((r) => baseQty(r) || ratioOf(r)),
     date: bizDate.value

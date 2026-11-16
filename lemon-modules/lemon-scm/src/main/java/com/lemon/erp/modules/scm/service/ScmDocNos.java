@@ -23,10 +23,14 @@ public class ScmDocNos {
     /** 供应商、客户编码规则标识：新增时编码留空则自动生成 */
     public static final String SUPPLIER = "GYS";
     public static final String CUSTOMER = "KH";
+    /** 门店价格方案编码 */
+    public static final String PRICE_SCHEME = "JGFA";
 
     /** 单据编号规则标识 */
     public static final String ORDER_CHANGE = "BG";
     public static final String DELIVERY = "FH";
+    /** 调价单 */
+    public static final String PRICE_ADJUST = "TJ";
 
     @Bean
     @Order(1)
@@ -36,8 +40,10 @@ public class ScmDocNos {
         types.add(doc(ORDER_CHANGE, "scm.label.orderChange"));
         Arrays.stream(TradeKind.values()).forEach(k -> types.add(doc(k.getPrefix(), k.getLabelKey())));
         types.add(doc(DELIVERY, "scm.label.deliveryNotice"));
+        types.add(doc(PRICE_ADJUST, "scm.label.priceAdjust"));
         types.add(master(SUPPLIER, "scm.label.supplierCode"));
         types.add(master(CUSTOMER, "scm.label.customerCode"));
+        types.add(master(PRICE_SCHEME, "scm.label.priceSchemeCode"));
         return new DocNoCatalog("scm.label.supplyChainManagement", types);
     }
 }

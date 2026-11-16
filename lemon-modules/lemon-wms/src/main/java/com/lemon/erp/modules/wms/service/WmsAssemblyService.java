@@ -52,7 +52,7 @@ public class WmsAssemblyService {
 
     /** 单据编号规则标识 */
     public static final String DOC_NO = "ZZ";
-    static final DataPermissionRule RULE = new DataPermissionRule("wms_assembly", "dept_id", "create_by");
+    static final DataPermissionRule RULE = DataPermissionRule.withWarehouse("wms_assembly", "dept_id", "create_by", "warehouse_id");
 
     private final WmsAssemblyMapper assemblyMapper;
     private final WmsAssemblyItemMapper itemMapper;
@@ -61,7 +61,7 @@ public class WmsAssemblyService {
     private final DocNoService docNoService;
     private final StockCostService costService;
 
-    @DataPermission(table = "wms_assembly", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "wms_assembly", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public PageResult<WmsAssembly> page(long current, long size, DocQuery query) {
         Page<WmsAssembly> page = Page.of(current, size);
         assemblyMapper.selectPageList(page, query);

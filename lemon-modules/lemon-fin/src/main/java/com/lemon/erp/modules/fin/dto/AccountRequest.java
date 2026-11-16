@@ -16,6 +16,7 @@ import java.util.List;
  * @param category  类别，一级科目必填
  * @param direction 余额方向 DEBIT / CREDIT，一级科目必填
  * @param auxItems  辅助核算项目，可多选；科目已使用时也可以修改（只影响之后录入的凭证）
+ * @param storeId   所属门店，只对现金、银行的末级科目（结算账户）有效，为空表示各门店共用
  */
 public record AccountRequest(
         @NotBlank(message = "{fin.valid.enterAccountCode}") @Pattern(regexp = "^\\d{4,20}$", message = "{fin.valid.accountCodeMustDigits}") String code,
@@ -24,5 +25,6 @@ public record AccountRequest(
         AccountCategory category,
         AccountDirection direction,
         @Size(max = 255, message = "{fin.valid.remarkCannotExceedCharacters}") String remark,
-        List<AuxItem> auxItems) {
+        List<AuxItem> auxItems,
+        Long storeId) {
 }

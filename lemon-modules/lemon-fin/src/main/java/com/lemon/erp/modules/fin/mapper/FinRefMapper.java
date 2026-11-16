@@ -19,4 +19,7 @@ public interface FinRefMapper {
 
     /** 物料分类（分类 ID） */
     String findMaterialCategory(@Param("id") Long id);
+
+    /** 门店：有归属的结算账户 */
+    String findStore(@Param("id") Long id);
 }

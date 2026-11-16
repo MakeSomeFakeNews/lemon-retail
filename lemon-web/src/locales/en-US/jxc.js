@@ -24,6 +24,8 @@ export default {
     allBrands: 'All brands',
     allWarehouses: 'All warehouses',
     allRegions: 'All regions',
+    allStores: 'All stores',
+    allStoreRegions: 'All store regions',
     region: 'Region',
     materialKeyword: 'Product code / name',
     customerKeyword: 'Customer code / name',
@@ -40,6 +42,7 @@ export default {
     yuan: '¥ {v}'
   },
   dim: {
+    STORE: 'Store',
     CATEGORY: 'Category',
     BRAND: 'Brand',
     REGION: 'Region',

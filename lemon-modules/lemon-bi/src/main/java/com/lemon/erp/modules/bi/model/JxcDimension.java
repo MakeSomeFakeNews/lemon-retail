@@ -16,6 +16,8 @@ public enum JxcDimension {
     SALESMAN(true, false),
     /** 供应商 */
     SUPPLIER(false, true),
+    /** 门店（单据仓库所属的门店，明细行另选仓库时取明细行的仓库） */
+    STORE(true, true),
     /** 商品 */
     MATERIAL(true, true),
     /** 日 */

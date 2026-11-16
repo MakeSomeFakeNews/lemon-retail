@@ -37,7 +37,7 @@ public class BiOverstockService {
     private final BiJxcMapper jxcMapper;
     private final PermissionService permissionService;
 
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public JxcViews.OverstockPage page(OverstockQuery q, long current, long size) {
         prepare(q);
         Page<JxcViews.OverstockRow> page = jxcMapper.selectOverstock(Page.of(current, size), q);

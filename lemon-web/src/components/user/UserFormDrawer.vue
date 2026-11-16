@@ -60,6 +60,21 @@
           </a-form-item>
         </a-col>
         <a-col :xs="24" :sm="12">
+          <a-form-item :label="$t('store.user.store')" name="storeId" :extra="$t('store.user.storeExtra')">
+            <StoreSelect v-model:value="form.storeId" />
+          </a-form-item>
+        </a-col>
+        <a-col :xs="24" :sm="12">
+          <a-form-item :label="$t('store.user.storeScope')" name="storeScope">
+            <a-radio-group v-model:value="form.storeScope" :options="toOptions(dict.sys_store_scope)" />
+          </a-form-item>
+        </a-col>
+        <a-col v-if="form.storeScope === StoreScope.ASSIGNED" :span="24">
+          <a-form-item :label="$t('store.user.storeIds')" name="storeIds" :extra="$t('store.user.storeIdsExtra')">
+            <StoreSelect v-model:value="form.storeIds" multiple :exclude="form.storeId" :placeholder="$t('store.common.selectStore')" />
+          </a-form-item>
+        </a-col>
+        <a-col :xs="24" :sm="12">
           <a-form-item :label="$t('common.field.status')" name="status">
             <a-radio-group
               v-model:value="form.status"
@@ -83,10 +98,12 @@ import { computed, ref } from 'vue'
 import { ThunderboltOutlined } from '@ant-design/icons-vue'
 import { useI18n } from 'vue-i18n'
 import FormDrawer from '@/components/FormDrawer.vue'
+import StoreSelect from '@/components/store/StoreSelect.vue'
 import { addUser, getUser, updateUser } from '@/api/system/user'
 import { roleOptions } from '@/api/system/role'
 import { useDict } from '@/composables/useDict'
 import { useFormDrawer } from '@/composables/useFormDrawer'
+import { StoreScope } from '@/constants/enums'
 import { useUserStore } from '@/store/user'
 import { ADMIN_ROLE, STATUS_DISABLED, SUPER_ADMIN_ID } from '@/utils/constants'
 import { toOptions } from '@/utils/dict'
@@ -104,7 +121,7 @@ const emit = defineEmits(['success'])
 
 const { t } = useI18n()
 const userStore = useUserStore()
-const dict = useDict('sys_common_status')
+const dict = useDict('sys_common_status', 'sys_store_scope')
 
 // 停用的部门不能选
 const deptOptions = computed(() => mapTree(props.deptTree, (n) => ({ id: n.id, name: n.name, disabled: n.status === STATUS_DISABLED })))
@@ -129,6 +146,9 @@ const drawer = useFormDrawer({
     phone: '',
     deptId: undefined,
     roleIds: [],
+    storeId: undefined,
+    storeScope: StoreScope.ALL,
+    storeIds: [],
     status: 1,
     remark: ''
   }),
@@ -136,7 +156,13 @@ const drawer = useFormDrawer({
   fetch: (record) => getUser(record.id),
   create: addUser,
   update: updateUser,
-  toPayload: ({ id, createTime, updateTime, avatar, deptName, ...data }) => data,
+  // 门店范围为「全部门店」时不需要另外管辖的门店；所属门店不重复放在其中
+  toPayload: ({ id, createTime, updateTime, avatar, deptName, storeName, ...data }) => ({
+    ...data,
+    storeId: data.storeId ?? null,
+    storeScope: data.storeScope || StoreScope.ALL,
+    storeIds: data.storeScope === StoreScope.ASSIGNED ? (data.storeIds || []).filter((s) => s !== data.storeId) : []
+  }),
   onSuccess: () => emit('success')
 })
 const { form, formRef } = drawer

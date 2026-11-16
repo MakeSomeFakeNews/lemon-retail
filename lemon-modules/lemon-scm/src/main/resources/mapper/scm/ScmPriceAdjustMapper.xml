@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.scm.mapper.ScmPriceAdjustMapper">
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.scm.entity.ScmPriceAdjust">
+        SELECT a.id, a.adjust_no, a.target, a.effective_time, a.status, a.reason, a.flow_instance_id, a.approve_time, a.effect_time,
+               a.create_by, a.create_time, a.update_time, u.nickname AS create_by_name,
+               (SELECT COUNT(*) FROM scm_price_adjust_item i WHERE i.adjust_id = a.id) AS item_count
+        FROM scm_price_adjust a
+        LEFT JOIN sys_user u ON u.id = a.create_by
+        <where>
+            <if test="keyword != null and keyword != ''">
+                (a.adjust_no LIKE CONCAT('%', #{keyword}, '%') OR a.reason LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null">AND a.status = #{status}</if>
+            <if test="target != null">AND a.target = #{target}</if>
+            <if test="schemeId != null">
+                AND EXISTS (SELECT 1 FROM scm_price_adjust_scheme x WHERE x.adjust_id = a.id AND x.scheme_id = #{schemeId})
+            </if>
+        </where>
+        ORDER BY a.id DESC
+    </select>
+
+    <select id="selectDetail" resultType="com.lemon.erp.modules.scm.entity.ScmPriceAdjust">
+        SELECT a.*, u.nickname AS create_by_name
+        FROM scm_price_adjust a
+        LEFT JOIN sys_user u ON u.id = a.create_by
+        WHERE a.id = #{id}
+    </select>
+
+    <select id="selectItems" resultType="com.lemon.erp.modules.scm.entity.ScmPriceAdjustItem">
+        SELECT i.*, m.code AS material_code, m.name AS material_name, m.spec, m.unit, m.retail_price AS hq_retail_price
+        FROM scm_price_adjust_item i
+        JOIN wms_material m ON m.id = i.material_id
+        WHERE i.adjust_id = #{adjustId}
+        ORDER BY i.id
+    </select>
+
+    <select id="selectDueIds" resultType="java.lang.Long">
+        SELECT id FROM scm_price_adjust
+        WHERE status = #{status} AND effective_time IS NOT NULL AND effective_time &lt;= #{now}
+        ORDER BY effective_time, id
+    </select>
+
+    <select id="selectStatusForUpdate" resultType="com.lemon.erp.modules.scm.model.PriceAdjustStatus">
+        SELECT status FROM scm_price_adjust WHERE id = #{id} FOR UPDATE
+    </select>
+
+    <select id="selectHistory" resultType="com.lemon.erp.modules.scm.entity.ScmPriceHistory">
+        SELECT h.*, a.adjust_no, s.code AS scheme_code, s.name AS scheme_name,
+               m.code AS material_code, m.name AS material_name, m.spec
+        FROM scm_price_history h
+        JOIN scm_price_adjust a ON a.id = h.adjust_id
+        JOIN wms_material m ON m.id = h.material_id
+        LEFT JOIN scm_price_scheme s ON s.id = h.scheme_id
+        <where>
+            <if test="materialId != null">h.material_id = #{materialId}</if>
+            <if test="schemeId != null">AND h.scheme_id = #{schemeId}</if>
+            <if test="target != null">AND h.target = #{target}</if>
+            <if test="adjustId != null">AND h.adjust_id = #{adjustId}</if>
+        </where>
+        ORDER BY h.effect_time DESC, h.id DESC
+    </select>
+
+</mapper>

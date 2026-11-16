@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.scm.mapper.ScmPriceAdjustItemMapper">
+
+    <insert id="insertBatch">
+        INSERT INTO scm_price_adjust_item (adjust_id, material_id, retail_price, member_price, remark, create_time, update_time) VALUES
+        <foreach collection="list" item="i" separator=",">
+            (#{i.adjustId}, #{i.materialId}, #{i.retailPrice}, #{i.memberPrice}, #{i.remark}, NOW(), NOW())
+        </foreach>
+    </insert>
+
+</mapper>

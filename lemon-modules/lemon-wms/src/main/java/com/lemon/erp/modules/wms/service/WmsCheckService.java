@@ -94,11 +94,12 @@ public class WmsCheckService {
     private final StockCostService costService;
     private final WmsStockFlowMapper flowMapper;
     private final WmsLocationMapper locationMapper;
+    private final WmsWarehouseService warehouseService;
 
     public static final String PROCESS_KEY = "wms_check";
     private static final ApprovalFlow FLOW = new ApprovalFlow(PROCESS_KEY, "wms_check:");
 
-    @DataPermission(table = "wms_check", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "wms_check", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public PageResult<WmsCheck> page(long current, long size, DocQuery query) {
         Page<WmsCheck> page = Page.of(current, size);
         checkMapper.selectPageList(page, query);
@@ -444,6 +445,7 @@ public class WmsCheckService {
             throw new BizException("wms.valid.addCountItems");
         }
         WmsWarehouse warehouse = refs.warehouse(warehouseId, "wms.label.countWarehouse");
+        warehouseService.checkUsable(warehouse);
         // 盘点允许停用的物料、库位：它们可能还有库存
         Map<Long, WmsMaterial> materials = refs.materials(items.stream().map(WmsCheckItem::getMaterialId).toList(), false);
         Map<Long, WmsLocation> locations = refs.locations(items.stream().map(WmsCheckItem::getLocationId).toList());

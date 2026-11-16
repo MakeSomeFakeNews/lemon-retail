@@ -23,4 +23,7 @@ public interface ScmRefMapper {
 
     /** 物料分类（分类 ID） */
     String findMaterialCategory(@Param("id") Long id);
+
+    /** 门店价格方案：调价单 */
+    String findPriceScheme(@Param("id") Long id);
 }

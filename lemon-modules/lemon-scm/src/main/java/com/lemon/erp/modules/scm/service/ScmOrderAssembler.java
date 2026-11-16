@@ -64,6 +64,7 @@ public class ScmOrderAssembler {
             if (warehouse.getStatus() != EnableStatus.ENABLED) {
                 throw new BizException("scm.error.warehouseDisabled", warehouse.getName());
             }
+            warehouseService.checkUsable(warehouse);
         }
         Map<Long, WmsMaterial> materials = materialService.getEnabled(req.items().stream().map(OrderItemRequest::materialId).toList());
         // 明细未填写税率时：发票类型的税率 → 默认税率

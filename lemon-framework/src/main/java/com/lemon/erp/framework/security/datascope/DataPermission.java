@@ -31,4 +31,13 @@ public @interface DataPermission {
 
     /** 数据所属用户列（创建人 / 负责人等），用于「仅本人数据」，为空表示不按用户过滤 */
     String userColumn() default "create_by";
+
+    /** 数据所属门店列，为空表示不按门店过滤（单据一般为 {@code store_id}） */
+    String storeColumn() default "";
+
+    /**
+     * 数据所在仓库列，按仓库所属的门店过滤（单据的门店就是其仓库的门店），为空表示不按仓库过滤；
+     * 可写多列（逗号分隔，如调拨的 {@code warehouse_id,to_warehouse_id}），任一列的仓库属于可管辖门店即可见
+     */
+    String warehouseColumn() default "";
 }

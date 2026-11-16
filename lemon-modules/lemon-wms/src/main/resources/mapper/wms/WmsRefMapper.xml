@@ -10,4 +10,10 @@
         END
     </select>
 
+    <select id="findStore" resultType="java.lang.String">
+        SELECT CASE
+            WHEN EXISTS (SELECT 1 FROM wms_warehouse WHERE store_id = #{id}) THEN 'wms.label.warehouse'
+        END
+    </select>
+
 </mapper>
