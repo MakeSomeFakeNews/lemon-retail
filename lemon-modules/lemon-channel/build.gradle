@@ -1,0 +1,10 @@
+plugins {
+    id 'lemon.java-conventions'
+}
+
+description = '线上渠道：微信小店的店铺设置、商品映射、库存同步、订单与售后同步（生成销售订单、出库、退货）'
+
+dependencies {
+    // 门店（store → fin → scm → wms）：店铺绑定门店与发货仓库，订单生成销售订单 / 出库 / 退货
+    api project(':lemon-modules:lemon-store')
+}

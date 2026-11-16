@@ -39,6 +39,8 @@ import java.util.Properties;
 @RequiredArgsConstructor
 public class CacheMonitorService {
 
+    /** 微信小店接口调用凭证（channel 模块 HttpWxShopClient.TOKEN_KEY，按店铺缓存） */
+    private static final String WX_SHOP_TOKEN_KEY = "wxshop:token:";
     /** 应用使用的缓存，新增缓存类型时在这里登记即可出现在缓存列表中（名称、说明写消息键，登记在 monitor 资源包） */
     private static final List<CacheName> CACHES = List.of(
             new CacheName(TokenService.TOKEN_KEY, "monitor.label.loginSessions", "monitor.label.sessionsOnlineUsersAfterClearingAll", 0),
@@ -51,7 +53,9 @@ public class CacheMonitorService {
             new CacheName(ImHttp.TOKEN_KEY, "monitor.label.integrationTokens", "monitor.label.accessTokenDingtalkWecomFeishuApps", 0),
             new CacheName(SysImAuthService.STATE_KEY, "monitor.label.thirdPartyAuthorization", "monitor.label.stateDingtalkWecomFeishuLoginBinding", 0),
             new CacheName(WeChatMiniClient.TOKEN_KEY, "monitor.label.miniappToken", "monitor.label.miniappTokenDesc", 0),
-            new CacheName(SysMiniappAuthService.SESSION_KEY, "monitor.label.miniappSession", "monitor.label.miniappSessionDesc", 0));
+            new CacheName(SysMiniappAuthService.SESSION_KEY, "monitor.label.miniappSession", "monitor.label.miniappSessionDesc", 0),
+            // 线上渠道模块（channel）的 HttpWxShopClient.TOKEN_KEY：监控模块不依赖渠道模块，这里写前缀
+            new CacheName(WX_SHOP_TOKEN_KEY, "monitor.label.wxShopToken", "monitor.label.wxShopTokenDesc", 0));
     /** 单次最多返回的 key 数量，避免一次性返回过多 */
     private static final int MAX_KEYS = 1000;
 

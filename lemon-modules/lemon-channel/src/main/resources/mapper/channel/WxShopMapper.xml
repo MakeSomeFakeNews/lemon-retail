@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.channel.mapper.WxShopMapper">
+
+    <!-- 门店、仓库、客户只读关联 -->
+    <select id="selectPageList" resultType="com.lemon.erp.modules.channel.entity.WxShop">
+        SELECT s.id, s.name, s.mode, s.app_id, s.store_id, s.warehouse_id, s.customer_id, s.return_address_id,
+               s.stock_sync_enabled, s.safety_stock, s.stock_sync_interval, s.order_sync_enabled, s.auto_create_order, s.status,
+               s.stock_synced_at, s.order_synced_to, s.aftersale_synced_to, s.remark, s.create_by, s.create_time, s.update_time,
+               st.name AS store_name, w.name AS warehouse_name, c.name AS customer_name
+        FROM ch_wx_shop s
+        LEFT JOIN store_info st ON st.id = s.store_id
+        LEFT JOIN wms_warehouse w ON w.id = s.warehouse_id
+        LEFT JOIN scm_customer c ON c.id = s.customer_id
+        <where>
+            <if test="keyword != null and keyword != ''">
+                (s.name LIKE CONCAT('%', #{keyword}, '%') OR s.app_id LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null">AND s.status = #{status}</if>
+            <if test="storeId != null">AND s.store_id = #{storeId}</if>
+        </where>
+        ORDER BY s.id DESC
+    </select>
+</mapper>
