@@ -1,0 +1,10 @@
+plugins {
+    id 'lemon.java-conventions'
+}
+
+description = '门店：区域、门店资料（类型、状态、上级配送门店、价格方案、默认仓库与账户、加盟信息）'
+
+dependencies {
+    // 新建门店时直接创建仓库（wms）、现金账户（fin），校验价格方案（scm）；下层模块只通过 framework/store 的 StoreLookup 访问门店
+    api project(':lemon-modules:lemon-fin')
+}

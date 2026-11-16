@@ -78,7 +78,7 @@ public class WmsStockDocService {
     public static final String COST_PERM = "wms:stock:cost";
     private static final ApprovalFlow FLOW = new ApprovalFlow(PROCESS_KEY, "wms_stock_doc:");
 
-    @DataPermission(table = "wms_stock_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "wms_stock_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id,to_warehouse_id")
     public PageResult<WmsStockDoc> page(StockBizType kind, long current, long size, DocQuery query) {
         Page<WmsStockDoc> page = Page.of(current, size);
         docMapper.selectPageList(page, kind, query);

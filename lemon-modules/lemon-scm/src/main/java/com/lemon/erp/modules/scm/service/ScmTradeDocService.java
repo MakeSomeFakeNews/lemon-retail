@@ -90,7 +90,7 @@ public class ScmTradeDocService {
     private final DirectGifts directGifts;
     private final ScmSupplierService supplierService;
 
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public PageResult<ScmTradeDoc> page(TradeKind kind, long current, long size, TradeDocQuery query) {
         Page<ScmTradeDoc> page = Page.of(current, size);
         docMapper.selectPageList(page, kind, query);

@@ -25,6 +25,7 @@ public class ScmReferenceChecker implements ReferenceChecker {
             case SUPPLIER -> refMapper.findSupplier(id);
             case DEPT -> refMapper.findDept(id);
             case MATERIAL_CATEGORY -> refMapper.findMaterialCategory(id);
+            case PRICE_SCHEME -> refMapper.findPriceScheme(id);
             default -> null;
         };
     }

@@ -30,6 +30,7 @@ import com.lemon.erp.modules.wms.mapper.WmsSerialMapper;
 import com.lemon.erp.modules.wms.mapper.WmsStockFlowMapper;
 import com.lemon.erp.modules.wms.mapper.WmsStockMapper;
 import com.lemon.erp.modules.wms.model.SerialStatus;
+import com.lemon.erp.framework.security.datascope.DataPermission;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -67,6 +68,7 @@ public class WmsStockQueryService {
     private final WmsMaterialMapper materialMapper;
     private final PermissionService permissionService;
 
+    @DataPermission(table = "wms_stock", deptColumn = "", userColumn = "", warehouseColumn = "warehouse_id")
     public PageResult<StockView> stockPage(long current, long size, StockQuery query) {
         Page<StockView> page = Page.of(current, size);
         stockMapper.selectPageList(page, query);
@@ -79,6 +81,7 @@ public class WmsStockQueryService {
         return PageResult.of(page);
     }
 
+    @DataPermission(table = "wms_stock", deptColumn = "", userColumn = "", warehouseColumn = "warehouse_id")
     public PageResult<StockSummaryView> summaryPage(long current, long size, StockQuery query) {
         Page<StockSummaryView> page = Page.of(current, size);
         stockMapper.selectSummary(page, query);
@@ -96,6 +99,7 @@ public class WmsStockQueryService {
      *
      * @param summary true 按物料汇总，false 库存明细
      */
+    @DataPermission(table = "wms_stock", deptColumn = "", userColumn = "", warehouseColumn = "warehouse_id")
     public Map<String, BigDecimal> stockTotal(StockQuery query, boolean summary) {
         Map<String, Object> row = stockMapper.selectTotal(query, summary);
         Map<String, BigDecimal> total = new HashMap<>();
@@ -195,6 +199,7 @@ public class WmsStockQueryService {
         return map;
     }
 
+    @DataPermission(table = "wms_stock_flow", deptColumn = "", userColumn = "", warehouseColumn = "warehouse_id")
     public PageResult<StockFlowView> flowPage(long current, long size, FlowQuery query) {
         LocalDateTime begin = query.beginDate() == null ? null : query.beginDate().atStartOfDay();
         LocalDateTime end = query.endDate() == null ? null : query.endDate().plusDays(1).atStartOfDay();
@@ -211,6 +216,7 @@ public class WmsStockQueryService {
     }
 
     /** 收发存汇总：日期范围内各物料的期初、各类出入库和期末数量；开始日期默认本月 1 日，结束日期默认今天，跨度不超过一年 */
+    @DataPermission(table = "wms_stock_flow", deptColumn = "", userColumn = "", warehouseColumn = "warehouse_id")
     public PageResult<InOutRow> inOutPage(long current, long size, InOutQuery query) {
         LocalDate end = query.endDate() == null ? LocalDate.now() : query.endDate();
         LocalDate begin = query.beginDate() == null ? end.withDayOfMonth(1) : query.beginDate();

@@ -18,10 +18,10 @@ public class TenantProperties {
 
     /**
      * 平台共享的表（不按租户隔离，没有 tenant_id 列）：菜单、字典、系统参数、定时任务、租户与套餐，
-     * 以及只以全局唯一 ID 关联的用户角色、角色菜单、角色部门关系表
+     * 以及只以全局唯一 ID 关联的用户角色、用户门店、角色菜单、角色部门关系表
      */
     private Set<String> ignoreTables = new LinkedHashSet<>(Set.of(
             "sys_menu", "sys_dict_type", "sys_dict_data", "sys_job", "sys_job_log",
             "sys_tenant", "sys_tenant_package", "sys_tenant_package_menu",
-            "sys_user_role", "sys_role_menu", "sys_role_dept", "sys_config"));
+            "sys_user_role", "sys_user_store", "sys_role_menu", "sys_role_dept", "sys_config"));
 }

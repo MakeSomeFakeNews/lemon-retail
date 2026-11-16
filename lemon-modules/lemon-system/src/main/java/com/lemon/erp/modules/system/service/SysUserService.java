@@ -16,13 +16,19 @@ import com.lemon.erp.framework.security.TokenService;
 import com.lemon.erp.framework.security.datascope.DataPermission;
 import com.lemon.erp.framework.security.datascope.DataScopes;
 import com.lemon.erp.framework.security.datascope.DataPermissionRule;
+import com.lemon.erp.framework.security.datascope.DataScope;
+import com.lemon.erp.framework.store.StoreBrief;
+import com.lemon.erp.framework.store.StoreLookup;
+import com.lemon.erp.framework.store.StoreScope;
 import com.lemon.erp.modules.system.dto.UserQuery;
 import com.lemon.erp.modules.system.entity.SysRole;
 import com.lemon.erp.modules.system.entity.SysUser;
 import com.lemon.erp.modules.system.entity.SysUserRole;
+import com.lemon.erp.modules.system.entity.SysUserStore;
 import com.lemon.erp.modules.system.mapper.SysRoleMapper;
 import com.lemon.erp.modules.system.mapper.SysUserMapper;
 import com.lemon.erp.modules.system.mapper.SysUserRoleMapper;
+import com.lemon.erp.modules.system.mapper.SysUserStoreMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -30,10 +36,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -52,6 +60,8 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
     private static final DataPermissionRule DATA_RULE = new DataPermissionRule("sys_user", "dept_id", "id");
 
     private final SysUserRoleMapper userRoleMapper;
+    private final SysUserStoreMapper userStoreMapper;
+    private final StoreLookup storeLookup;
     private final SysRoleMapper roleMapper;
     private final SysDeptService deptService;
     private final PasswordEncoder passwordEncoder;
@@ -81,6 +91,8 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
         }
         Page<SysUser> page = page(Page.of(current, size), wrapper);
         fillDeptName(page.getRecords());
+        Map<Long, StoreBrief> stores = storeLookup.findAll(page.getRecords().stream().map(SysUser::getStoreId).toList());
+        page.getRecords().forEach(u -> u.setStoreName(Optional.ofNullable(stores.get(u.getStoreId())).map(StoreBrief::name).orElse(null)));
         return PageResult.of(page);
     }
 
@@ -92,6 +104,8 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
         }
         user.setRoleIds(userRoleMapper.selectList(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId, id))
                 .stream().map(SysUserRole::getRoleId).toList());
+        user.setStoreIds(userStoreMapper.selectList(Wrappers.<SysUserStore>lambdaQuery().eq(SysUserStore::getUserId, id))
+                .stream().map(SysUserStore::getStoreId).toList());
         return user;
     }
 
@@ -108,8 +122,12 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
         user.setPwdUpdateTime(LocalDateTime.now());
         user.setPwdReset(1);
         if (user.getStatus() == null) user.setStatus(EnableStatus.ENABLED);
+        checkStores(user);
         save(user);
         saveRoles(user.getId(), user.getRoleIds());
+        if (user.getStoreIds() != null) {
+            saveStores(user.getId(), user.getStoreIds());
+        }
     }
 
     @Transactional
@@ -127,10 +145,17 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
         // 密码只能通过重置密码修改，头像只能本人在个人中心修改
         user.setPassword(null);
         user.setAvatar(null);
+        if (user.getStoreScope() == null) {
+            user.setStoreScope(old.getStoreScope());
+        }
+        checkStores(user);
         updateById(user);
         if (user.getRoleIds() != null) {
             checkAssignableRoles(user.getRoleIds());
             saveRoles(user.getId(), user.getRoleIds());
+        }
+        if (user.getStoreIds() != null) {
+            saveStores(user.getId(), user.getStoreIds());
         }
         if (user.getStatus() == EnableStatus.DISABLED) {
             tokenService.kickUser(user.getId());
@@ -168,6 +193,7 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
         }
         removeByIds(ids);
         userRoleMapper.delete(Wrappers.<SysUserRole>lambdaQuery().in(SysUserRole::getUserId, ids));
+        userStoreMapper.delete(Wrappers.<SysUserStore>lambdaQuery().in(SysUserStore::getUserId, ids));
         userSettingService.deleteByUsers(ids);
         deptService.clearLeader(ids);
         ids.forEach(tokenService::kickUser);
@@ -206,7 +232,7 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
         if (distinct.isEmpty()) {
             throw new BizException("system.valid.selectUsers");
         }
-        boolean all = SecurityUtils.getDataScope().all();
+        boolean all = SecurityUtils.getDataScope().allDepts();
         Supplier<Long> counter = () -> count(Wrappers.<SysUser>lambdaQuery().in(SysUser::getId, distinct));
         long count = DataScopes.load(DATA_RULE, counter);
         if (count < distinct.size()) {
@@ -243,7 +269,7 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
     /** 新增用户或调整部门时，目标部门必须存在且在数据权限范围内 */
     private void checkDept(Long deptId) {
         if (deptId == null) {
-            if (!SecurityUtils.getDataScope().all()) {
+            if (!SecurityUtils.getDataScope().allDepts()) {
                 throw new BizException("system.error.selectDepartment");
             }
             return;
@@ -277,6 +303,40 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
         SysUser exist = getOne(Wrappers.<SysUser>lambdaQuery().eq(SysUser::getUsername, user.getUsername()));
         if (exist != null && !Objects.equals(exist.getId(), user.getId())) {
             throw new BizException("system.error.usernameAlreadyExists");
+        }
+    }
+
+    /**
+     * 所属门店、管辖门店必须存在；只能分配自己可管辖的门店，门店范围为「全部门店」需要操作人也是全部门店
+     */
+    private void checkStores(SysUser user) {
+        DataScope scope = SecurityUtils.getDataScopeOrAll();
+        if (user.getStoreScope() == null) {
+            user.setStoreScope(StoreScope.ALL);
+        }
+        if (user.getStoreScope() == StoreScope.ALL && !scope.allStores()) {
+            throw new BizException("system.error.cannotGrantAllStores");
+        }
+        List<Long> ids = new ArrayList<>();
+        if (user.getStoreId() != null) ids.add(user.getStoreId());
+        if (user.getStoreScope() == StoreScope.ALL) {
+            user.setStoreIds(user.getStoreIds() == null ? null : List.of());
+        } else if (user.getStoreIds() != null) {
+            ids.addAll(user.getStoreIds());
+        }
+        for (Long id : ids) {
+            storeLookup.require(id);
+            if (!scope.canAccessStore(id)) {
+                throw new BizException("framework.error.storeNotAccessible");
+            }
+        }
+    }
+
+    private void saveStores(Long userId, List<Long> storeIds) {
+        userStoreMapper.delete(Wrappers.<SysUserStore>lambdaQuery().eq(SysUserStore::getUserId, userId));
+        List<Long> distinct = storeIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (!distinct.isEmpty()) {
+            userStoreMapper.insertBatch(userId, distinct);
         }
     }
 

@@ -44,7 +44,7 @@ public class ScmOrderStatsService {
     private final ScmOrderStatsMapper statsMapper;
 
     /** 前 size 个分组（total 为分组总数） */
-    @DataPermission(table = "scm_order", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_order", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public PageResult<OrderSummaryRow> summary(SummaryQuery q, long size) {
         Page<OrderSummaryRow> page = Page.of(1, size);
         statsMapper.selectSummary(page, q.kind(), q.by(), OrderStatus.AUDITED, q.begin(), q.end(), q.partner(), q.material(),
@@ -53,7 +53,7 @@ public class ScmOrderStatsService {
     }
 
     /** 相同条件的合计：订单数、数量、金额 */
-    @DataPermission(table = "scm_order", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_order", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public OrderSummaryRow total(SummaryQuery q) {
         return statsMapper.selectTotal(q.kind(), OrderStatus.AUDITED, q.begin(), q.end(), q.partner(), q.material(), q.salesman());
     }

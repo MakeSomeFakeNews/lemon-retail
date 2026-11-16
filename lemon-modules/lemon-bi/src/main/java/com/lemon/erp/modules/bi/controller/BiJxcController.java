@@ -12,7 +12,10 @@ import com.lemon.erp.modules.bi.service.BiStockAnalysisService;
 import com.lemon.erp.modules.bi.dto.OverstockQuery;
 import com.lemon.erp.modules.bi.dto.StockAnalysisQuery;
 import com.lemon.erp.modules.scm.dto.RfmSettings;
+import com.lemon.erp.framework.store.StoreLookup;
 import lombok.RequiredArgsConstructor;
+
+import java.util.Set;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,26 +39,52 @@ public class BiJxcController {
     private final BiJxcAnalysisService analysisService;
     private final BiOverstockService overstockService;
     private final BiStockAnalysisService stockAnalysisService;
+    private final StoreLookup storeLookup;
+
+    /** 按区域筛选：转换为区域（含下级区域）中的门店 */
+    private JxcQuery stores(JxcQuery q) {
+        q.setRegionStoreIds(regionStores(q.getStoreRegionId()));
+        return q;
+    }
+
+    private OverstockQuery stores(OverstockQuery q) {
+        q.setRegionStoreIds(regionStores(q.getStoreRegionId()));
+        return q;
+    }
+
+    private StockAnalysisQuery stores(StockAnalysisQuery q) {
+        q.setRegionStoreIds(regionStores(q.getStoreRegionId()));
+        return q;
+    }
+
+    /** 区域中没有门店时用不存在的 ID，查不到数据；没有选区域为空（不限） */
+    private Set<Long> regionStores(Long regionId) {
+        if (regionId == null) {
+            return null;
+        }
+        Set<Long> stores = storeLookup.storesInRegion(regionId);
+        return stores.isEmpty() ? Set.of(-1L) : stores;
+    }
 
     // ---------------------------------------------------------------- 销售报表
 
     @GetMapping("/sales")
     @PreAuthorize("@ss.hasPerm('bi:jxc:sales')")
     public R<JxcViews.Summary> sales(@RequestParam JxcDimension groupBy, JxcQuery q) {
-        return R.ok(jxcService.summary(true, groupBy, q));
+        return R.ok(jxcService.summary(true, groupBy, stores(q)));
     }
 
     @GetMapping("/sales/detail")
     @PreAuthorize("@ss.hasPerm('bi:jxc:sales')")
     public R<JxcViews.DetailPage> salesDetail(JxcQuery q, @RequestParam(defaultValue = "1") long current,
                                                          @RequestParam(defaultValue = "20") long size) {
-        return R.ok(jxcService.detail(true, q, current, size));
+        return R.ok(jxcService.detail(true, stores(q), current, size));
     }
 
     @GetMapping("/sales/export")
     @PreAuthorize("@ss.hasPerm('bi:jxc:sales')")
     public R<JxcViews.DetailExport> salesExport(JxcQuery q) {
-        return R.ok(jxcService.export(true, q));
+        return R.ok(jxcService.export(true, stores(q)));
     }
 
     /** 单据列表：汇总项下的出入库单 / 退货单，每张一行（docId 穿透到该单的明细用 /detail） */
@@ -63,13 +92,13 @@ public class BiJxcController {
     @PreAuthorize("@ss.hasPerm('bi:jxc:sales')")
     public R<JxcViews.DocPage> salesDocs(JxcQuery q, @RequestParam(defaultValue = "1") long current,
                                             @RequestParam(defaultValue = "20") long size) {
-        return R.ok(jxcService.docs(true, q, current, size));
+        return R.ok(jxcService.docs(true, stores(q), current, size));
     }
 
     @GetMapping("/sales/docs/export")
     @PreAuthorize("@ss.hasPerm('bi:jxc:sales')")
     public R<JxcViews.DocExport> salesDocsExport(JxcQuery q) {
-        return R.ok(jxcService.exportDocs(true, q));
+        return R.ok(jxcService.exportDocs(true, stores(q)));
     }
 
     // ---------------------------------------------------------------- 进货报表
@@ -77,20 +106,20 @@ public class BiJxcController {
     @GetMapping("/purchase")
     @PreAuthorize("@ss.hasPerm('bi:jxc:purchase')")
     public R<JxcViews.Summary> purchase(@RequestParam JxcDimension groupBy, JxcQuery q) {
-        return R.ok(jxcService.summary(false, groupBy, q));
+        return R.ok(jxcService.summary(false, groupBy, stores(q)));
     }
 
     @GetMapping("/purchase/detail")
     @PreAuthorize("@ss.hasPerm('bi:jxc:purchase')")
     public R<JxcViews.DetailPage> purchaseDetail(JxcQuery q, @RequestParam(defaultValue = "1") long current,
                                                             @RequestParam(defaultValue = "20") long size) {
-        return R.ok(jxcService.detail(false, q, current, size));
+        return R.ok(jxcService.detail(false, stores(q), current, size));
     }
 
     @GetMapping("/purchase/export")
     @PreAuthorize("@ss.hasPerm('bi:jxc:purchase')")
     public R<JxcViews.DetailExport> purchaseExport(JxcQuery q) {
-        return R.ok(jxcService.export(false, q));
+        return R.ok(jxcService.export(false, stores(q)));
     }
 
     /** 单据列表：汇总项下的出入库单 / 退货单，每张一行（docId 穿透到该单的明细用 /detail） */
@@ -98,13 +127,13 @@ public class BiJxcController {
     @PreAuthorize("@ss.hasPerm('bi:jxc:purchase')")
     public R<JxcViews.DocPage> purchaseDocs(JxcQuery q, @RequestParam(defaultValue = "1") long current,
                                             @RequestParam(defaultValue = "20") long size) {
-        return R.ok(jxcService.docs(false, q, current, size));
+        return R.ok(jxcService.docs(false, stores(q), current, size));
     }
 
     @GetMapping("/purchase/docs/export")
     @PreAuthorize("@ss.hasPerm('bi:jxc:purchase')")
     public R<JxcViews.DocExport> purchaseDocsExport(JxcQuery q) {
-        return R.ok(jxcService.exportDocs(false, q));
+        return R.ok(jxcService.exportDocs(false, stores(q)));
     }
 
     // ---------------------------------------------------------------- 经营状况、资产状况
@@ -112,7 +141,7 @@ public class BiJxcController {
     @GetMapping("/business")
     @PreAuthorize("@ss.hasPerm('bi:jxc:business')")
     public R<JxcViews.Business> business(JxcQuery q) {
-        return R.ok(jxcService.business(q));
+        return R.ok(jxcService.business(stores(q)));
     }
 
     /** 资产状况，asOf 为截至日期（含），不传为今天 */
@@ -128,35 +157,35 @@ public class BiJxcController {
     @PreAuthorize("@ss.hasPerm('bi:jxc:goods')")
     public R<PageResult<JxcViews.GoodsRow>> top(JxcQuery q, @RequestParam(defaultValue = "1") long current,
                                                 @RequestParam(defaultValue = "20") long size) {
-        return R.ok(analysisService.top(q, current, size));
+        return R.ok(analysisService.top(stores(q), current, size));
     }
 
     @GetMapping("/goods/slow")
     @PreAuthorize("@ss.hasPerm('bi:jxc:goods')")
     public R<PageResult<JxcViews.GoodsRow>> slow(JxcQuery q, @RequestParam(defaultValue = "1") long current,
                                                  @RequestParam(defaultValue = "20") long size) {
-        return R.ok(analysisService.slow(q, current, size));
+        return R.ok(analysisService.slow(stores(q), current, size));
     }
 
     @GetMapping("/goods/overstock")
     @PreAuthorize("@ss.hasPerm('bi:jxc:goods')")
     public R<PageResult<JxcViews.GoodsRow>> overstock(JxcQuery q, @RequestParam(defaultValue = "1") long current,
                                                       @RequestParam(defaultValue = "20") long size) {
-        return R.ok(analysisService.overstock(q, current, size));
+        return R.ok(analysisService.overstock(stores(q), current, size));
     }
 
     @GetMapping("/goods/shortage")
     @PreAuthorize("@ss.hasPerm('bi:jxc:goods')")
     public R<PageResult<JxcViews.GoodsRow>> shortage(JxcQuery q, @RequestParam(defaultValue = "1") long current,
                                                      @RequestParam(defaultValue = "20") long size) {
-        return R.ok(analysisService.shortage(q, current, size));
+        return R.ok(analysisService.shortage(stores(q), current, size));
     }
 
     @GetMapping("/goods/turnover")
     @PreAuthorize("@ss.hasPerm('bi:jxc:goods')")
     public R<PageResult<JxcViews.GoodsRow>> turnover(JxcQuery q, @RequestParam(defaultValue = "1") long current,
                                                      @RequestParam(defaultValue = "20") long size) {
-        return R.ok(analysisService.turnover(q, current, size));
+        return R.ok(analysisService.turnover(stores(q), current, size));
     }
 
     // ---------------------------------------------------------------- 积压分析
@@ -169,7 +198,7 @@ public class BiJxcController {
     @PreAuthorize("@ss.hasPerm('bi:jxc:overstock')")
     public R<JxcViews.OverstockPage> overstockAnalysis(OverstockQuery q, @RequestParam(defaultValue = "1") long current,
                                                        @RequestParam(defaultValue = "20") long size) {
-        return R.ok(overstockService.page(q, current, size));
+        return R.ok(overstockService.page(stores(q), current, size));
     }
 
     // ---------------------------------------------------------------- 库存分析（issue #116）
@@ -179,7 +208,7 @@ public class BiJxcController {
     @PreAuthorize("@ss.hasPerm('bi:jxc:turnover')")
     public R<JxcViews.TurnoverPage> turnover(StockAnalysisQuery q, @RequestParam(defaultValue = "1") long current,
                                              @RequestParam(defaultValue = "20") long size) {
-        return R.ok(stockAnalysisService.turnover(q, current, size));
+        return R.ok(stockAnalysisService.turnover(stores(q), current, size));
     }
 
     /** 滞销 / 畅销分析（mode = SLOW / HOT） */
@@ -187,7 +216,7 @@ public class BiJxcController {
     @PreAuthorize("@ss.hasPerm('bi:jxc:salesRate')")
     public R<JxcViews.SalesRatePage> salesRate(StockAnalysisQuery q, @RequestParam(defaultValue = "1") long current,
                                                @RequestParam(defaultValue = "20") long size) {
-        return R.ok(stockAnalysisService.salesRate(q, current, size));
+        return R.ok(stockAnalysisService.salesRate(stores(q), current, size));
     }
 
     /** 库存预警（tab = WAREHOUSE / HIGH / LOW），截至日期不传为今天 */
@@ -195,7 +224,7 @@ public class BiJxcController {
     @PreAuthorize("@ss.hasPerm('bi:jxc:stockAlert')")
     public R<JxcViews.StockAlertPage> stockAlert(StockAnalysisQuery q, @RequestParam(defaultValue = "1") long current,
                                                  @RequestParam(defaultValue = "20") long size) {
-        return R.ok(stockAnalysisService.stockAlert(q, current, size));
+        return R.ok(stockAnalysisService.stockAlert(stores(q), current, size));
     }
 
     // ---------------------------------------------------------------- 客户 RFM
@@ -204,6 +233,6 @@ public class BiJxcController {
     @GetMapping("/rfm")
     @PreAuthorize("@ss.hasPerm('bi:jxc:rfm')")
     public R<JxcViews.Rfm> rfm(JxcQuery q, RfmSettings params) {
-        return R.ok(analysisService.rfm(q, params));
+        return R.ok(analysisService.rfm(stores(q), params));
     }
 }

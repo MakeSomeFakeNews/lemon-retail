@@ -25,6 +25,12 @@ public class StockAnalysisQuery {
 
     /** 仓库：库存、销量、进货、分仓库的上下限都按该仓库；为空时为全部仓库 */
     private Long warehouseId;
+    /** 门店：仓库属于该门店 */
+    private Long storeId;
+    /** 区域：仓库所属门店在该区域（含下级区域） */
+    private Long storeRegionId;
+    /** 区域内的门店（由 storeRegionId 转换） */
+    private java.util.Set<Long> regionStoreIds;
     /** 物料分类，包含下级分类 */
     private String category;
     private String brand;

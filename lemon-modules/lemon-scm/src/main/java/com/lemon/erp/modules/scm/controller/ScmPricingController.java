@@ -49,16 +49,18 @@ public class ScmPricingController {
      * 开单默认价（含税、基本单位、本位币）：销售订单、报价单、出入库直接开单选择物料后带出
      *
      * @param kind SALES / PURCHASE
-     * @param qtys 与 materialIds 一一对应的数量（可省略）
+     * @param qtys        与 materialIds 一一对应的数量（可省略）
+     * @param warehouseId 单据仓库（可省略）：销售时按仓库所属门店的价格方案取方案零售价
      */
     @GetMapping("/pricing/default")
     @PreAuthorize("@ss.hasAnyPerm('scm:sales:add', 'scm:sales:edit', 'scm:salesOut:add', "
             + "'scm:purchase:add', 'scm:purchase:edit', 'scm:purchaseIn:add', 'scm:price:list', 'scm:goodsPrice:list')")
     public R<List<PricingViews.DefaultPrice>> defaults(@RequestParam OrderKind kind, @RequestParam(required = false) Long partnerId,
+                                                       @RequestParam(required = false) Long warehouseId,
                                                        @RequestParam List<Long> materialIds,
                                                        @RequestParam(required = false) List<BigDecimal> qtys,
                                                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return R.ok(pricingService.defaults(kind, partnerId, materialIds, qtys, date));
+        return R.ok(pricingService.defaults(kind, partnerId, warehouseId, materialIds, qtys, date));
     }
 
     /**

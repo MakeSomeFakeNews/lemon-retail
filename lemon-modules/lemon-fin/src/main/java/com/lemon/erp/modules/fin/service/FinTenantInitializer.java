@@ -10,6 +10,8 @@ import com.lemon.erp.modules.fin.mapper.FinAccountMapper;
 import com.lemon.erp.modules.fin.mapper.FinCurrencyMapper;
 import com.lemon.erp.modules.fin.mapper.FinIoCategoryMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
@@ -21,6 +23,8 @@ import java.util.Map;
  * 新租户复制平台的币种、会计科目表（科目按编码层级复制，上级科目 ID 换成新租户中的）和收支类别（科目换成新租户中的）
  */
 @Component
+// 在门店初始化（StoreTenantInitializer，最后执行）之前：总部的仓库、现金账户依赖这里复制的基础数据
+@Order(Ordered.LOWEST_PRECEDENCE - 100)
 @RequiredArgsConstructor
 public class FinTenantInitializer implements TenantInitializer {
 
@@ -42,6 +46,8 @@ public class FinTenantInitializer implements TenantInitializer {
         for (FinAccount a : accounts) {
             Long platformId = a.getId();
             TenantInitializer.asNew(a);
+            // 门店归属在新租户创建总部后重新设置（StoreTenantInitializer）
+            a.setStoreId(null);
             a.setParentId(a.getParentId() == null || a.getParentId() == 0 ? 0L : idMap.getOrDefault(a.getParentId(), 0L));
             accountMapper.insert(a);
             idMap.put(platformId, a.getId());

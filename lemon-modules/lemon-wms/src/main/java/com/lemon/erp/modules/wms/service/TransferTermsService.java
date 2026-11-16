@@ -231,7 +231,7 @@ public class TransferTermsService {
     }
 
     /** 调拨汇总（按调出仓库 → 调入仓库），数据权限同调拨单列表 */
-    @DataPermission(table = "wms_stock_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "wms_stock_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id,to_warehouse_id")
     public List<TransferSummaryRow> summary(DocQuery query) {
         return docMapper.selectTransferSummary(query);
     }

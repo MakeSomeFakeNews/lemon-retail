@@ -2,6 +2,7 @@ package com.lemon.erp.modules.scm.service;
 
 import com.lemon.erp.framework.workflow.FlowBusiness;
 import com.lemon.erp.modules.scm.model.OrderKind;
+import com.lemon.erp.modules.scm.model.PriceAdjustTarget;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -37,5 +38,13 @@ public class ScmFlowBusinesses {
                 number("wholeDiscount", "scm.label.flowWholeDiscountAfterChange"),
                 number("wholeDiscountDelta", "scm.label.flowWholeDiscountDelta"),
                 text("orderNo", "scm.label.orderNo"));
+    }
+
+    @Bean
+    public FlowBusiness priceAdjustFlow() {
+        return FlowBusiness.of(ScmPriceAdjustService.PROCESS_KEY, "scm.label.priceAdjustApproval",
+                select("target", "scm.label.priceAdjustTarget", PriceAdjustTarget.values()),
+                number("itemCount", "scm.label.priceAdjustItemCount"),
+                text("adjustNo", "scm.label.priceAdjustNo"));
     }
 }

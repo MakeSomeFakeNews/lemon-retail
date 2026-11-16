@@ -16,7 +16,10 @@
           :placeholder="$t('jxc.common.allBrands')" class="filter-s" />
         <a-select v-if="sales" v-model:value="query.region" :options="toOptions(dict.scm_region)" allow-clear show-search option-filter-prop="label"
           :placeholder="$t('jxc.common.allRegions')" class="filter-s" />
-        <WarehouseSelect v-model:value="query.warehouseId" :placeholder="$t('jxc.common.allWarehouses')" class="filter-s" />
+        <StoreSelect v-model:value="query.storeId" :placeholder="$t('jxc.common.allStores')" class="filter-s" />
+        <a-tree-select v-model:value="query.storeRegionId" :tree-data="storeRegions" :field-names="{ label: 'name', value: 'id', children: 'children' }"
+          :placeholder="$t('jxc.common.allStoreRegions')" tree-default-expand-all show-search tree-node-filter-prop="name" allow-clear class="filter-s" />
+        <WarehouseSelect v-model:value="query.warehouseId" :store-id="query.storeId" :placeholder="$t('jxc.common.allWarehouses')" class="filter-s" />
         <a-input v-model:value="query.keyword" allow-clear :placeholder="$t('jxc.common.materialKeyword')" class="filter" @press-enter="load" />
         <a-button type="primary" :loading="loading" @click="load">{{ $t('common.action.query') }}</a-button>
       </div>
@@ -140,6 +143,8 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { DownloadOutlined } from '@ant-design/icons-vue'
 import PartnerSelect from '@/components/scm/PartnerSelect.vue'
 import WarehouseSelect from '@/components/wms/WarehouseSelect.vue'
+import StoreSelect from '@/components/store/StoreSelect.vue'
+import { regionTree } from '@/api/store/region'
 import IdentityUserSelect from '@/components/common/IdentityUserSelect.vue'
 import JxcDetail from './JxcDetail.vue'
 import JxcDocs from './JxcDocs.vue'
@@ -168,7 +173,8 @@ const dims = computed(() => (sales.value ? SALES_DIMS : PURCHASE_DIMS))
 const presets = rangePresets()
 const range = ref(thisMonth())
 const groupBy = ref(sales.value ? JxcDimension.CUSTOMER : JxcDimension.SUPPLIER)
-const query = reactive({ partnerId: undefined, salesmanId: undefined, category: undefined, brand: undefined, region: undefined, warehouseId: undefined, keyword: '' })
+const query = reactive({ partnerId: undefined, salesmanId: undefined, category: undefined, brand: undefined, region: undefined, storeId: undefined, storeRegionId: undefined, warehouseId: undefined, keyword: '' })
+const storeRegions = ref([])
 const data = ref({ rows: [], total: {}, truncated: false })
 const total = computed(() => data.value.total || {})
 const loading = ref(false)
@@ -271,7 +277,10 @@ function exportSummary() {
   writeExcel(name, cols.map((c) => ({ title: c.title, width: c.key === 'group' ? 30 : 14 })), rows, { withStamp: false })
 }
 
-onMounted(load)
+onMounted(async () => {
+  load()
+  storeRegions.value = await regionTree()
+})
 </script>
 
 <style scoped>

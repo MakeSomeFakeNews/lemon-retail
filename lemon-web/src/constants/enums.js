@@ -430,6 +430,12 @@ export const FormFieldType = Object.freeze({
   SELECT: 'SELECT',
 })
 
+/** com.lemon.erp.modules.store.model.FranchiseSettleMode（字典 store_settle_mode） */
+export const FranchiseSettleMode = Object.freeze({
+  PREPAID: 'PREPAID', // 预付货款
+  CREDIT: 'CREDIT', // 月结
+})
+
 /** com.lemon.erp.modules.scm.model.FreightBearer（字典 scm_freight_bearer） */
 export const FreightBearer = Object.freeze({
   COMPANY: 'COMPANY', // 本公司承担
@@ -540,6 +546,7 @@ export const JxcDimension = Object.freeze({
   CUSTOMER: 'CUSTOMER', // 客户
   SALESMAN: 'SALESMAN', // 业务员
   SUPPLIER: 'SUPPLIER', // 供应商
+  STORE: 'STORE', // 门店
   MATERIAL: 'MATERIAL', // 商品
   DAY: 'DAY', // 日
   MONTH: 'MONTH', // 月
@@ -720,6 +727,21 @@ export const PlanUnit = Object.freeze({
   MONTH: 'MONTH',
 })
 
+/** com.lemon.erp.modules.scm.model.PriceAdjustStatus（字典 scm_price_adjust_status） */
+export const PriceAdjustStatus = Object.freeze({
+  DRAFT: 'DRAFT', // 草稿
+  APPROVING: 'APPROVING', // 审批中
+  APPROVED: 'APPROVED', // 已审核、待生效
+  EFFECTIVE: 'EFFECTIVE', // 已生效
+  VOIDED: 'VOIDED', // 已作废
+})
+
+/** com.lemon.erp.modules.scm.model.PriceAdjustTarget（字典 scm_price_adjust_target） */
+export const PriceAdjustTarget = Object.freeze({
+  HQ: 'HQ', // 总部价
+  SCHEME: 'SCHEME', // 门店价格方案
+})
+
 /** com.lemon.erp.modules.scm.model.PriceControlMode（字典 scm_price_control_mode） */
 export const PriceControlMode = Object.freeze({
   WARN: 'WARN', // 提示
@@ -731,6 +753,7 @@ export const PriceSource = Object.freeze({
   CUSTOMER_PRICE: 'CUSTOMER_PRICE',
   PRICE_LIST: 'PRICE_LIST',
   PRICE_LEVEL: 'PRICE_LEVEL',
+  STORE_SCHEME: 'STORE_SCHEME', // 门店价格方案的零售价
   RETAIL: 'RETAIL',
   SUPPLIER_PRICE: 'SUPPLIER_PRICE',
   LAST_PRICE: 'LAST_PRICE',
@@ -777,6 +800,9 @@ export const RefType = Object.freeze({
   USER: 'USER',
   DEPT: 'DEPT',
   MATERIAL_CATEGORY: 'MATERIAL_CATEGORY', // 物料分类
+  STORE: 'STORE', // 门店
+  REGION: 'REGION', // 区域
+  PRICE_SCHEME: 'PRICE_SCHEME', // 门店价格方案
 })
 
 /** com.lemon.erp.modules.wms.model.ReservationSource */
@@ -925,6 +951,28 @@ export const StockQtyFilter = Object.freeze({
   ZERO: 'ZERO', // 库存 = 0
   NEGATIVE: 'NEGATIVE', // 库存 &lt
   NONZERO: 'NONZERO', // 库存 ≠ 0
+})
+
+/** com.lemon.erp.framework.store.StoreScope（字典 sys_store_scope） */
+export const StoreScope = Object.freeze({
+  ALL: 'ALL', // 全部门店
+  ASSIGNED: 'ASSIGNED', // 所属门店 + 指定的管辖门店
+})
+
+/** com.lemon.erp.framework.store.StoreStatus（字典 store_status） */
+export const StoreStatus = Object.freeze({
+  PREPARING: 'PREPARING', // 筹备
+  OPEN: 'OPEN', // 营业
+  SUSPENDED: 'SUSPENDED', // 停业
+  CLOSED: 'CLOSED', // 闭店
+})
+
+/** com.lemon.erp.framework.store.StoreType（字典 store_type） */
+export const StoreType = Object.freeze({
+  HQ: 'HQ', // 总部
+  DIRECT: 'DIRECT', // 直营店
+  FRANCHISE: 'FRANCHISE', // 加盟店
+  DC: 'DC', // 配送中心
 })
 
 /** com.lemon.erp.modules.scm.model.SupplierLevel（字典 scm_supplier_level） */

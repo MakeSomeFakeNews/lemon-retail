@@ -3,12 +3,15 @@ package com.lemon.erp.modules.scm.service;
 import com.lemon.erp.framework.security.PermissionService;
 import com.lemon.erp.framework.security.SecurityUtils;
 import com.lemon.erp.framework.security.datascope.DataPermissionContext;
+import com.lemon.erp.framework.store.StoreBrief;
+import com.lemon.erp.framework.store.StoreLookup;
 import com.lemon.erp.modules.scm.dto.PricingViews;
 import com.lemon.erp.modules.scm.dto.PricingViews.DefaultPrice;
 import com.lemon.erp.modules.scm.entity.ScmCustomer;
 import com.lemon.erp.modules.scm.entity.ScmCustomerPrice;
 import com.lemon.erp.modules.scm.entity.ScmPriceList;
 import com.lemon.erp.modules.scm.entity.ScmPriceMemory;
+import com.lemon.erp.modules.scm.entity.ScmPriceSchemeItem;
 import com.lemon.erp.modules.scm.entity.ScmSupplierPrice;
 import com.lemon.erp.modules.scm.mapper.ScmPriceMemoryMapper;
 import com.lemon.erp.modules.scm.mapper.ScmPricingMapper;
@@ -20,7 +23,9 @@ import com.lemon.erp.modules.wms.entity.WmsMaterial;
 import com.lemon.erp.modules.wms.model.PriceLevels;
 import com.lemon.erp.modules.wms.service.WmsMaterialService;
 import com.lemon.erp.modules.wms.service.WmsPriceLevelService;
+import com.lemon.erp.modules.wms.service.WmsWarehouseService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -33,7 +38,8 @@ import java.util.Set;
 
 /**
  * 开单默认价与价格参考。
- * <p>销售默认价：客户执行价 → 销售价目表（有效期、起订量）→ 客户价格等级的价格列 → 零售价 → 该客户最近售价（价格记忆）；
+ * <p>销售默认价：客户执行价 → 销售价目表（有效期、起订量）→ 客户价格等级的价格列 → 门店价格方案的零售价（单据仓库所属门店绑定的启用方案中有该物料时）
+ * → 总部零售价 → 该客户最近售价（价格记忆）；
  * 停用的价格列不参与。采购默认价：供应商在单据日期有效的采购合同价 → 供货价格（阶梯价）→ 最近进价 → 参考成本价。
  * 价格均为含税、基本单位、本位币
  */
@@ -55,6 +61,10 @@ public class ScmPricingService {
     private final WmsMaterialService materialService;
     private final WmsPriceLevelService priceLevelService;
     private final PermissionService permissionService;
+    private final WmsWarehouseService warehouseService;
+    private final ScmPriceSchemeService schemeService;
+    /** 门店模块实现；没有门店模块时不按门店价格方案取价 */
+    private final ObjectProvider<StoreLookup> storeLookup;
 
     /**
      * 开单默认价，按行返回：结果与 materialIds 一一对应（顺序、个数相同），同一物料多行时按各行的数量分别匹配
@@ -66,6 +76,16 @@ public class ScmPricingService {
      * @param date        单据日期，为空取今天
      */
     public List<DefaultPrice> defaults(OrderKind kind, Long partnerId, List<Long> materialIds, List<BigDecimal> qtys, LocalDate date) {
+        return defaults(kind, partnerId, null, materialIds, qtys, date);
+    }
+
+    /**
+     * 同 {@link #defaults(OrderKind, Long, List, List, LocalDate)}，销售时按单据仓库所属门店的价格方案取方案零售价
+     *
+     * @param warehouseId 单据仓库，可为空（不按门店价格方案）
+     */
+    public List<DefaultPrice> defaults(OrderKind kind, Long partnerId, Long warehouseId, List<Long> materialIds, List<BigDecimal> qtys,
+                                       LocalDate date) {
         LocalDate day = date == null ? LocalDate.now() : date;
         List<Long> ids = materialIds.stream().distinct().toList();
         Map<Long, WmsMaterial> materials = materialService.mapByIds(ids);
@@ -78,11 +98,12 @@ public class ScmPricingService {
             Map<Long, ScmCustomerPrice> customerPrices = customerPriceService.ofMaterials(partnerId, ids);
             Set<Integer> enabledLevels = priceLevelService.enabledLevels();
             int level = customer == null || customer.getPriceLevel() == null ? PriceLevels.RETAIL : customer.getPriceLevel();
+            Map<Long, ScmPriceSchemeItem> schemePrices = storeSchemePrices(warehouseId, ids);
             for (int i = 0; i < materialIds.size(); i++) {
                 Long id = materialIds.get(i);
                 BigDecimal qty = lineQty(qtys, i);
                 result.add(cache.computeIfAbsent(id + "|" + qty.toPlainString(), k -> salesPrice(id, materials.get(id),
-                        customerPrices.get(id), partnerId, qty, day, level, enabledLevels, memory.get(id))));
+                        customerPrices.get(id), schemePrices.get(id), partnerId, qty, day, level, enabledLevels, memory.get(id))));
             }
         } else {
             for (int i = 0; i < materialIds.size(); i++) {
@@ -101,7 +122,21 @@ public class ScmPricingService {
         return q == null || q.signum() <= 0 ? BigDecimal.ONE : q.stripTrailingZeros();
     }
 
-    private DefaultPrice salesPrice(Long id, WmsMaterial material, ScmCustomerPrice customerPrice, Long customerId, BigDecimal qty,
+    /**
+     * 单据仓库所属门店绑定的价格方案中这些物料的方案价（物料 ID → 明细）；仓库不属于门店、门店没有方案或方案停用时为空
+     */
+    private Map<Long, ScmPriceSchemeItem> storeSchemePrices(Long warehouseId, List<Long> materialIds) {
+        StoreLookup lookup = warehouseId == null ? null : storeLookup.getIfAvailable();
+        if (lookup == null) {
+            return Map.of();
+        }
+        Long storeId = warehouseService.get(warehouseId).getStoreId();
+        Long schemeId = storeId == null ? null : lookup.find(storeId).map(StoreBrief::priceSchemeId).orElse(null);
+        return schemeService.enabledPrices(schemeId, materialIds);
+    }
+
+    private DefaultPrice salesPrice(Long id, WmsMaterial material, ScmCustomerPrice customerPrice, ScmPriceSchemeItem schemePrice,
+                                    Long customerId, BigDecimal qty,
                                     LocalDate date, int level, Set<Integer> enabledLevels, ScmPriceMemory memory) {
         if (customerPrice != null) {
             return new DefaultPrice(id, customerPrice.getPrice(), customerPrice.getTaxRate(), PriceSource.CUSTOMER_PRICE);
@@ -113,6 +148,10 @@ public class ScmPricingService {
         if (material != null) {
             if (level != PriceLevels.RETAIL && enabledLevels.contains(level) && PriceLevels.price(material, level) != null) {
                 return new DefaultPrice(id, PriceLevels.price(material, level), null, PriceSource.PRICE_LEVEL);
+            }
+            // 门店价格方案覆盖总部零售价
+            if (schemePrice != null && schemePrice.getRetailPrice() != null) {
+                return new DefaultPrice(id, schemePrice.getRetailPrice(), null, PriceSource.STORE_SCHEME);
             }
             if (enabledLevels.contains(PriceLevels.RETAIL) && material.getRetailPrice() != null) {
                 return new DefaultPrice(id, material.getRetailPrice(), null, PriceSource.RETAIL);

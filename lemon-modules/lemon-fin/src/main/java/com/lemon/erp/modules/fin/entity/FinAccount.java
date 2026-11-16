@@ -3,6 +3,7 @@ package com.lemon.erp.modules.fin.entity;
 import com.lemon.erp.common.enums.EnableStatus;
 import com.lemon.erp.modules.fin.model.AccountDirection;
 import com.lemon.erp.modules.fin.model.AccountCategory;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.lemon.erp.common.base.BaseEntity;
@@ -36,6 +37,10 @@ public class FinAccount extends BaseEntity {
     private EnableStatus status;
 
     private String remark;
+
+    /** 所属门店：现金、银行的末级科目（结算账户）按门店归属，用户只能使用可管辖门店的账户；为空表示各门店共用 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Long storeId;
 
     /** 辅助核算项目（AuxItem 名称，逗号分隔），手工凭证使用该科目时必填 */
     private String auxItems;

@@ -91,6 +91,8 @@
         <if test="sales and q.region != null and q.region != ''">AND p.region = #{q.region}</if>
         <if test="sales and q.noRegion">AND (p.region IS NULL OR p.region = '')</if>
         <if test="q.warehouseId != null">AND COALESCE(i.warehouse_id, d.warehouse_id) = #{q.warehouseId}</if>
+        <if test="q.storeId != null">AND COALESCE(i.warehouse_id, d.warehouse_id) IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id = #{q.storeId})</if>
+        <if test="q.regionStoreIds != null">AND COALESCE(i.warehouse_id, d.warehouse_id) IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id IN <foreach collection="q.regionStoreIds" item="rs" open="(" separator="," close=")">#{rs}</foreach>)</if>
         <if test="q.keyword != null and q.keyword != ''">
             AND (m.code LIKE CONCAT('%', #{q.keyword}, '%') OR m.name LIKE CONCAT('%', #{q.keyword}, '%'))
         </if>
@@ -127,6 +129,7 @@
             <when test="dim == 'CUSTOMER' or dim == 'SUPPLIER'">d.partner_id</when>
             <when test="dim == 'SALESMAN'">o.salesman_id</when>
             <when test="dim == 'MATERIAL'">i.material_id</when>
+            <when test="dim == 'STORE'">dsw.store_id</when>
             <when test="dim == 'DAY'">d.biz_date</when>
             <otherwise>YEAR(d.biz_date) * 100 + MONTH(d.biz_date)</otherwise>
         </choose>
@@ -143,6 +146,7 @@
                <include refid="measures"/>
         <include refid="tradeFrom"/>
         <if test="dim == 'SALESMAN'">LEFT JOIN sys_user u ON u.id = o.salesman_id</if>
+        <if test="dim == 'STORE'">LEFT JOIN wms_warehouse dsw ON dsw.id = COALESCE(i.warehouse_id, d.warehouse_id)</if>
         <include refid="tradeWhere"/>
         GROUP BY <include refid="dimKey"/>
         <choose>
@@ -371,6 +375,8 @@
         <include refid="flowCost"/>
         WHERE d.kind IN ('SALES_OUT', 'SALES_RETURN') AND d.biz_date &gt;= #{q.begin} AND d.biz_date &lt;= #{q.end}
         <if test="q.warehouseId != null">AND COALESCE(i.warehouse_id, d.warehouse_id) = #{q.warehouseId}</if>
+        <if test="q.storeId != null">AND COALESCE(i.warehouse_id, d.warehouse_id) IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id = #{q.storeId})</if>
+        <if test="q.regionStoreIds != null">AND COALESCE(i.warehouse_id, d.warehouse_id) IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id IN <foreach collection="q.regionStoreIds" item="rs" open="(" separator="," close=")">#{rs}</foreach>)</if>
         GROUP BY i.material_id
     </sql>
 
@@ -382,6 +388,8 @@
         JOIN wms_warehouse w ON w.id = s.warehouse_id
         WHERE w.type &lt;&gt; 'CONSIGN_IN'
         <if test="q.warehouseId != null">AND s.warehouse_id = #{q.warehouseId}</if>
+        <if test="q.storeId != null">AND s.warehouse_id IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id = #{q.storeId})</if>
+        <if test="q.regionStoreIds != null">AND s.warehouse_id IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id IN <foreach collection="q.regionStoreIds" item="rs" open="(" separator="," close=")">#{rs}</foreach>)</if>
         GROUP BY s.material_id
     </sql>
 
@@ -571,13 +579,17 @@
               JOIN wms_warehouse w ON w.id = s.warehouse_id
               WHERE w.type &lt;&gt; 'CONSIGN_IN'
               <if test="q.warehouseId != null">AND s.warehouse_id = #{q.warehouseId}</if>
+              <if test="q.storeId != null">AND s.warehouse_id IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id = #{q.storeId})</if>
+              <if test="q.regionStoreIds != null">AND s.warehouse_id IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id IN <foreach collection="q.regionStoreIds" item="rs" open="(" separator="," close=")">#{rs}</foreach>)</if>
               UNION ALL
               SELECT f.material_id, -f.qty
               FROM wms_stock_flow f
               JOIN wms_warehouse w ON w.id = f.warehouse_id
               <include refid="flowDocs"/>
               WHERE w.type &lt;&gt; 'CONSIGN_IN' AND <include refid="flowDate"/> &gt; #{q.date}
-              <if test="q.warehouseId != null">AND f.warehouse_id = #{q.warehouseId}</if>) u
+              <if test="q.warehouseId != null">AND f.warehouse_id = #{q.warehouseId}</if>
+              <if test="q.storeId != null">AND f.warehouse_id IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id = #{q.storeId})</if>
+              <if test="q.regionStoreIds != null">AND f.warehouse_id IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id IN <foreach collection="q.regionStoreIds" item="rs" open="(" separator="," close=")">#{rs}</foreach>)</if>) u
         GROUP BY u.material_id
     </sql>
 
@@ -641,13 +653,17 @@
               JOIN wms_warehouse w ON w.id = s.warehouse_id
               WHERE w.type &lt;&gt; 'CONSIGN_IN'
               <if test="q.warehouseId != null">AND s.warehouse_id = #{q.warehouseId}</if>
+              <if test="q.storeId != null">AND s.warehouse_id IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id = #{q.storeId})</if>
+              <if test="q.regionStoreIds != null">AND s.warehouse_id IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id IN <foreach collection="q.regionStoreIds" item="rs" open="(" separator="," close=")">#{rs}</foreach>)</if>
               UNION ALL
               SELECT f.material_id, -f.qty, CASE WHEN <include refid="flowDate"/> &gt; #{q.end} THEN -f.qty ELSE 0 END
               FROM wms_stock_flow f
               JOIN wms_warehouse w ON w.id = f.warehouse_id
               <include refid="flowDocs"/>
               WHERE w.type &lt;&gt; 'CONSIGN_IN' AND <include refid="flowDate"/> &gt;= #{q.begin}
-              <if test="q.warehouseId != null">AND f.warehouse_id = #{q.warehouseId}</if>) u
+              <if test="q.warehouseId != null">AND f.warehouse_id = #{q.warehouseId}</if>
+              <if test="q.storeId != null">AND f.warehouse_id IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id = #{q.storeId})</if>
+              <if test="q.regionStoreIds != null">AND f.warehouse_id IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id IN <foreach collection="q.regionStoreIds" item="rs" open="(" separator="," close=")">#{rs}</foreach>)</if>) u
         GROUP BY u.material_id
     </sql>
 
@@ -885,6 +901,8 @@
         LEFT JOIN (<include refid="monthSales"/>) ms ON ms.material_id = m.id AND ms.warehouse_id = a.warehouse_id
         WHERE m.alert_mode = 'WAREHOUSE'
         <if test="q.warehouseId != null">AND a.warehouse_id = #{q.warehouseId}</if>
+        <if test="q.storeId != null">AND a.warehouse_id IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id = #{q.storeId})</if>
+        <if test="q.regionStoreIds != null">AND a.warehouse_id IN (SELECT jsw.id FROM wms_warehouse jsw WHERE jsw.store_id IN <foreach collection="q.regionStoreIds" item="rs" open="(" separator="," close=")">#{rs}</foreach>)</if>
         <include refid="goodsFilters"/>
         UNION ALL
         SELECT NULL, NULL, NULL,

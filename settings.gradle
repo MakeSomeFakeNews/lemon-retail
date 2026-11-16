@@ -13,6 +13,7 @@ include 'lemon-framework'
     'monitor',    // 系统监控：在线用户、日志、服务与缓存监控、定时任务
     'workflow',   // 流程中心：Flowable 集成、流程模型、待办审批
     'dashboard',  // 首页工作台
+    'store',      // 门店：区域、门店资料（依赖 fin；下层模块通过 framework/store 的 StoreLookup 访问门店）
     'wms',        // 仓库管理
     'scm',        // 供应链管理
     'fin',        // 财务管理

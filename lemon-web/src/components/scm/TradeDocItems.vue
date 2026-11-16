@@ -340,6 +340,8 @@ async function fillPrices(rows) {
   const list = await defaultPrices({
     kind: priceKind.value,
     partnerId: props.form.partnerId,
+    // 销售时仓库所属门店绑定了价格方案按方案零售价
+    warehouseId: props.form.warehouseId || undefined,
     materialIds: targets.map((r) => r.materialId),
     qtys: targets.map((r) => r.qty),
     date: props.form.bizDate
@@ -357,9 +359,9 @@ async function fillPrices(rows) {
   })
 }
 
-/** 往来单位或日期变化后重新带出默认价 */
+/** 往来单位、日期或仓库变化后重新带出默认价 */
 watch(
-  () => (props.direct ? `${props.form.partnerId}|${props.form.bizDate}` : null),
+  () => (props.direct ? `${props.form.partnerId}|${props.form.bizDate}|${props.form.warehouseId}` : null),
   (v, old) => v && v !== old && fillPrices(props.form.items)
 )
 

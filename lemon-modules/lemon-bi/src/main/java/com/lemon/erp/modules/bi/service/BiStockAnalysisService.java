@@ -55,7 +55,7 @@ public class BiStockAnalysisService {
      * 周转分析：库存周转天数 = 期间天数 × (期初 + 期末) ÷ 2 ÷ 本期出库，库存周转率 = 本期出库 ÷ ((期初 + 期末) ÷ 2) × 100%。
      * 按金额维度时用 数量 × 单价 计算（单价为空的商品不计算），合计行按合计的数量或金额计算
      */
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public JxcViews.TurnoverPage turnover(StockAnalysisQuery q, long current, long size) {
         long days = BiJxcService.checkRange(q.getBegin(), q.getEnd(), BiJxcService.MAX_DAYS);
         if (q.getBasis() == null) {
@@ -155,7 +155,7 @@ public class BiStockAnalysisService {
      * 滞销 / 畅销：销售比例 = 期间净销量 ÷ 销售基数 × 100%，滞销列出不高于阈值的、畅销列出不低于阈值的；
      * 基数不大于 0 的商品（期间没有进货，或期初加进货不大于 0）无法计算比例，不参与
      */
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public JxcViews.SalesRatePage salesRate(StockAnalysisQuery q, long current, long size) {
         BiJxcService.checkRange(q.getBegin(), q.getEnd(), BiJxcService.MAX_DAYS);
         if (q.getMode() == null) {
@@ -186,7 +186,7 @@ public class BiStockAnalysisService {
      * 「高于上限」积压数量 = 库存 − 上限、资金占用 = 库存均价 × 积压数量，「低于下限」补货数量 = 下限 − 库存、
      * 补货资金 = 库存均价 × 补货数量；系数 = 数量 ÷ 基数。预警口径同库存查询（按总库存比较所有仓库的合计，分仓库按仓库）
      */
-    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by")
+    @DataPermission(table = "scm_trade_doc", deptColumn = "dept_id", userColumn = "create_by", warehouseColumn = "warehouse_id")
     public JxcViews.StockAlertPage stockAlert(StockAnalysisQuery q, long current, long size) {
         LocalDate today = LocalDate.now();
         if (q.getDate() == null) {

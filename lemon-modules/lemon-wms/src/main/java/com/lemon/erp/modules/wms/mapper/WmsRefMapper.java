@@ -10,4 +10,7 @@ import org.apache.ibatis.annotations.Param;
 public interface WmsRefMapper {
 
     String findUser(@Param("id") Long id);
+
+    /** 门店：有仓库 */
+    String findStore(@Param("id") Long id);
 }

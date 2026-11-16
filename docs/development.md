@@ -10,6 +10,7 @@
 
 ## 功能
 
+- **门店**：区域（多级）、门店资料（总部 / 直营店 / 加盟店 / 配送中心，状态筹备 / 营业 / 停业 / 闭店，上级配送门店、价格方案、默认仓库与结算账户、加盟信息）；仓库、结算账户、员工归属门店，单据的门店就是其仓库的门店；用户的门店范围（全部门店 / 所属门店 + 指定门店）限定能看到、能使用的门店数据；门店价格方案与调价单（见「门店」）
 - **供应链管理**：供应商（供货价格与阶梯价、默认供应商）、客户（信用额度、账期、价格等级）；采购 / 销售订单（审核可接入审批流程、订单变更）→ 采购入库 / 退货、销售出库 / 退货（自动生成仓库单据、回写订单进度），也可不选订单直接开单；补货建议（再订货点，一键按供应商生成采购订单）；价目表、客户执行价、促销（折扣 / 满减 / 买赠）、整单优惠与抹零、销售提成；发货通知、拣货、装箱（见「供应链管理」）
 - **财务管理**：会计科目、凭证（审核、记账）、期末结账（自动结转损益）；科目余额表、明细账、资产负债表、利润表、现金流量表（小企业会计准则格式，可追溯到凭证）；应收应付（由出入库自动生成）、收付款核销（自动核销、折让 / 抹零、多收转预收预付、冲账单、应收应付对冲）、账龄分析；出纳日记账与资金日报、其他收入 / 费用支出单（收支类别）、账户调拨；销售毛利、库龄分析。业务单据一键生成凭证（见「财务管理」）
 - **商务智能**：数据仓库（销售 / 采购 / 库存快照 / 财务事实表，定时与手动同步）；多维分析（行列维度透视、筛选、下钻、图表）；自定义报表与仪表盘（可共享）；经营驾驶舱；数据大屏（仓储物流、销售经营，投屏链接免登录）；决策支持（销售预测、ABC 分析、呆滞物料、预警规则）（见「商务智能」）
@@ -20,7 +21,7 @@
   - 角色管理：左侧角色列表（含成员数），右侧按「基本信息 / 菜单权限 / 数据权限 / 成员」分页签管理，未保存修改有提示
 - **流程中心**：仿钉钉的流程设计器（审批人 / 抄送人 / 条件分支 / 并行分支，依次审批、会签、或签）+ 表单设计，一键发布为 BPMN 流程；发起申请、我的待办 / 已办 / 申请、抄送我的、流程实例管理；同意、拒绝、转交、撤回、终止，审批记录与流程进度图。业务单据可通过 `FlowApi` 接入审批（见「工作流」）
 - **SaaS 多租户**（可选，`lemon.tenant.enabled`）：共享数据库按 `tenant_id` 隔离；租户、租户套餐（限定可用菜单，可按功能模块勾选）、按行业模板（连锁零售、商贸批发、全部功能）开通租户、到期时间与账号数量上限；新租户自动开通管理员并初始化基础数据（见「SaaS 多租户」）
-- **数据权限**：角色可配置 全部 / 自定义部门 / 本部门 / 本部门及以下 / 仅本人，多角色取并集；声明式注解，业务模块可直接复用
+- **数据权限**：角色可配置 全部 / 自定义部门 / 本部门 / 本部门及以下 / 仅本人，多角色取并集；用户可再限定门店范围（与部门条件同时满足）；声明式注解，业务模块可直接复用
 - **系统监控**：在线用户（强制下线）、操作日志、登录日志（均带 IP 归属地）、服务监控（CPU/内存/JVM/磁盘）、缓存监控（Redis 指标、命令统计、缓存管理）、定时任务（Cron、启停、立即执行、执行日志）
 - **首页**：数据概览、通知公告（置顶优先、未读标记）、业务待办（各模块汇总的待处理事项）、近 7 天登录趋势、最近操作
 - **个人中心**：修改资料、上传头像、修改密码、绑定钉钉 / 企业微信 / 飞书账号
@@ -174,6 +175,8 @@ public PageResult<BizOrder> page(...) { ... }
 ```
 
 - 用户的数据权限范围（`DataScope`）在登录用户加载时计算，随权限缓存一起缓存，见 `SysDataScopeResolver`。
+- **门店维度**：用户的门店范围（`sys_user.store_scope`）为「指定门店」时，`DataScope.storeIds` = 所属门店（`sys_user.store_id`）+ 管辖门店（`sys_user_store`），为「全部门店」时为空（不限）；门店条件与部门条件同时满足（AND）。规则上用 `storeColumn` 声明门店列（如门店表的 `id`），用 `warehouseColumn` 声明仓库列——单据、库存、流水没有门店列，按仓库所属门店过滤（`col IN (SELECT id FROM wms_warehouse WHERE store_id IN (...))`），可写多列（调拨 `warehouse_id,to_warehouse_id`，任一列满足即可见，调出、调入双方都能看到）。`DataPermissionRule.withWarehouse(table, dept, user, warehouseColumn)` 构造单据规则，`byWarehouse(table, col)` 构造只按门店过滤的库存规则。只判断部门的地方用 `DataScope.allDepts()`，`all()` 表示部门和门店都不限。
+- 写操作的门店校验不靠拦截器：开单时 `WmsWarehouseService.checkUsable`（`StockDocValidator`、盘点、订单调用）要求仓库属于可管辖门店且门店可以开单（停业、闭店不能），结算账户由 `FinAccountService.requireCashAccount` 校验所属门店；未登录的系统操作（定时任务）用 `SecurityUtils.getDataScopeOrAll()`，不受限。
 - 无法使用注解时（同一个类内部调用、修改前的权限校验）用编程方式：`DataPermissionContext.execute(rule, () -> ...)`，示例见 `SysUserService.checkDataScope`。
 - 只建议用在查询上：写操作中的唯一性校验等查询不应受数据权限影响。
 - 没有启用规则的 SQL 不会被解析，不影响其它查询的性能。
@@ -286,6 +289,19 @@ public void onOrderApproved(FlowFinishedEvent e) {
 
 流程详情只有发起人、审批人（含转交过的）、抄送人和有 `wf:instance:list` 权限的用户可以查看；任务只能由当前审批人处理。
 
+## 门店
+
+代码在 `modules/store`（依赖 fin → scm → wms），前端 `views/store`、`components/store/StoreSelect.vue`。下层模块（wms、scm、fin、system、bi）不依赖门店模块，通过 `framework/store` 的 `StoreLookup`（门店简要信息 `StoreBrief`、总部、区域内门店）访问门店；门店模块新建门店时直接调用 `WmsWarehouseService.createForStore`、`FinAccountService.createStoreCashAccount` 创建同名仓库、现金账户。
+
+| 概念 | 说明 |
+| --- | --- |
+| 区域 | `store_region`，多级树；有下级或门店的区域不能删除。报表、营销活动可按区域（含下级区域）选择门店（`StoreLookup.storesInRegion`）。权限 `store:region:list/add/edit/remove`，区域树 `GET /store/region/tree` 登录即可访问 |
+| 门店 | `store_info`：类型（字典 `store_type`，`framework/store/StoreType`）HQ 总部（每个租户唯一，新租户由 `StoreTenantInitializer` 创建，不能删除、停业，不能改为其他类型）/ DIRECT 直营 / FRANCHISE 加盟 / DC 配送中心；状态（`store_status`，`StoreStatus.canTrade()`）筹备、营业可以开单，停业、闭店不能；编码留空按编码规则 `MD` 生成；上级配送门店只能是总部或配送中心；价格方案、配送价方案（加盟店）引用 `scm_price_scheme`；默认仓库必须是本门店的启用仓库，默认结算账户必须是本门店（或共用）的结算账户；加盟信息（加盟商、合同期、保证金、结算方式 `store_settle_mode`）只对加盟店保存。新增时可勾选自动创建同名仓库（默认）和现金账户（库存现金下增加明细科目「门店名」，库存现金是已使用的末级科目时不能自动创建）。有仓库、结算账户、员工或是其他门店的上级配送门店时不能删除（`RefType.STORE`，wms / fin / system 各自登记 `ReferenceChecker`），只能停业、闭店。权限 `store:store:list/add/edit/remove`；`GET /store/store/options?all=&trading=` 登录即可访问，默认只返回可管辖的门店 |
+| 仓库归属 | `wms_warehouse.store_id`：每个仓库属于一个门店，新增时不选为总部；已有库存或单据后不能改门店。单据的门店就是其仓库的门店（不在单据上另存），仓库不能改门店，所以单据的门店保存后不会变化。`GET /wms/warehouse/options?storeId=&all=`：默认只返回可管辖门店的仓库，调拨的调入仓库用 `all=true` |
+| 结算账户归属 | `fin_account.store_id`：现金、银行的末级科目可归属门店，为空表示各门店共用；`GET /fin/account/cash-options?storeId=` 返回共用的和可管辖门店的结算账户（前端 `AccountSelect` 只选现金银行时使用） |
+| 员工 | `sys_user.store_id` 所属门店（开单默认门店），`store_scope`（字典 `sys_store_scope`，`StoreScope`）ALL 全部门店 / ASSIGNED 所属门店 + 指定门店（`sys_user_store`）。只有自己是全部门店的操作人才能给用户设置「全部门店」，指定的门店也必须在自己的范围内 |
+| 报表 | 进销存销售 / 进货报表、商品分析可按门店（`storeId`）、区域（`storeRegionId`）筛选，可按「门店」汇总（`JxcDimension.STORE`，按单据仓库所属门店）；列表和报表都按用户的门店范围过滤 |
+
 ## 仓库管理
 
 代码在 `modules/wms`，前端 `views/wms`、`components/wms`。
@@ -361,7 +377,7 @@ public void onOrderApproved(FlowFinishedEvent e) {
 
 ## 业务联动
 
-业务模块单向依赖：`wms ← scm ← fin ← bi`，下游调用上游的服务、监听上游的事件，上游不感知下游（例如财务监听供应链的 `TradeDocConfirmedEvent` 生成应收应付单）：
+业务模块单向依赖：`wms ← scm ← fin ← bi / store`，下游调用上游的服务、监听上游的事件，上游不感知下游（例如财务监听供应链的 `TradeDocConfirmedEvent` 生成应收应付单）：
 
 ```
 采购订单 ─审核─▶ 采购入库 / 退货 ──▶ 仓库入库 / 出库单（已确认，更新库存、批次、序列号、实时成本）
@@ -866,7 +882,7 @@ lemon-retail
     └── init.sql                建表 + 初始数据（MySQL）
 ```
 
-模块依赖（只允许单向）：`lemon-admin → lemon-modules/* → lemon-framework → lemon-common`。业务模块之间按实际引用声明依赖：`wms ← scm ← fin ← bi`，`system ← monitor ← dashboard`，`workflow`、`ai` 只依赖 framework。
+模块依赖（只允许单向）：`lemon-admin → lemon-modules/* → lemon-framework → lemon-common`。业务模块之间按实际引用声明依赖：`wms ← scm ← fin ← bi / store`，`system ← monitor ← dashboard`，`workflow`、`ai` 只依赖 framework。
 
 跨模块访问数据：Java 代码只注入本模块的 Mapper，读写其他模块的表一律调用所属模块 Service 提供的方法（例如财务生成运费单据后调用供应链 Service 回写出入库单），上游需要的能力由 framework 定义接口、所属模块实现（例如业务模块校验负责人用 `framework/org/UserLookup`，由系统模块实现）。mapper XML 中跨模块的只读 JOIN（报表、商务智能、首页统计）允许保留，写操作必须经过所属模块的 Service。
 

@@ -10,6 +10,8 @@
             WHEN EXISTS (SELECT 1 FROM scm_price_list WHERE material_id = #{id}) THEN 'scm.label.salesPriceList'
             WHEN EXISTS (SELECT 1 FROM scm_customer_price WHERE material_id = #{id}) THEN 'scm.label.customerPrice'
             WHEN EXISTS (SELECT 1 FROM scm_trade_draft_item WHERE material_id = #{id}) THEN 'scm.label.inboundOutboundDraft'
+            WHEN EXISTS (SELECT 1 FROM scm_price_scheme_item WHERE material_id = #{id}) THEN 'scm.label.priceScheme'
+            WHEN EXISTS (SELECT 1 FROM scm_price_adjust_item WHERE material_id = #{id}) THEN 'scm.label.priceAdjust'
         END
     </select>
 
@@ -27,6 +29,7 @@
             WHEN EXISTS (SELECT 1 FROM scm_order WHERE create_by = #{id}) THEN 'scm.label.purchaseSalesOrder'
             WHEN EXISTS (SELECT 1 FROM scm_trade_doc WHERE create_by = #{id}) THEN 'scm.label.inboundOutboundDocument'
             WHEN EXISTS (SELECT 1 FROM scm_trade_draft WHERE create_by = #{id}) THEN 'scm.label.inboundOutboundDraft'
+            WHEN EXISTS (SELECT 1 FROM scm_price_adjust WHERE create_by = #{id}) THEN 'scm.label.priceAdjust'
         END
     </select>
 
@@ -55,6 +58,12 @@
     <select id="findMaterialCategory" resultType="java.lang.String">
         SELECT CASE
             WHEN EXISTS (SELECT 1 FROM scm_promotion x JOIN wms_material_category c ON c.code = x.material_category WHERE c.id = #{id}) THEN 'scm.label.promotionActivity'
+        END
+    </select>
+
+    <select id="findPriceScheme" resultType="java.lang.String">
+        SELECT CASE
+            WHEN EXISTS (SELECT 1 FROM scm_price_adjust_scheme WHERE scheme_id = #{id}) THEN 'scm.label.priceAdjust'
         END
     </select>
 

@@ -8,6 +8,8 @@ export const accountTree = (params) => request.get('/fin/account', { params })
 export const allAccounts = () => request.get('/fin/account/all')
 /** 启用的末级科目 */
 export const accountOptions = () => request.get('/fin/account/options')
+/** 当前用户可用的结算账户（现金、银行下启用的末级科目：各门店共用的 + 可管辖门店的）；storeId 只返回该门店的和共用的 */
+export const cashAccountOptions = (storeId) => request.get('/fin/account/cash-options', { params: { storeId } })
 /** 科目范围用途（库存现金 CASH、银行存款 BANK）当前使用的科目编码：{ CASH: '1001', BANK: '1002' }，按凭证科目设置 */
 export const accountScopes = () => request.get('/fin/account/scopes')
 export const addAccount = (data) => request.post('/fin/account', data)

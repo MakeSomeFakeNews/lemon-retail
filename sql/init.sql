@@ -60,6 +60,12 @@ DROP TABLE IF EXISTS scm_order_change;
 DROP TABLE IF EXISTS scm_order;
 DROP TABLE IF EXISTS scm_customer;
 DROP TABLE IF EXISTS scm_supplier_price_tier;
+DROP TABLE IF EXISTS scm_price_history;
+DROP TABLE IF EXISTS scm_price_adjust_item;
+DROP TABLE IF EXISTS scm_price_adjust_scheme;
+DROP TABLE IF EXISTS scm_price_adjust;
+DROP TABLE IF EXISTS scm_price_scheme_item;
+DROP TABLE IF EXISTS scm_price_scheme;
 DROP TABLE IF EXISTS scm_price_list;
 DROP TABLE IF EXISTS scm_price_control;
 DROP TABLE IF EXISTS scm_customer_price;
@@ -77,6 +83,8 @@ DROP TABLE IF EXISTS wms_serial_log;
 DROP TABLE IF EXISTS wms_stock_flow;
 DROP TABLE IF EXISTS wms_serial;
 DROP TABLE IF EXISTS wms_reservation;
+DROP TABLE IF EXISTS store_info;
+DROP TABLE IF EXISTS store_region;
 DROP TABLE IF EXISTS wms_stock;
 DROP TABLE IF EXISTS wms_batch;
 DROP TABLE IF EXISTS wms_variant_value;
@@ -107,6 +115,7 @@ DROP TABLE IF EXISTS sys_dict_type;
 DROP TABLE IF EXISTS sys_role_menu;
 DROP TABLE IF EXISTS sys_role_dept;
 DROP TABLE IF EXISTS sys_user_role;
+DROP TABLE IF EXISTS sys_user_store;
 DROP TABLE IF EXISTS sys_menu;
 DROP TABLE IF EXISTS sys_role;
 DROP TABLE IF EXISTS sys_user;
@@ -345,6 +354,8 @@ CREATE TABLE sys_user (
     id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
     tenant_id   BIGINT NOT NULL DEFAULT 1 COMMENT '租户ID',
     dept_id     BIGINT                DEFAULT NULL COMMENT '部门ID',
+    store_id    BIGINT                DEFAULT NULL COMMENT '所属门店（主属门店），开单默认门店',
+    store_scope VARCHAR(16)  NOT NULL DEFAULT 'ALL' COMMENT '可管辖门店(字典 sys_store_scope) ALL全部门店 ASSIGNED所属门店 + 指定门店（sys_user_store）',
     username    VARCHAR(64)  NOT NULL COMMENT '用户名',
     password    VARCHAR(100) NOT NULL COMMENT '密码(BCrypt)',
     pwd_update_time DATETIME              DEFAULT NULL COMMENT '最近设置密码的时间（密码有效期）',
@@ -402,6 +413,12 @@ CREATE TABLE sys_user_role (
     -- 按角色反查用户（删除角色前检查、角色关联用户）
     KEY idx_role_id (role_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户角色关联';
+
+CREATE TABLE sys_user_store (
+    user_id  BIGINT NOT NULL COMMENT '用户ID',
+    store_id BIGINT NOT NULL COMMENT '门店ID',
+    PRIMARY KEY (user_id, store_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户管辖门店（门店范围为指定门店时，所属门店之外另外可管辖的门店）';
 
 CREATE TABLE sys_role_menu (
     role_id BIGINT NOT NULL COMMENT '角色ID',
@@ -647,6 +664,60 @@ CREATE TABLE wf_copy (
     KEY idx_copy_instance_id (process_instance_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '流程抄送';
 
+-- ---------------------------------------------------------------- 门店：区域、门店资料。仓库、结算账户、员工通过 store_id 归属门店，单据的门店就是其仓库的门店
+
+CREATE TABLE store_region (
+    id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id   BIGINT       NOT NULL DEFAULT 1 COMMENT '租户ID',
+    parent_id   BIGINT       NOT NULL DEFAULT 0 COMMENT '上级区域，0 为顶级',
+    code        VARCHAR(32)  NOT NULL COMMENT '区域编码',
+    name        VARCHAR(64)  NOT NULL COMMENT '区域名称',
+    sort        INT          NOT NULL DEFAULT 0 COMMENT '排序',
+    status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态 1启用 0停用',
+    remark      VARCHAR(255)          DEFAULT NULL COMMENT '备注',
+    create_time DATETIME              DEFAULT NULL COMMENT '创建时间',
+    update_time DATETIME              DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_region_code (code, tenant_id),
+    KEY idx_region_parent (parent_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '区域（多级）';
+
+CREATE TABLE store_info (
+    id                   BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id            BIGINT        NOT NULL DEFAULT 1 COMMENT '租户ID',
+    code                 VARCHAR(32)   NOT NULL COMMENT '门店编码（编码规则 MD）',
+    name                 VARCHAR(64)   NOT NULL COMMENT '门店名称',
+    short_name           VARCHAR(32)            DEFAULT NULL COMMENT '简称',
+    type                 VARCHAR(16)   NOT NULL COMMENT '门店类型(字典 store_type) HQ总部（每个租户唯一） DIRECT直营店 FRANCHISE加盟店 DC配送中心',
+    region_id            BIGINT                 DEFAULT NULL COMMENT '所属区域',
+    supply_store_id      BIGINT                 DEFAULT NULL COMMENT '上级配送门店（总部或配送中心），要货默认由它供货',
+    price_scheme_id      BIGINT                 DEFAULT NULL COMMENT '零售价方案（scm_price_scheme），为空按总部价格',
+    status               VARCHAR(16)   NOT NULL DEFAULT 'OPEN' COMMENT '状态(字典 store_status) PREPARING筹备 OPEN营业 SUSPENDED停业 CLOSED闭店；停业、闭店不能开单',
+    contact              VARCHAR(64)            DEFAULT NULL COMMENT '联系人',
+    phone                VARCHAR(32)            DEFAULT NULL COMMENT '电话',
+    address              VARCHAR(255)           DEFAULT NULL COMMENT '地址',
+    longitude            DECIMAL(10, 6)         DEFAULT NULL COMMENT '经度',
+    latitude             DECIMAL(10, 6)         DEFAULT NULL COMMENT '纬度',
+    business_hours       VARCHAR(64)            DEFAULT NULL COMMENT '营业时间，如 09:00-22:00',
+    area                 DECIMAL(12, 2)         DEFAULT NULL COMMENT '营业面积（平方米），用于坪效',
+    default_warehouse_id BIGINT                 DEFAULT NULL COMMENT '默认仓库（本门店的仓库）',
+    default_account_id   BIGINT                 DEFAULT NULL COMMENT '默认结算账户（本门店的现金 / 银行末级科目）',
+    dept_id              BIGINT                 DEFAULT NULL COMMENT '对应部门（可选）',
+    franchisee           VARCHAR(64)            DEFAULT NULL COMMENT '加盟商名称（加盟店）',
+    contract_start       DATE                   DEFAULT NULL COMMENT '加盟合同开始日期',
+    contract_end         DATE                   DEFAULT NULL COMMENT '加盟合同结束日期',
+    deposit              DECIMAL(18, 2)         DEFAULT NULL COMMENT '加盟保证金',
+    settle_mode          VARCHAR(16)            DEFAULT NULL COMMENT '加盟结算方式(字典 store_settle_mode) PREPAID预付货款 CREDIT月结',
+    delivery_scheme_id   BIGINT                 DEFAULT NULL COMMENT '配送价方案（加盟店向总部进货的价格），为空按价格列配送价',
+    sort                 INT           NOT NULL DEFAULT 0 COMMENT '排序',
+    remark               VARCHAR(255)           DEFAULT NULL COMMENT '备注',
+    create_time          DATETIME               DEFAULT NULL COMMENT '创建时间',
+    update_time          DATETIME               DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_store_code (code, tenant_id),
+    KEY idx_store_region (region_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '门店';
+
 -- ---------------------------------------------------------------- 仓库管理
 
 CREATE TABLE wms_warehouse (
@@ -656,6 +727,7 @@ CREATE TABLE wms_warehouse (
     name        VARCHAR(64)  NOT NULL COMMENT '仓库名称',
     type        VARCHAR(16)  NOT NULL DEFAULT 'NORMAL' COMMENT '仓库类型(字典 wms_warehouse_type) NORMAL普通 RAW原料 FINISHED成品 DEFECT不良品 CONSIGN_OUT客户寄售仓 CONSIGN_IN供应商寄售仓（不良品、寄售仓不计入可用库存，供应商寄售仓不计入存货成本）',
     partner_id  BIGINT                DEFAULT NULL COMMENT '寄售仓的客户（客户寄售仓）/ 供应商（供应商寄售仓）',
+    store_id    BIGINT                DEFAULT NULL COMMENT '所属门店（store_info.id）：单据的门店就是其仓库的门店，按门店的数据权限据此过滤；已有库存或单据后不能修改',
     address     VARCHAR(255)          DEFAULT NULL COMMENT '地址',
     contact     VARCHAR(64)           DEFAULT NULL COMMENT '联系人',
     phone       VARCHAR(32)           DEFAULT NULL COMMENT '联系电话',
@@ -665,7 +737,8 @@ CREATE TABLE wms_warehouse (
     create_time DATETIME              DEFAULT NULL COMMENT '创建时间',
     update_time DATETIME              DEFAULT NULL COMMENT '更新时间',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_warehouse_code (code, tenant_id)
+    UNIQUE KEY uk_warehouse_code (code, tenant_id),
+    KEY idx_warehouse_store (store_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '仓库';
 
 CREATE TABLE wms_location (
@@ -1239,6 +1312,97 @@ CREATE TABLE scm_price_control (
     UNIQUE KEY uk_price_control (material_id, tenant_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '价格控制：销售订单单价不低于最低销售价，采购订单单价不高于最高采购价（手工录入的订单）';
 
+-- 门店价格方案（一组商品零售价 / 会员价覆盖，门店绑定方案）、调价单（立即或定时生效，保留调价历史）
+CREATE TABLE scm_price_scheme (
+    id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id   BIGINT       NOT NULL DEFAULT 1 COMMENT '租户ID',
+    code        VARCHAR(32)  NOT NULL COMMENT '方案编码（留空按编码规则 JGFA 生成）',
+    name        VARCHAR(64)  NOT NULL COMMENT '方案名称',
+    status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态(字典 sys_common_status) 1启用 0停用：停用的方案不参与取价、不能被门店绑定',
+    remark      VARCHAR(255)          DEFAULT NULL COMMENT '备注',
+    create_by   BIGINT                DEFAULT NULL COMMENT '创建人',
+    create_time DATETIME              DEFAULT NULL COMMENT '创建时间',
+    update_time DATETIME              DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_price_scheme_code (code, tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '门店价格方案：一组商品的价格覆盖，门店绑定一个方案（store_info.price_scheme_id），开单时方案价优先于总部零售价';
+
+CREATE TABLE scm_price_scheme_item (
+    id           BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id    BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    scheme_id    BIGINT         NOT NULL COMMENT '价格方案',
+    material_id  BIGINT         NOT NULL COMMENT '物料',
+    retail_price DECIMAL(18, 4)          DEFAULT NULL COMMENT '零售价（含税、基本单位、本位币），为空按总部零售价',
+    member_price DECIMAL(18, 4)          DEFAULT NULL COMMENT '会员价，为空不覆盖',
+    create_time  DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time  DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_price_scheme_item (scheme_id, material_id, tenant_id),
+    KEY idx_price_scheme_item_material (material_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '价格方案明细：方案 × 物料的价格覆盖';
+
+CREATE TABLE scm_price_adjust (
+    id               BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id        BIGINT       NOT NULL DEFAULT 1 COMMENT '租户ID',
+    adjust_no        VARCHAR(32)  NOT NULL COMMENT '调价单号（编码规则 TJ）',
+    target           VARCHAR(16)  NOT NULL DEFAULT 'HQ' COMMENT '调价对象(字典 scm_price_adjust_target) HQ总部价 SCHEME价格方案（方案见 scm_price_adjust_scheme）',
+    effective_time   DATETIME              DEFAULT NULL COMMENT '定时生效时间，为空审核后立即生效',
+    status           VARCHAR(16)  NOT NULL DEFAULT 'DRAFT' COMMENT '状态(字典 scm_price_adjust_status) DRAFT草稿 APPROVING审批中 APPROVED待生效 EFFECTIVE已生效 VOIDED已作废',
+    reason           VARCHAR(255)          DEFAULT NULL COMMENT '调价原因',
+    flow_instance_id VARCHAR(64)           DEFAULT NULL COMMENT '审批流程实例ID',
+    approve_time     DATETIME              DEFAULT NULL COMMENT '审核时间',
+    effect_time      DATETIME              DEFAULT NULL COMMENT '实际生效时间',
+    create_by        BIGINT                DEFAULT NULL COMMENT '制单人',
+    create_time      DATETIME              DEFAULT NULL COMMENT '创建时间',
+    update_time      DATETIME              DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_price_adjust_no (adjust_no, tenant_id),
+    KEY idx_price_adjust_due (status, effective_time)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '调价单：调整总部零售价或门店价格方案，审核后立即或定时生效，生效时记录调价历史';
+
+CREATE TABLE scm_price_adjust_scheme (
+    id        BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id BIGINT NOT NULL DEFAULT 1 COMMENT '租户ID',
+    adjust_id BIGINT NOT NULL COMMENT '调价单',
+    scheme_id BIGINT NOT NULL COMMENT '价格方案',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_price_adjust_scheme (adjust_id, scheme_id, tenant_id),
+    KEY idx_price_adjust_scheme_scheme (scheme_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '调价单调整的价格方案（调价对象为价格方案时）';
+
+CREATE TABLE scm_price_adjust_item (
+    id           BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id    BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    adjust_id    BIGINT         NOT NULL COMMENT '调价单',
+    material_id  BIGINT         NOT NULL COMMENT '物料',
+    retail_price DECIMAL(18, 4)          DEFAULT NULL COMMENT '新零售价，为空不调整',
+    member_price DECIMAL(18, 4)          DEFAULT NULL COMMENT '新会员价（只用于价格方案），为空不调整',
+    remark       VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    create_time  DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time  DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_price_adjust_item_adjust (adjust_id),
+    KEY idx_price_adjust_item_material (material_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '调价单明细';
+
+CREATE TABLE scm_price_history (
+    id               BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id        BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    adjust_id        BIGINT         NOT NULL COMMENT '调价单',
+    material_id      BIGINT         NOT NULL COMMENT '物料',
+    target           VARCHAR(16)    NOT NULL COMMENT '调价对象(字典 scm_price_adjust_target)',
+    scheme_id        BIGINT                  DEFAULT NULL COMMENT '价格方案，总部价为空',
+    old_retail_price DECIMAL(18, 4)          DEFAULT NULL COMMENT '调整前零售价',
+    new_retail_price DECIMAL(18, 4)          DEFAULT NULL COMMENT '调整后零售价',
+    old_member_price DECIMAL(18, 4)          DEFAULT NULL COMMENT '调整前会员价',
+    new_member_price DECIMAL(18, 4)          DEFAULT NULL COMMENT '调整后会员价',
+    effect_time      DATETIME       NOT NULL COMMENT '生效时间',
+    PRIMARY KEY (id),
+    KEY idx_price_history_material (material_id, effect_time),
+    KEY idx_price_history_adjust (adjust_id),
+    KEY idx_price_history_scheme (scheme_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '调价历史：调价单生效时每个物料（价格方案时每个方案 × 物料）一行，只追加';
+
 CREATE TABLE scm_customer_price (
     id          BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
     tenant_id   BIGINT NOT NULL DEFAULT 1 COMMENT '租户ID',
@@ -1683,6 +1847,7 @@ CREATE TABLE fin_account (
     status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态 1启用 0停用',
     remark      VARCHAR(255)          DEFAULT NULL COMMENT '备注',
     aux_items   VARCHAR(64)           DEFAULT NULL COMMENT '辅助核算项目（逗号分隔，可多选） DEPT部门 CUSTOMER客户 SUPPLIER供应商 MATERIAL存货；手工凭证使用该科目时必填',
+    store_id    BIGINT                DEFAULT NULL COMMENT '所属门店：现金、银行的末级科目（结算账户）按门店归属，用户只能使用可管辖门店的账户；为空表示各门店共用',
     create_time DATETIME              DEFAULT NULL COMMENT '创建时间',
     update_time DATETIME              DEFAULT NULL COMMENT '更新时间',
     PRIMARY KEY (id),
@@ -2504,9 +2669,9 @@ INSERT INTO sys_dept (id, parent_id, name, sort, leader_user_id, status, create_
 (100, 10, '前端组',   1, NULL, 1, NOW(), NOW()),
 (101, 10, '后端组',   2, NULL, 1, NOW(), NOW());
 
-INSERT INTO sys_user (id, dept_id, username, password, nickname, status, create_time, update_time) VALUES
-(1, 1,  'admin', '$2a$10$1KjM59xYPcOlGbBaXNIRGOKMOubiCF1YaqU7b47kEXtfe159apzGW', '超级管理员', 1, NOW(), NOW()),
-(2, 10, 'test',  '$2a$10$1KjM59xYPcOlGbBaXNIRGOKMOubiCF1YaqU7b47kEXtfe159apzGW', '测试用户', 1, NOW(), NOW());
+INSERT INTO sys_user (id, dept_id, store_id, username, password, nickname, status, create_time, update_time) VALUES
+(1, 1,  1, 'admin', '$2a$10$1KjM59xYPcOlGbBaXNIRGOKMOubiCF1YaqU7b47kEXtfe159apzGW', '超级管理员', 1, NOW(), NOW()),
+(2, 10, 1, 'test',  '$2a$10$1KjM59xYPcOlGbBaXNIRGOKMOubiCF1YaqU7b47kEXtfe159apzGW', '测试用户', 1, NOW(), NOW());
 
 INSERT INTO sys_role (id, name, code, sort, data_scope, status, remark, create_time, update_time) VALUES
 (1, '超级管理员', 'admin', 1, 1, 1, '拥有全部权限', NOW(), NOW()),
@@ -2708,9 +2873,9 @@ INSERT INTO sys_role_menu (role_id, menu_id) VALUES
 (2, 4), (2, 130), (2, 131), (2, 132), (2, 133), (2, 134), (2, 135), (2, 136), (2, 137), (2, 138), (2, 139);
 
 -- 示例基础资料（没有库存，库存只能通过单据产生）
-INSERT INTO wms_warehouse (id, code, name, address, contact, sort, status, create_time, update_time) VALUES
-(1, 'WH01', '总部成品仓', '上海市浦东新区 1 号库', '张三', 1, 1, NOW(), NOW()),
-(2, 'WH02', '原材料仓', '上海市浦东新区 2 号库', '李四', 2, 1, NOW(), NOW());
+INSERT INTO wms_warehouse (id, code, name, store_id, address, contact, sort, status, create_time, update_time) VALUES
+(1, 'WH01', '总部成品仓', 1, '上海市浦东新区 1 号库', '张三', 1, 1, NOW(), NOW()),
+(2, 'WH02', '原材料仓', 1, '上海市浦东新区 2 号库', '李四', 2, 1, NOW(), NOW());
 
 INSERT INTO wms_location (warehouse_id, code, name, sort, status, create_time, update_time) VALUES
 (1, 'A-01', 'A 区 1 号货架', 1, 1, NOW(), NOW()),
@@ -2721,6 +2886,82 @@ INSERT INTO wms_material (code, name, spec, unit, category, batch_enabled, seria
 ('M0001', '柠檬原浆', '5L/桶', '桶', 'RAW', 1, 0, 20, 1, NOW(), NOW()),
 ('M0002', '包装纸箱', '40×30×20cm', '个', 'PACKING', 0, 0, 100, 1, NOW(), NOW()),
 ('P0001', '智能榨汁机', 'LJ-200', '台', 'FINISHED', 0, 1, 5, 1, NOW(), NOW());
+
+-- ---------------------------------------------------------------- 门店：菜单、字典、总部
+
+INSERT INTO sys_menu (id, parent_id, name, type, path, component, perms, icon, sort, visible, status, create_time, update_time) VALUES
+(17,  0, '门店', 'M', '/store', NULL, NULL, 'ShopOutlined', 0, 1, 1, NOW(), NOW()),
+(971, 17, '门店资料', 'M', NULL, NULL, NULL, NULL, 1, 1, 1, NOW(), NOW()),
+(972, 17, '价格管理', 'M', NULL, NULL, NULL, NULL, 2, 1, 1, NOW(), NOW()),
+(420, 971, '门店管理', 'C', 'store', 'store/store/index', 'store:store:list', 'ShopOutlined', 1, 1, 1, NOW(), NOW()),
+(421, 971, '区域管理', 'C', 'region', 'store/region/index', 'store:region:list', 'GlobalOutlined', 2, 1, 1, NOW(), NOW()),
+(4200, 420, '门店新增', 'F', NULL, NULL, 'store:store:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4201, 420, '门店修改', 'F', NULL, NULL, 'store:store:edit', NULL, 2, 1, 1, NOW(), NOW()),
+(4202, 420, '门店删除', 'F', NULL, NULL, 'store:store:remove', NULL, 3, 1, 1, NOW(), NOW()),
+(4210, 421, '区域新增', 'F', NULL, NULL, 'store:region:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4211, 421, '区域修改', 'F', NULL, NULL, 'store:region:edit', NULL, 2, 1, 1, NOW(), NOW()),
+(4212, 421, '区域删除', 'F', NULL, NULL, 'store:region:remove', NULL, 3, 1, 1, NOW(), NOW());
+
+INSERT INTO sys_dict_type (id, name, type, kind, status, remark, create_time, update_time) VALUES
+(220, '门店类型', 'store_type', 'SYSTEM', 1, '总部每个租户唯一', NOW(), NOW()),
+(221, '门店状态', 'store_status', 'SYSTEM', 1, '停业、闭店的门店不能开单', NOW(), NOW()),
+(222, '加盟结算方式', 'store_settle_mode', 'SYSTEM', 1, '加盟店向总部进货的结算方式', NOW(), NOW()),
+(223, '门店范围', 'sys_store_scope', 'SYSTEM', 1, '用户可管辖的门店：全部门店，或所属门店 + 指定的门店', NOW(), NOW());
+
+INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, status, create_time, update_time) VALUES
+('store_type', '总部', 'HQ', 'red', 1, 1, NOW(), NOW()),
+('store_type', '直营店', 'DIRECT', 'blue', 2, 1, NOW(), NOW()),
+('store_type', '加盟店', 'FRANCHISE', 'purple', 3, 1, NOW(), NOW()),
+('store_type', '配送中心', 'DC', 'cyan', 4, 1, NOW(), NOW()),
+('store_status', '筹备', 'PREPARING', 'orange', 1, 1, NOW(), NOW()),
+('store_status', '营业', 'OPEN', 'green', 2, 1, NOW(), NOW()),
+('store_status', '停业', 'SUSPENDED', 'default', 3, 1, NOW(), NOW()),
+('store_status', '闭店', 'CLOSED', 'red', 4, 1, NOW(), NOW()),
+('store_settle_mode', '预付货款', 'PREPAID', 'blue', 1, 1, NOW(), NOW()),
+('store_settle_mode', '月结', 'CREDIT', 'orange', 2, 1, NOW(), NOW()),
+('sys_store_scope', '全部门店', 'ALL', 'green', 1, 1, NOW(), NOW()),
+('sys_store_scope', '指定门店', 'ASSIGNED', 'blue', 2, 1, NOW(), NOW());
+
+-- 普通用户只读；总经理全部
+INSERT INTO sys_role_menu (role_id, menu_id) VALUES
+(2, 17), (2, 971), (2, 972), (2, 420), (2, 421),
+(3, 17), (3, 971), (3, 972), (3, 420), (3, 421), (3, 4200), (3, 4201), (3, 4202), (3, 4210), (3, 4211), (3, 4212);
+
+-- 总部门店（新租户由 StoreTenantInitializer 创建）：默认仓库为总部成品仓，默认结算账户为库存现金
+INSERT INTO store_info (id, code, name, type, status, default_warehouse_id, default_account_id, sort, create_time, update_time) VALUES
+(1, 'MD000', '总部', 'HQ', 'OPEN', 1, 1, 0, NOW(), NOW());
+
+-- 价格管理：价格方案、调价单
+-- 定时任务「调价单定时生效」（scm.priceAdjust，每 5 分钟）由 ScmPriceAdjustJob 在首次启动时写入 sys_job，无需 INSERT
+INSERT INTO sys_menu (id, parent_id, name, type, path, component, perms, icon, sort, visible, status, create_time, update_time) VALUES
+(425, 972, '价格方案', 'C', 'price-scheme', 'scm/price-scheme/index', 'scm:priceScheme:list', 'TagsOutlined', 1, 1, 1, NOW(), NOW()),
+(426, 972, '调价单', 'C', 'price-adjust', 'scm/price-adjust/index', 'scm:priceAdjust:list', 'RiseOutlined', 2, 1, 1, NOW(), NOW()),
+(4250, 425, '价格方案新增', 'F', NULL, NULL, 'scm:priceScheme:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4251, 425, '价格方案修改', 'F', NULL, NULL, 'scm:priceScheme:edit', NULL, 2, 1, 1, NOW(), NOW()),
+(4252, 425, '价格方案删除', 'F', NULL, NULL, 'scm:priceScheme:remove', NULL, 3, 1, 1, NOW(), NOW()),
+(4260, 426, '调价单新增', 'F', NULL, NULL, 'scm:priceAdjust:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4261, 426, '调价单修改', 'F', NULL, NULL, 'scm:priceAdjust:edit', NULL, 2, 1, 1, NOW(), NOW()),
+(4262, 426, '调价单删除', 'F', NULL, NULL, 'scm:priceAdjust:remove', NULL, 3, 1, 1, NOW(), NOW()),
+(4263, 426, '调价单审核', 'F', NULL, NULL, 'scm:priceAdjust:audit', NULL, 4, 1, 1, NOW(), NOW());
+-- 普通用户只读；总经理全部
+INSERT INTO sys_role_menu (role_id, menu_id) VALUES
+(2, 425), (2, 426),
+(3, 425), (3, 426), (3, 4250), (3, 4251), (3, 4252), (3, 4260), (3, 4261), (3, 4262), (3, 4263);
+
+INSERT INTO sys_dict_type (id, name, type, kind, status, remark, create_time, update_time) VALUES
+(240, '调价单状态', 'scm_price_adjust_status', 'SYSTEM', 1, '草稿 → 审批中 → 待生效 → 已生效；待生效的可以作废', NOW(), NOW()),
+(241, '调价对象', 'scm_price_adjust_target', 'SYSTEM', 1, '调价单调整总部零售价还是门店价格方案', NOW(), NOW());
+INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, status, builtin, create_time, update_time) VALUES
+('scm_price_adjust_status', '草稿', 'DRAFT', 'default', 1, 1, 1, NOW(), NOW()),
+('scm_price_adjust_status', '审批中', 'APPROVING', 'processing', 2, 1, 1, NOW(), NOW()),
+('scm_price_adjust_status', '待生效', 'APPROVED', 'blue', 3, 1, 1, NOW(), NOW()),
+('scm_price_adjust_status', '已生效', 'EFFECTIVE', 'green', 4, 1, 1, NOW(), NOW()),
+('scm_price_adjust_status', '已作废', 'VOIDED', 'red', 5, 1, 1, NOW(), NOW()),
+('scm_price_adjust_target', '总部价', 'HQ', 'purple', 1, 1, 1, NOW(), NOW()),
+('scm_price_adjust_target', '价格方案', 'SCHEME', 'cyan', 2, 1, 1, NOW(), NOW());
+-- 调价单审批（内置流程，未发布）：发布后调价单提交即进入审批，通过后待生效 / 生效
+INSERT INTO wf_model (model_key, name, category, sort, status, design_json, remark, create_time, update_time) VALUES
+('scm_price_adjust', '调价单审批', 'SALES', 30, 1, '{"form": [], "flow": {"id": "start", "type": "START", "name": "发起人", "next": {"id": "leader", "type": "APPROVER", "name": "部门主管审批", "assignee": {"type": "DEPT_LEADER", "ids": [], "names": [], "level": 1}, "approveMode": "OR", "emptyAction": "TO_ADMIN", "next": null}}}', '内置流程（未发布）：部门主管审批。发布后调价单提交即进入审批，通过后到生效时间生效；流程变量 target 调价对象、itemCount 调价商品数、adjustNo 调价单号', NOW(), NOW());
 
 -- ---------------------------------------------------------------- 供应链管理：菜单、字典
 
@@ -2917,6 +3158,8 @@ INSERT INTO fin_account (id, code, name, parent_id, category, direction, status,
 (61, '6603',   '财务费用',               0,  'PROFIT',    'DEBIT',  1, NOW(), NOW()),
 (62, '6711',   '营业外支出',             0,  'PROFIT',    'DEBIT',  1, NOW(), NOW()),
 (63, '6801',   '所得税费用',             0,  'PROFIT',    'DEBIT',  1, NOW(), NOW());
+-- 现金、银行的末级科目（结算账户）归属总部门店
+UPDATE fin_account SET store_id = 1 WHERE code IN ('1001', '100201', '100202');
 -- 往来科目按客户 / 供应商辅助核算
 UPDATE fin_account SET aux_items = 'CUSTOMER' WHERE code IN ('1122', '2203');
 UPDATE fin_account SET aux_items = 'SUPPLIER' WHERE code IN ('1123', '2202');

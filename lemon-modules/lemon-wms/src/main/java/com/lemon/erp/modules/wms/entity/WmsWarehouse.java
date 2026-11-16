@@ -1,6 +1,8 @@
 package com.lemon.erp.modules.wms.entity;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.lemon.erp.common.base.BaseEntity;
 import com.lemon.erp.common.enums.EnableStatus;
 import com.lemon.erp.modules.wms.model.WarehouseType;
@@ -22,6 +24,14 @@ public class WmsWarehouse extends BaseEntity {
     @NotBlank(message = "{wms.valid.warehouseNameRequired}")
     @Size(max = 64, message = "{wms.valid.warehouseNameCannotExceedCharacters}")
     private String name;
+
+    /** 所属门店：每个仓库属于一个门店，单据的门店就是其仓库的门店；新增时为空则属于总部，已有库存或单据后不能修改 */
+    private Long storeId;
+
+    /** 所属门店名称，仅展示用 */
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    @TableField(exist = false)
+    private String storeName;
 
     /** 仓库类型，字典 wms_warehouse_type：NORMAL / RAW / FINISHED / DEFECT（不良品仓不计入可用库存） */
     private WarehouseType type;

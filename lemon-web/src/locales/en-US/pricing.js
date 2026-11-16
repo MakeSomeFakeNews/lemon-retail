@@ -37,6 +37,7 @@ export default {
   source: {
     CUSTOMER_PRICE: 'Customer price',
     PRICE_LIST: 'Price list',
+    STORE_SCHEME: 'Store scheme price',
     PRICE_LEVEL: 'Level price',
     RETAIL: 'Retail',
     SUPPLIER_PRICE: 'Supply price',

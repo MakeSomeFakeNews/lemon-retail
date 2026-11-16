@@ -147,7 +147,7 @@ public class SysDeptService extends ServiceImpl<SysDeptMapper, SysDept> {
      */
     private void checkParent(SysDept dept, boolean checkScope) {
         if (dept.getParentId() == TreeEntity.ROOT_PARENT_ID) {
-            if (checkScope && !SecurityUtils.getDataScope().all()) {
+            if (checkScope && !SecurityUtils.getDataScope().allDepts()) {
                 throw new BizException("system.error.noPermissionSetTopLevelDepartment");
             }
             return;

@@ -40,14 +40,21 @@ public class WmsWarehouseController {
     public R<PageResult<WmsWarehouse>> page(@RequestParam(defaultValue = "1") long current,
                                             @RequestParam(defaultValue = "10") long size,
                                             @RequestParam(required = false) String keyword,
-                                            @RequestParam(required = false) EnableStatus status) {
-        return R.ok(warehouseService.page(current, size, keyword, status));
+                                            @RequestParam(required = false) EnableStatus status,
+                                            @RequestParam(required = false) Long storeId) {
+        return R.ok(warehouseService.page(current, size, keyword, status, storeId));
     }
 
-    /** 登录即可访问：各单据页面选择仓库 */
+    /**
+     * 登录即可访问：各单据页面选择仓库
+     *
+     * @param storeId 只返回该门店的仓库
+     * @param all     返回全部门店的仓库（调拨的调入仓库），默认只返回可管辖门店的仓库
+     */
     @GetMapping("/options")
-    public R<List<OptionItem>> options() {
-        return R.ok(warehouseService.options());
+    public R<List<OptionItem>> options(@RequestParam(required = false) Long storeId,
+                                       @RequestParam(defaultValue = "false") boolean all) {
+        return R.ok(warehouseService.options(storeId, all));
     }
 
     @GetMapping("/{id}")

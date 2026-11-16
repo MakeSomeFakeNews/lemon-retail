@@ -1,6 +1,8 @@
 package com.lemon.erp.modules.system.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
+import com.lemon.erp.framework.store.StoreScope;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -59,6 +61,22 @@ public class SysUser extends BaseEntity {
 
     @TableField(exist = false)
     private List<Long> roleIds;
+
+    /** 所属门店（主属门店），开单默认门店 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Long storeId;
+
+    /** 可管辖的门店范围，为空按全部门店 */
+    private StoreScope storeScope;
+
+    /** 门店范围为「指定门店」时另外可管辖的门店（不含所属门店）；修改时为 null 表示不修改 */
+    @TableField(exist = false)
+    private List<Long> storeIds;
+
+    /** 所属门店名称，仅展示用 */
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    @TableField(exist = false)
+    private String storeName;
 
     /** 部门名称，仅列表展示用 */
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)

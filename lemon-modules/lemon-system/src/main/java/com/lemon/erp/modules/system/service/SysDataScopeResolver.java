@@ -8,8 +8,11 @@ import com.lemon.erp.modules.system.entity.SysDept;
 import com.lemon.erp.modules.system.entity.SysRole;
 import com.lemon.erp.modules.system.entity.SysRoleDept;
 import com.lemon.erp.modules.system.entity.SysUser;
+import com.lemon.erp.modules.system.entity.SysUserStore;
 import com.lemon.erp.modules.system.mapper.SysDeptMapper;
 import com.lemon.erp.modules.system.mapper.SysRoleDeptMapper;
+import com.lemon.erp.modules.system.mapper.SysUserStoreMapper;
+import com.lemon.erp.framework.store.StoreScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -19,7 +22,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 计算用户的数据权限范围：多个角色的数据权限取并集。
+ * 计算用户的数据权限范围：多个角色的部门数据权限取并集；用户的门店范围为「指定门店」时再限定门店（与部门条件同时满足）。
  * 只依赖 Mapper，供登录用户加载时使用（避免与 TokenService 形成循环依赖）。
  */
 @Component
@@ -28,11 +31,28 @@ public class SysDataScopeResolver {
 
     private final SysDeptMapper deptMapper;
     private final SysRoleDeptMapper roleDeptMapper;
+    private final SysUserStoreMapper userStoreMapper;
 
     /**
      * @param roles 用户的启用角色（需包含 id、dataScope）
      */
     public DataScope resolve(SysUser user, List<SysRole> roles) {
+        DataScope scope = resolveDepts(user, roles);
+        return user.getStoreScope() == StoreScope.ASSIGNED ? scope.withStores(stores(user)) : scope;
+    }
+
+    /** 门店范围为「指定门店」：所属门店 + 管辖门店 */
+    private Set<Long> stores(SysUser user) {
+        Set<Long> stores = new HashSet<>();
+        if (user.getStoreId() != null) {
+            stores.add(user.getStoreId());
+        }
+        userStoreMapper.selectList(Wrappers.<SysUserStore>lambdaQuery().eq(SysUserStore::getUserId, user.getId()))
+                .forEach(us -> stores.add(us.getStoreId()));
+        return stores;
+    }
+
+    private DataScope resolveDepts(SysUser user, List<SysRole> roles) {
         Set<Long> deptIds = new HashSet<>();
         List<Long> customRoleIds = new ArrayList<>();
         boolean self = false;

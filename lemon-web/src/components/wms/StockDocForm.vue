@@ -45,7 +45,7 @@
         </a-col>
         <a-col v-if="kind === 'transfer'" :xs="24" :sm="12" :lg="6">
           <a-form-item :label="$t('wms.doc.toWarehouse')" name="toWarehouseId">
-            <WarehouseSelect :value="form.toWarehouseId" :allow-clear="false" @update:value="onToWarehouseChange" />
+            <WarehouseSelect :value="form.toWarehouseId" :allow-clear="false" all @update:value="onToWarehouseChange" />
           </a-form-item>
         </a-col>
         <a-col :xs="24" :sm="12" :lg="6">

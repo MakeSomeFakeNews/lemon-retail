@@ -244,7 +244,7 @@ import { round2 } from '@/utils/number'
 import { OrderKind, PriceControlMode, PriceSource, SupplierLevel } from '@/constants/enums'
 /**
  * 新增 / 编辑采购、销售订单（草稿）。采购订单选择供应商后，按供货价格自动带出单价、税率；
- * 销售订单选择客户和物料后按开单默认价（客户执行价 → 价目表 → 价格等级价 → 零售价 → 最近售价，/scm/pricing/default）
+ * 销售订单选择客户和物料后按开单默认价（客户执行价 → 价目表 → 价格等级价 → 门店方案价 → 零售价 → 最近售价，/scm/pricing/default）
  * 带出单价、税率，手工改过的单价不再自动覆盖。单价下方可打开「价格参考」查看历史价格并点选使用。
  * 物料有辅助单位时可按辅助单位录入：表单中 unitQty / unitPrice 为所选单位的数量、单价，
  * 提交时折算为基本单位的 qty / price（qty = unitQty × 换算率，price = unitPrice ÷ 换算率），并带上 unitName
@@ -546,6 +546,12 @@ async function findPartner(id, label) {
   return list.find((p) => p.id === id) || { id }
 }
 
+/** 销售订单换仓库后重新取价（仓库所属门店的价格方案） */
+watch(
+  () => form.value.warehouseId,
+  (v, old) => drawer.open.value && !drawer.loading.value && v !== old && props.kind === 'sales' && fetchSalesPrices(form.value.items).catch(() => {})
+)
+
 /** 销售订单取单行的开单默认价 */
 const fetchSalesPrice = (row) => fetchSalesPrices([row])
 
@@ -560,6 +566,8 @@ async function fetchSalesPrices(rows) {
   const res = await defaultPrices({
     kind: OrderKind.SALES,
     partnerId: form.value.partnerId,
+    // 仓库所属门店绑定了价格方案时按方案零售价
+    warehouseId: form.value.warehouseId || undefined,
     materialIds: list.map((row) => row.materialId),
     qtys: list.map((row) => baseQty(row) || 1),
     date: form.value.orderDate || undefined

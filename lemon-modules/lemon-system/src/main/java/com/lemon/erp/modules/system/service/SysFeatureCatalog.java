@@ -78,7 +78,7 @@ final class SysFeatureCatalog {
 
     static final List<Feature> FEATURES = List.of(
             new Feature(Key.CORE.name(), "system.label.corePlatform", "system.label.core", "system.label.systemAdministrationApprovalWorkflowsMasterData", true,
-                    List.of(1L, 2L, 3L, 914L, 903L), List.of()),
+                    List.of(1L, 2L, 3L, 914L, 903L, 17L), List.of()),
             // 供应链
             f(Key.PURCHASE, "system.label.purchasing", "system.label.supplyChain", "system.label.purchaseRequisitionsPurchaseOrdersDeliveryNotices", List.of(901L), Key.INVENTORY),
             f(Key.SALES, "system.label.sales", "system.label.supplyChain", "system.label.quotationsPriceListsSalesOrdersDelivery",

@@ -19,6 +19,7 @@ public class WmsReferenceChecker implements ReferenceChecker {
     public String findReference(RefType type, Long id) {
         return switch (type) {
             case USER -> refMapper.findUser(id);
+            case STORE -> refMapper.findStore(id);
             default -> null;
         };
     }

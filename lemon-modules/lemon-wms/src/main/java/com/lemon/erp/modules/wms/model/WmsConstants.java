@@ -22,8 +22,8 @@ public final class WmsConstants {
     public static final String IN_CATEGORY_DICT = "wms_in_category";
     public static final String OUT_CATEGORY_DICT = "wms_out_category";
     /** 单据数据权限：制单人部门 + 制单人 */
-    public static final DataPermissionRule STOCK_DOC_RULE = new DataPermissionRule("wms_stock_doc", "dept_id", "create_by");
-    public static final DataPermissionRule CHECK_RULE = new DataPermissionRule("wms_check", "dept_id", "create_by");
+    public static final DataPermissionRule STOCK_DOC_RULE = DataPermissionRule.withWarehouse("wms_stock_doc", "dept_id", "create_by", "warehouse_id,to_warehouse_id");
+    public static final DataPermissionRule CHECK_RULE = DataPermissionRule.withWarehouse("wms_check", "dept_id", "create_by", "warehouse_id");
 
     /** 序列号分隔符：逗号（含全角）、分号、空白、换行，方便扫码枪逐行录入 */
     private static final Pattern SERIAL_SEPARATOR = Pattern.compile("[,，;；\\s]+");
