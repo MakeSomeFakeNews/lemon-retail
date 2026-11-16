@@ -256,6 +256,26 @@ public class FinBillService {
     }
 
     /**
+     * 其他模块的业务生成的应收 / 应付单（如连锁经营的加盟配送应收、加盟退货红字应收），与业务同一事务；
+     * 到期日按往来单位账期，不含税（凭证 借 应收账款 / 贷 主营业务收入），金额为负数时为红字
+     *
+     * @param sourceId 来源单据 ID（加盟配送为调拨单）
+     * @param sourceNo 来源单号
+     */
+    @Transactional
+    public FinBill createGenerated(BillKind kind, Long partnerId, BillSource source, Long sourceId, String sourceNo, LocalDate date,
+                                   BigDecimal amount, String remark) {
+        checkKind(kind);
+        if (source == null || source == BillSource.MANUAL || source.isTrade() || amount == null || amount.signum() == 0) {
+            throw new BizException("fin.error.amountCannot");
+        }
+        FinBill bill = newBill(kind, partnerId, source, sourceId, sourceNo, date, date.plusDays(paymentDays(kind, partnerId)), amount, BigDecimal.ZERO);
+        bill.setRemark(remark);
+        billMapper.insert(bill);
+        return bill;
+    }
+
+    /**
      * 订单关闭的尾差调整：生成应收 / 应付调整单（来源 ORDER_ADJUST，正数蓝字、负数红字），与关闭同一事务；
      * 到期日按往来单位账期，外币订单记原币和汇率
      */

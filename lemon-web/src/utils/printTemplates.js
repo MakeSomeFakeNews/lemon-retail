@@ -74,7 +74,8 @@ const receiptType = (key, name, paper) => ({
   key,
   module: n.modPos,
   name,
-  fields: [n.store, n.terminal, n.cashier, n.saleTime, n.member, n.totalQty, n.listAmount, n.discountAmount, n.roundOff, n.receivable, n.paid, n.change, n.payMethods],
+  fields: [n.store, n.terminal, n.cashier, n.saleTime, n.member, n.totalQty, n.listAmount, n.posPromotion, n.discountAmount, n.roundOff, n.receivable, n.paid, n.change,
+    n.payMethods, n.pointsEarned],
   columns: [n.goods, num(n.quantity), num(n.salePrice), num(n.amount)],
   signs: [],
   note: true,
@@ -211,6 +212,15 @@ export const PRINT_TYPES = [
     fields: [n.customer, n.supplier, n.statementPeriod, n.beginBalance, n.endBalance],
     columns: [n.date, n.type, n.docNo, n.sourceSettle, num(n.increase), num(n.decrease), num(n.balance), n.remark],
     signs: [n.tabulator, n.finReview, n.customerSeal, n.supplierSeal],
+    note: true
+  },
+  {
+    key: 'chain.franchiseStatement',
+    module: n.modChain,
+    name: n.franchiseStatement,
+    fields: [n.franchiseStore, n.franchisee, n.statementPeriod, n.beginBalance, n.deliveryAmount, n.returnAmount, n.paymentAmount, n.otherAmount, n.endBalance, n.status],
+    columns: [n.date, n.type, n.docNo, n.sourceSettle, num(n.increase), num(n.decrease), num(n.balance), n.remark],
+    signs: [n.tabulator, n.finReview, n.franchiseeSeal],
     note: true
   }
 ].map((tp) => ({ ...tp, columns: (tp.columns || []).map((c) => (typeof c === 'string' ? { title: c } : c)), signs: tp.signs || [] }))

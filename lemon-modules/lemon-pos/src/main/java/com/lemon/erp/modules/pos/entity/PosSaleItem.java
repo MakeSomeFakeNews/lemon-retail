@@ -45,9 +45,13 @@ public class PosSaleItem extends BaseEntity {
 
     private BigDecimal amount;
 
+    private BigDecimal promoShare;
+
     private BigDecimal orderShare;
 
     private BigDecimal finalAmount;
+
+    private Integer gift;
 
     private BigDecimal taxRate;
 

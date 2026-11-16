@@ -13,8 +13,11 @@ import { PaymentStatus, ReceiptPaper, SaleKind } from '@/constants/enums'
 /** 小票：sale 为单据详情（含 items、payments），paper 为收银台的小票纸宽 */
 export function printReceipt(sale, paper = ReceiptPaper.MM80) {
   const pays = (sale.payments || []).filter((p) => p.status === PaymentStatus.SUCCESS)
-  const methods = pays.map((p) => `${dictLabel('pos_pay_method', p.payMethod)} ${money(Math.abs(p.amount))}`).join(' / ')
-  const discount = Number(sale.listAmount || 0) - Number(sale.amount || 0) + Number(sale.orderDiscount || 0)
+  // 积分抵现显示使用的积分
+  const methods = pays.map((p) => `${dictLabel('pos_pay_method', p.payMethod)} ${money(Math.abs(p.amount))}${p.points ? `(${qty(Math.abs(p.points))})` : ''}`).join(' / ')
+  // 优惠 = 原价 − 商品金额（特价、会员价、单行折扣）+ 满减 + 整单优惠
+  const discount = Number(sale.listAmount || 0) - Number(sale.amount || 0) + Number(sale.promoAmount || 0) + Number(sale.orderDiscount || 0)
+  const promotion = sale.promotionId ? `${sale.promotionName || ''}${Number(sale.promoAmount) ? ` -${money(sale.promoAmount)}` : ''}` : '-'
   const doc = {
     title: t(sale.kind === SaleKind.RETURN ? 'pos.print.returnTitle' : 'pos.print.saleTitle', { store: sale.storeName }),
     no: sale.saleNo,
@@ -26,12 +29,14 @@ export function printReceipt(sale, paper = ReceiptPaper.MM80) {
       [n('member'), sale.memberName || sale.memberCode || '-', false, n('member')],
       [n('totalQty'), qty(sale.totalQty), false, n('totalQty')],
       [n('listAmount'), money(sale.listAmount), false, n('listAmount')],
+      [n('posPromotion'), promotion, false, n('posPromotion')],
       [n('discountAmount'), money(discount), false, n('discountAmount')],
       [n('roundOff'), money(sale.roundOff), false, n('roundOff')],
       [n('receivable'), money(sale.payableAmount), false, n('receivable')],
       [n('paid'), money(sale.paidAmount), false, n('paid')],
       [n('change'), money(sale.changeAmount), false, n('change')],
-      [n('payMethods'), methods, true, n('payMethods')]
+      [n('payMethods'), methods, true, n('payMethods')],
+      [n('pointsEarned'), sale.pointsEarned ? qty(sale.pointsEarned) : '-', false, n('pointsEarned')]
     ],
     columns: [
       { key: 'name', title: n('goods') },
@@ -39,7 +44,7 @@ export function printReceipt(sale, paper = ReceiptPaper.MM80) {
       { key: 'price', title: n('salePrice'), align: 'right' },
       { key: 'amount', title: n('amount'), align: 'right' }
     ],
-    rows: (sale.items || []).map((i) => ({ name: i.materialName, qty: `${qty(i.inputQty)}${i.unit || ''}`, price: money(i.salePrice), amount: money(i.finalAmount) })),
+    rows: (sale.items || []).map((i) => ({ name: i.gift ? `${i.materialName} (${t('pos.sale.gift')})` : i.materialName, qty: `${qty(i.inputQty)}${i.unit || ''}`, price: money(i.salePrice), amount: money(i.finalAmount) })),
     note: t('pos.print.thanks')
   }
   const type = paper === ReceiptPaper.MM58 ? 'pos.receipt58' : 'pos.receipt80'

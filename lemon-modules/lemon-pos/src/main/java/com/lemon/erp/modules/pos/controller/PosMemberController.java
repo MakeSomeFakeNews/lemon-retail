@@ -8,10 +8,14 @@ import com.lemon.erp.framework.log.OperType;
 import com.lemon.erp.modules.pos.dto.PosQueries;
 import com.lemon.erp.modules.pos.entity.PosMember;
 import com.lemon.erp.modules.pos.entity.PosMemberLevel;
+import com.lemon.erp.modules.pos.entity.PosPointsLog;
 import com.lemon.erp.modules.pos.entity.PosSale;
+import com.lemon.erp.modules.pos.entity.PosStoredValueLog;
 import com.lemon.erp.modules.pos.service.PosMemberLevelService;
 import com.lemon.erp.modules.pos.service.PosMemberService;
+import com.lemon.erp.modules.pos.service.PosPointsService;
 import com.lemon.erp.modules.pos.service.PosSaleService;
+import com.lemon.erp.modules.pos.service.PosStoredValueService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -38,6 +42,8 @@ public class PosMemberController {
     private final PosMemberService memberService;
     private final PosMemberLevelService levelService;
     private final PosSaleService saleService;
+    private final PosPointsService pointsService;
+    private final PosStoredValueService storedValueService;
 
     @GetMapping("/member")
     @PreAuthorize("@ss.hasPerm('pos:member:list')")
@@ -59,6 +65,24 @@ public class PosMemberController {
                                         @RequestParam(defaultValue = "10") long size) {
         memberService.get(id);
         return R.ok(saleService.page(current, size, new PosQueries.Sale(null, null, null, null, null, null, id, null, null, null, null)));
+    }
+
+    /** 会员的积分流水（全部门店） */
+    @GetMapping("/member/{id}/points-log")
+    @PreAuthorize("@ss.hasPerm('pos:member:list')")
+    public R<PageResult<PosPointsLog>> pointsLog(@PathVariable Long id, @RequestParam(defaultValue = "1") long current,
+                                                @RequestParam(defaultValue = "10") long size) {
+        memberService.get(id);
+        return R.ok(pointsService.page(current, size, new PosQueries.PointsLog(null, id, null, null, null, null)));
+    }
+
+    /** 会员的储值流水（全部门店） */
+    @GetMapping("/member/{id}/stored-value-log")
+    @PreAuthorize("@ss.hasPerm('pos:member:list')")
+    public R<PageResult<PosStoredValueLog>> storedValueLog(@PathVariable Long id, @RequestParam(defaultValue = "1") long current,
+                                                           @RequestParam(defaultValue = "10") long size) {
+        memberService.get(id);
+        return R.ok(storedValueService.pageOfMember(current, size, id));
     }
 
     @PostMapping("/member")

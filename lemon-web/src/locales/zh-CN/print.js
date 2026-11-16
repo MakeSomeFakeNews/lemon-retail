@@ -161,6 +161,8 @@ export default {
     paid: '实收',
     change: '找零',
     payMethods: '支付方式',
+    posPromotion: '满减活动',
+    pointsEarned: '本单积分',
     goods: '商品',
     salePrice: '单价',
     shiftNo: '班次',
@@ -194,7 +196,15 @@ export default {
     deliveryPrice: '配送价',
     deliveryAmount: '配送金额',
     receivedQty: '实收数量',
-    receiver: '收货人'
+    receiver: '收货人',
+    modChain: '连锁经营',
+    franchiseStatement: '加盟对账单',
+    franchiseStore: '加盟店',
+    franchisee: '加盟商',
+    returnAmount: '退货金额',
+    paymentAmount: '收款金额',
+    otherAmount: '其他应收',
+    franchiseeSeal: '加盟商确认（盖章）'
   },
   paper: {
     size: '{name}（{size}）',

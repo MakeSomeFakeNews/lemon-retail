@@ -11,18 +11,27 @@
         <a-descriptions-item :label="$t('pos.member.totalAmount')">{{ money(member.totalAmount) }}</a-descriptions-item>
         <a-descriptions-item :label="$t('pos.member.visitCount')">{{ member.visitCount }}</a-descriptions-item>
         <a-descriptions-item :label="$t('pos.member.lastVisit')">{{ member.lastVisitTime || '-' }}</a-descriptions-item>
-        <a-descriptions-item :label="$t('pos.member.points')">{{ money(member.points) }}</a-descriptions-item>
+        <a-descriptions-item :label="$t('pos.member.points')">{{ qty(member.points) }}</a-descriptions-item>
         <a-descriptions-item :label="$t('pos.member.balance')">{{ money(member.balance) }}</a-descriptions-item>
         <a-descriptions-item :label="$t('common.field.createTime')">{{ member.createTime }}</a-descriptions-item>
       </a-descriptions>
-      <div class="section-title">{{ $t('pos.member.consumption') }}</div>
-      <a-table row-key="id" size="small" :columns="columns" :data-source="sales" :loading="loading" :pagination="pagination" @change="onChange">
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'kind'"><DictTag type="pos_sale_kind" :value="record.kind" /></template>
-          <template v-else-if="column.key === 'status'"><DictTag type="pos_sale_status" :value="record.status" /></template>
-          <template v-else-if="column.key === 'payableAmount'">{{ money(record.payableAmount) }}</template>
-        </template>
-      </a-table>
+      <a-tabs v-model:active-key="tab">
+        <a-tab-pane key="sales" :tab="$t('pos.member.consumption')">
+          <a-table row-key="id" size="small" :columns="columns" :data-source="sales" :loading="loading" :pagination="pagination" @change="onChange">
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'kind'"><DictTag type="pos_sale_kind" :value="record.kind" /></template>
+              <template v-else-if="column.key === 'status'"><DictTag type="pos_sale_status" :value="record.status" /></template>
+              <template v-else-if="column.key === 'payableAmount'">{{ money(record.payableAmount) }}</template>
+            </template>
+          </a-table>
+        </a-tab-pane>
+        <a-tab-pane key="points" :tab="$t('pos.member.pointsLog')">
+          <MemberLedger v-if="tab === 'points'" :member-id="member.id" kind="points" />
+        </a-tab-pane>
+        <a-tab-pane key="storedValue" :tab="$t('pos.member.storedValueLog')">
+          <MemberLedger v-if="tab === 'storedValue'" :member-id="member.id" kind="storedValue" />
+        </a-tab-pane>
+      </a-tabs>
     </template>
   </SubPage>
 </template>
@@ -34,13 +43,15 @@ import DictTag from '@/components/DictTag.vue'
 import SubPage from '@/components/SubPage.vue'
 import { getMember, memberSales } from '@/api/pos'
 import { useDict } from '@/composables/useDict'
-import { money } from '@/utils/number'
+import { money, qty } from '@/utils/number'
+import MemberLedger from './MemberLedger.vue'
 
-/** 会员详情：资料、累计消费，消费记录（POS 单据，按门店范围） */
+/** 会员详情：资料、累计消费、积分、储值余额，消费记录（POS 单据，按门店范围）、积分流水、储值流水 */
 const { t } = useI18n()
 useDict('pos_member_gender', 'pos_sale_kind', 'pos_sale_status')
 
 const open = ref(false)
+const tab = ref('sales')
 const member = ref()
 const sales = ref([])
 const loading = ref(false)
@@ -57,6 +68,7 @@ const columns = computed(() => [
 async function show(id) {
   member.value = await getMember(id)
   pagination.current = 1
+  tab.value = 'sales'
   open.value = true
   loadSales()
 }

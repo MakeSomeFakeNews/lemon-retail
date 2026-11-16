@@ -5,10 +5,10 @@
     <sql id="columns">
         s.id, s.sale_no, s.kind, s.status, s.store_id, s.terminal_id, s.shift_id, s.warehouse_id, s.member_id, s.orig_sale_id,
         s.business_date, s.sale_time, s.total_qty, s.list_amount, s.amount, s.order_discount, s.round_off, s.payable_amount,
-        s.paid_amount, s.change_amount, s.wms_doc_id, s.wms_doc_no, s.remark, s.void_by, s.void_time, s.void_reason, s.void_doc_id,
+        s.paid_amount, s.change_amount, s.promotion_id, s.promo_amount, s.points_earned, s.wms_doc_id, s.wms_doc_no, s.remark, s.void_by, s.void_time, s.void_reason, s.void_doc_id,
         s.dept_id, s.create_by, s.create_time, s.update_time,
         st.name AS store_name, t.name AS terminal_name, sh.shift_no, u.nickname AS cashier_name,
-        m.member_code, m.name AS member_name, m.phone AS member_phone, o.sale_no AS orig_sale_no
+        m.member_code, m.name AS member_name, m.phone AS member_phone, o.sale_no AS orig_sale_no, pr.name AS promotion_name
     </sql>
 
     <sql id="joins">
@@ -18,6 +18,7 @@
         LEFT JOIN sys_user u ON u.id = s.create_by
         LEFT JOIN pos_member m ON m.id = s.member_id
         LEFT JOIN pos_sale o ON o.id = s.orig_sale_id
+        LEFT JOIN pos_promotion pr ON pr.id = s.promotion_id
     </sql>
 
     <select id="selectPageList" resultType="com.lemon.erp.modules.pos.entity.PosSale">
@@ -88,6 +89,26 @@
                COALESCE(SUM(counted_cash), 0) AS "countedCash", COALESCE(SUM(cash_diff), 0) AS "cashDiff"
         FROM pos_shift
         WHERE store_id = #{storeId} AND business_date = #{date} AND status = 'CLOSED'
+    </select>
+
+    <select id="selectDayTopupPays" resultType="com.lemon.erp.modules.pos.dto.PosViews$PayRow">
+        SELECT p.pay_method, p.account_id, a.name AS account_name,
+               SUM(CASE WHEN p.amount &gt; 0 THEN p.amount ELSE 0 END) AS receipt_amount,
+               SUM(CASE WHEN p.amount &lt; 0 THEN -p.amount ELSE 0 END) AS refund_amount,
+               SUM(p.amount) AS amount, COUNT(*) AS pay_count
+        FROM pos_payment p
+        LEFT JOIN fin_account a ON a.id = p.account_id
+        WHERE p.store_id = #{storeId} AND p.business_date = #{date} AND p.status = 'SUCCESS' AND p.topup_id IS NOT NULL
+        GROUP BY p.pay_method, p.account_id, a.name
+        ORDER BY p.pay_method
+    </select>
+
+    <select id="sumReturnedPoints" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(points_earned), 0) FROM pos_sale WHERE orig_sale_id = #{origSaleId} AND kind = 'RETURN'
+    </select>
+
+    <select id="fullyReturned" resultType="boolean">
+        SELECT COUNT(*) = 0 FROM pos_sale_item WHERE sale_id = #{saleId} AND returned_qty &lt; input_qty
     </select>
 
     <select id="existsReturn" resultType="boolean">

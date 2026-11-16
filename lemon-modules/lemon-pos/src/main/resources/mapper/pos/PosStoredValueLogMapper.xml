@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.pos.mapper.PosStoredValueLogMapper">
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.pos.entity.PosStoredValueLog">
+        SELECT l.*, m.member_code, m.name AS member_name, st.name AS store_name, u.nickname AS create_by_name
+        FROM pos_stored_value_log l
+        JOIN pos_member m ON m.id = l.member_id
+        LEFT JOIN store_info st ON st.id = l.store_id
+        LEFT JOIN sys_user u ON u.id = l.create_by
+        <where>
+            <if test="q.keyword != null and q.keyword != ''">
+                (m.phone = #{q.keyword} OR m.member_code = #{q.keyword} OR l.source_no = #{q.keyword})
+            </if>
+            <if test="q.memberId != null">AND l.member_id = #{q.memberId}</if>
+            <if test="q.storeId != null">AND l.store_id = #{q.storeId}</if>
+            <if test="q.changeType != null">AND l.change_type = #{q.changeType}</if>
+            <if test="q.begin != null">AND l.business_date &gt;= #{q.begin}</if>
+            <if test="q.end != null">AND l.business_date &lt;= #{q.end}</if>
+        </where>
+        ORDER BY l.id DESC
+    </select>
+
+    <!-- 跨店结算：消费、退回取正数；结算金额由服务计算（消费净额 − 充值） -->
+    <select id="selectSettle" resultType="com.lemon.erp.modules.pos.dto.PosViews$StoredValueSettleRow">
+        SELECT l.store_id, st.code AS store_code, st.name AS store_name,
+               SUM(CASE WHEN l.change_type = 'TOPUP' THEN l.amount ELSE 0 END) AS topup_amount,
+               SUM(CASE WHEN l.change_type = 'TOPUP' THEN 1 ELSE 0 END) AS topup_count,
+               SUM(CASE WHEN l.change_type = 'BONUS' THEN l.amount ELSE 0 END) AS bonus_amount,
+               SUM(CASE WHEN l.change_type = 'CONSUME' THEN -l.amount ELSE 0 END) AS consume_amount,
+               SUM(CASE WHEN l.change_type = 'REFUND' THEN l.amount ELSE 0 END) AS refund_amount,
+               SUM(CASE WHEN l.change_type = 'ADJUST' THEN l.amount ELSE 0 END) AS adjust_amount
+        FROM pos_stored_value_log l
+        JOIN store_info st ON st.id = l.store_id
+        WHERE l.business_date &gt;= #{q.begin} AND l.business_date &lt;= #{q.end}
+        <if test="q.storeId != null">AND l.store_id = #{q.storeId}</if>
+        GROUP BY l.store_id, st.code, st.name
+        ORDER BY st.code
+    </select>
+
+    <select id="selectDayConsume" resultType="java.math.BigDecimal">
+        SELECT COALESCE(-SUM(amount), 0) FROM pos_stored_value_log
+        WHERE store_id = #{storeId} AND business_date = #{date} AND change_type IN ('CONSUME', 'REFUND')
+    </select>
+
+</mapper>

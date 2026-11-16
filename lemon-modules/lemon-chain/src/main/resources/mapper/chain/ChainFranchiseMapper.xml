@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 加盟商账户：加盟店（store_info.type = FRANCHISE）及其账户，只读关联客户、应收（fin_bill）、预收（fin_advance）计算余额 -->
+<mapper namespace="com.lemon.erp.modules.chain.mapper.ChainFranchiseAccountMapper">
+
+    <sql id="columns">
+        a.id, s.id AS store_id, a.customer_id, a.credit_limit, a.remark, a.create_time, a.update_time,
+        s.code AS store_code, s.name AS store_name, s.franchisee, s.settle_mode, s.status AS store_status,
+        s.contract_start, s.contract_end, c.code AS customer_code, c.name AS customer_name,
+        (SELECT COALESCE(SUM(b.amount - b.settled_amount), 0) FROM fin_bill b
+         WHERE b.kind = 'AR' AND b.partner_id = a.customer_id AND b.status &lt;&gt; 'SETTLED') AS receivable,
+        (SELECT COALESCE(SUM(v.amount - v.used_amount), 0) FROM fin_advance v
+         WHERE v.kind = 'RECEIPT' AND v.partner_id = a.customer_id) AS prepaid,
+        (SELECT COALESCE(SUM(CASE WHEN p.kind = 'RECEIVE' THEN p.amount ELSE -p.amount END), 0) FROM chain_franchise_deposit p
+         WHERE p.store_id = s.id) AS deposit_balance
+    </sql>
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.chain.entity.ChainFranchiseAccount">
+        SELECT <include refid="columns"/>
+        FROM store_info s
+        LEFT JOIN chain_franchise_account a ON a.store_id = s.id
+        LEFT JOIN scm_customer c ON c.id = a.customer_id
+        WHERE s.type = 'FRANCHISE'
+        <if test="keyword != null and keyword != ''">
+            AND (s.code LIKE CONCAT('%', #{keyword}, '%') OR s.name LIKE CONCAT('%', #{keyword}, '%')
+                 OR s.franchisee LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="storeId != null">AND s.id = #{storeId}</if>
+        <if test="settleMode != null and settleMode != ''">AND s.settle_mode = #{settleMode}</if>
+        <if test="storeIds != null">
+            AND s.id IN <foreach collection="storeIds" item="sid" open="(" separator="," close=")">#{sid}</foreach>
+        </if>
+        ORDER BY s.sort, s.id
+    </select>
+
+    <select id="selectByStore" resultType="com.lemon.erp.modules.chain.entity.ChainFranchiseAccount">
+        SELECT <include refid="columns"/>
+        FROM store_info s
+        LEFT JOIN chain_franchise_account a ON a.store_id = s.id
+        LEFT JOIN scm_customer c ON c.id = a.customer_id
+        WHERE s.id = #{storeId}
+    </select>
+
+</mapper>

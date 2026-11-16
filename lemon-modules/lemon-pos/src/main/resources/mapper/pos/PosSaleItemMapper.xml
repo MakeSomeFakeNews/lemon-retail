@@ -4,12 +4,12 @@
 
     <insert id="insertBatch">
         INSERT INTO pos_sale_item (sale_id, line_no, material_id, unit, unit_ratio, input_qty, qty, list_price, price, price_source,
-                                   special_id, discount_rate, sale_price, amount, order_share, final_amount, tax_rate, serial_nos,
-                                   orig_item_id, returned_qty, returned_amount, remark, create_time, update_time) VALUES
+                                   special_id, discount_rate, sale_price, amount, promo_share, order_share, final_amount, gift, tax_rate,
+                                   serial_nos, orig_item_id, returned_qty, returned_amount, remark, create_time, update_time) VALUES
         <foreach collection="list" item="i" separator=",">
             (#{i.saleId}, #{i.lineNo}, #{i.materialId}, #{i.unit}, #{i.unitRatio}, #{i.inputQty}, #{i.qty}, #{i.listPrice}, #{i.price},
-             #{i.priceSource}, #{i.specialId}, #{i.discountRate}, #{i.salePrice}, #{i.amount}, #{i.orderShare}, #{i.finalAmount},
-             #{i.taxRate}, #{i.serialNos}, #{i.origItemId}, 0, 0, #{i.remark}, NOW(), NOW())
+             #{i.priceSource}, #{i.specialId}, #{i.discountRate}, #{i.salePrice}, #{i.amount}, COALESCE(#{i.promoShare}, 0), #{i.orderShare}, #{i.finalAmount},
+             COALESCE(#{i.gift}, 0), #{i.taxRate}, #{i.serialNos}, #{i.origItemId}, 0, 0, #{i.remark}, NOW(), NOW())
         </foreach>
     </insert>
 

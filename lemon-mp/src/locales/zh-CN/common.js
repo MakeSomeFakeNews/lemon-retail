@@ -8,6 +8,7 @@ export default {
     mine: '我的'
   },
   group: {
+    store: '门店',
     office: '办公',
     sales: '销售',
     warehouse: '仓储'

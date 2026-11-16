@@ -39,6 +39,18 @@ public class PosDailyClose extends BaseEntity {
 
     private BigDecimal netAmount;
 
+    private Integer topupCount;
+
+    private BigDecimal topupAmount;
+
+    private BigDecimal bonusAmount;
+
+    private BigDecimal storedValueAmount;
+
+    private BigDecimal pointsAmount;
+
+    private Long voucherId;
+
     private BigDecimal expectedCash;
 
     private BigDecimal countedCash;

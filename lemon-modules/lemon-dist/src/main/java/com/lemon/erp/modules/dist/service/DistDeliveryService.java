@@ -258,6 +258,11 @@ public class DistDeliveryService {
         requisitionService.addDelivered(deltas, permissionService.hasPerm(OVER_QTY_PERM));
 
         boolean differential = moves.differential(d);
+        if (differential) {
+            // 加盟店：发货前按将要生成的配送金额检查预付余额 / 信用额度（连锁经营模块）
+            moves.checkFranchiseCredit(support.store(d.getToStoreId()), items.stream()
+                    .map(i -> new DistStockMoves.PricedQty(i.getMaterialId(), i.getQty(), i.getPrice())).toList(), labelOf(kind));
+        }
         Map<Long, BigDecimal> schemePrices = differential
                 ? moves.schemePrices(support.store(d.getToStoreId()), items.stream().map(DistDeliveryItem::getMaterialId).collect(Collectors.toSet()))
                 : Map.of();

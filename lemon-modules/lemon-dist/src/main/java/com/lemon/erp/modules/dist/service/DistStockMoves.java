@@ -1,5 +1,7 @@
 package com.lemon.erp.modules.dist.service;
 
+import com.lemon.erp.common.util.Decimals;
+import com.lemon.erp.framework.store.FranchiseCreditChecker;
 import com.lemon.erp.framework.store.StoreType;
 import com.lemon.erp.modules.dist.entity.DistDelivery;
 import com.lemon.erp.modules.dist.model.DeliveryKind;
@@ -13,7 +15,9 @@ import com.lemon.erp.modules.wms.model.StockBizType;
 import com.lemon.erp.modules.wms.model.StockOutType;
 import com.lemon.erp.modules.wms.model.TransferPricing;
 import com.lemon.erp.modules.wms.service.WmsStockDocService;
+import com.lemon.erp.modules.wms.service.WmsStockQueryService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +46,8 @@ public class DistStockMoves {
     private final WmsStockDocService stockDocService;
     private final ScmPriceSchemeService schemeService;
     private final DistSupport support;
+    private final WmsStockQueryService stockQueryService;
+    private final ObjectProvider<FranchiseCreditChecker> creditChecker;
 
     /** 配送给加盟店：按配送价差价调拨 */
     public boolean differential(DistDelivery d) {
@@ -61,6 +67,33 @@ public class DistStockMoves {
             }
         });
         return prices;
+    }
+
+    /**
+     * 加盟店的货款额度检查（要货单提交、配送单发货前）：金额 = 数量 × 配送价（指定价格 → 配送价方案价 → 当前移动加权均价，
+     * 与发货时的调拨价规则一致），由连锁经营模块按预付余额 / 信用额度检查（{@link FranchiseCreditChecker}）。不是加盟店时不检查
+     *
+     * @param lines   物料 ID、数量、指定的价格（可为空）
+     * @param docName 单据名称（消息键）
+     */
+    public void checkFranchiseCredit(StoreInfo toStore, List<PricedQty> lines, String docName) {
+        FranchiseCreditChecker checker = creditChecker.getIfAvailable();
+        if (checker == null || toStore.getType() != StoreType.FRANCHISE || lines.isEmpty()) {
+            return;
+        }
+        List<Long> ids = lines.stream().map(PricedQty::materialId).distinct().toList();
+        Map<Long, BigDecimal> scheme = schemePrices(toStore, ids);
+        Map<Long, BigDecimal> costs = stockQueryService.unitCosts(ids);
+        BigDecimal amount = BigDecimal.ZERO;
+        for (PricedQty l : lines) {
+            BigDecimal price = l.price() != null ? l.price() : scheme.getOrDefault(l.materialId(), costs.get(l.materialId()));
+            amount = amount.add(Decimals.money(Decimals.nz(l.qty()).multiply(Decimals.nz(price))));
+        }
+        checker.check(toStore.getId(), amount, docName);
+    }
+
+    /** 额度检查的一行：物料、数量、指定的配送价（可为空） */
+    public record PricedQty(Long materialId, BigDecimal qty, BigDecimal price) {
     }
 
     /**

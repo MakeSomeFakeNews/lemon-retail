@@ -98,3 +98,38 @@ export const cashierReport = (params) => request.get('/pos/report/cashier', { pa
 export const saleDetailReport = (params) => request.get('/pos/report/detail', { params })
 export const getPayConfig = () => request.get('/pos/pay-config')
 export const savePayConfig = (data) => request.put('/pos/pay-config', data)
+
+// ---------------------------------------------------------------- 会员营销：积分与储值规则、积分、储值、充值、跨店结算
+/** { rule, excludes, tiers } */
+export const getMemberRule = () => request.get('/pos/member-rule')
+/** { rule: { pointsEnabled, earnAmount, earnPoints, redeemEnabled, redeemPoints, redeemMaxRate, storedValueEnabled, remark }, excludes: [{ materialId } | { categoryCode }], tiers: [{ minAmount, bonusAmount }] } */
+export const saveMemberRule = (data) => request.put('/pos/member-rule', data)
+/** params { current, size, keyword, memberId, storeId, changeType, begin, end } */
+export const pagePointsLog = (params) => request.get('/pos/points-log', { params })
+/** { memberId, points, reason } */
+export const adjustPoints = (data) => request.post('/pos/points/adjust', data)
+/** { before, reason } → { members, points } */
+export const clearPoints = (data) => request.post('/pos/points/clear', data)
+export const pageStoredValueLog = (params) => request.get('/pos/stored-value-log', { params })
+/** { memberId, amount, storeId, reason } */
+export const adjustStoredValue = (data) => request.post('/pos/stored-value/adjust', data)
+export const memberPointsLog = (id, params) => request.get(`/pos/member/${id}/points-log`, { params })
+export const memberStoredValueLog = (id, params) => request.get(`/pos/member/${id}/stored-value-log`, { params })
+/** params { current, size, keyword, storeId, memberId, begin, end } */
+export const pageTopup = (params) => request.get('/pos/topup', { params })
+export const getTopup = (id) => request.get(`/pos/topup/${id}`)
+/** 后台充值 { storeId, memberId, amount, bonusAmount, payMethod, accountId, refNo, remark } → 充值单 */
+export const adminTopup = (data) => request.post('/pos/topup', data)
+/** 收银台充值 { terminalId, memberId, amount, bonusAmount, tenders, remark } → 充值单 */
+export const cashierTopup = (data) => request.post('/pos/cashier/topup', data)
+/** 储值跨店结算 params { storeId, begin, end } → { rows, total } */
+export const storedValueSettle = (params) => request.get('/pos/report/stored-value', { params })
+
+// ---------------------------------------------------------------- 满减 / 满折 / 满赠
+export const pagePromotion = (params) => request.get('/pos/promotion', { params })
+export const getPromotion = (id) => request.get(`/pos/promotion/${id}`)
+export const addPromotion = (data) => request.post('/pos/promotion', data)
+export const updatePromotion = (id, data) => request.put(`/pos/promotion/${id}`, data)
+export const deletePromotion = (id) => request.delete(`/pos/promotion/${ids(id)}`)
+export const activatePromotion = (id) => request.post(`/pos/promotion/${id}/activate`)
+export const endPromotion = (id) => request.post(`/pos/promotion/${id}/end`)

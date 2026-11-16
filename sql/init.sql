@@ -104,6 +104,14 @@ DROP TABLE IF EXISTS pos_sale;
 DROP TABLE IF EXISTS pos_shift;
 DROP TABLE IF EXISTS pos_pay_account;
 DROP TABLE IF EXISTS pos_terminal;
+DROP TABLE IF EXISTS chain_replenish_param;
+DROP TABLE IF EXISTS chain_alloc_record;
+DROP TABLE IF EXISTS chain_alloc_run;
+DROP TABLE IF EXISTS chain_alloc_rule;
+DROP TABLE IF EXISTS chain_franchise_deposit;
+DROP TABLE IF EXISTS chain_franchise_statement;
+DROP TABLE IF EXISTS chain_franchise_ledger;
+DROP TABLE IF EXISTS chain_franchise_account;
 DROP TABLE IF EXISTS dist_date_lock;
 DROP TABLE IF EXISTS dist_store_ledger;
 DROP TABLE IF EXISTS dist_discrepancy;
@@ -168,6 +176,7 @@ CREATE TABLE sys_tenant_package (
     id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
     name        VARCHAR(64)  NOT NULL COMMENT '套餐名称',
     status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态 1启用 0停用',
+    store_limit INT                   DEFAULT NULL COMMENT '门店数量上限（不含总部），为空不限',
     remark      VARCHAR(255)          DEFAULT NULL COMMENT '备注',
     create_time DATETIME              DEFAULT NULL COMMENT '创建时间',
     update_time DATETIME              DEFAULT NULL COMMENT '更新时间',
@@ -831,6 +840,9 @@ CREATE TABLE pos_sale (
     round_off      DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '抹零',
     payable_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '应收（退货为应退）= 商品金额 - 整单优惠 - 抹零',
     paid_amount    DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '实收（含现金找零前的收款）',
+    promotion_id   BIGINT                  DEFAULT NULL COMMENT '应用的满减 / 满折 / 满赠活动（每单最多一个）',
+    promo_amount   DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '满减 / 满折优惠（已含在应收中，按行分摊到 promo_share）',
+    points_earned  DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '本单积分：销售为获得的积分，退货为扣回的积分（负数）',
     change_amount  DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '找零',
     wms_doc_id     BIGINT                  DEFAULT NULL COMMENT '生成的仓库出库 / 入库单',
     wms_doc_no     VARCHAR(32)             DEFAULT NULL COMMENT '仓库单据号',
@@ -868,8 +880,10 @@ CREATE TABLE pos_sale_item (
     discount_rate   DECIMAL(7, 4)  NOT NULL DEFAULT 100 COMMENT '单行折扣（%，100 为不打折）',
     sale_price      DECIMAL(18, 4) NOT NULL COMMENT '成交单价（录入单位）= 行金额 / 数量',
     amount          DECIMAL(18, 2) NOT NULL COMMENT '行金额（取价、限购、单行折扣后）',
+    promo_share     DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '分摊的满减 / 满折优惠',
     order_share     DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '分摊的整单优惠与抹零',
-    final_amount    DECIMAL(18, 2) NOT NULL COMMENT '实收金额 = 行金额 - 分摊（含税），退货按它计算退款',
+    final_amount    DECIMAL(18, 2) NOT NULL COMMENT '实收金额 = 行金额 - 满减分摊 - 整单优惠分摊（含税），退货按它计算退款',
+    gift            TINYINT        NOT NULL DEFAULT 0 COMMENT '满赠的赠品行（单价 0，随单出库扣库存）',
     tax_rate        DECIMAL(5, 2)  NOT NULL DEFAULT 0 COMMENT '税率（%，业务参数默认税率），计算出库的不含税业务单价',
     serial_nos      VARCHAR(2000)           DEFAULT NULL COMMENT '序列号（启用序列号管理的物料）',
     orig_item_id    BIGINT                  DEFAULT NULL COMMENT '退货行对应的原销售行',
@@ -886,10 +900,11 @@ CREATE TABLE pos_sale_item (
 CREATE TABLE pos_payment (
     id              BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
     tenant_id       BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
-    sale_id         BIGINT                  DEFAULT NULL COMMENT 'POS 单据；聚合支付先收款、结算时再关联，未关联的为已收款未结算',
+    sale_id         BIGINT                  DEFAULT NULL COMMENT 'POS 单据；聚合支付先收款、结算时再关联，未关联（且不是充值）的为已收款未结算',
+    topup_id        BIGINT                  DEFAULT NULL COMMENT '储值充值单（充值的收款）',
     store_id        BIGINT         NOT NULL COMMENT '门店',
-    terminal_id     BIGINT         NOT NULL COMMENT '收银台',
-    shift_id        BIGINT         NOT NULL COMMENT '班次（退款记入办理退款的班次）',
+    terminal_id     BIGINT                  DEFAULT NULL COMMENT '收银台（后台充值为空）',
+    shift_id        BIGINT                  DEFAULT NULL COMMENT '班次（退款记入办理退款的班次；后台充值为空）',
     business_date   DATE           NOT NULL COMMENT '营业日期',
     pay_method      VARCHAR(16)    NOT NULL COMMENT '支付方式(字典 pos_pay_method)',
     amount          DECIMAL(18, 2) NOT NULL COMMENT '金额：收款为正（现金为扣除找零后的实收），退款为负',
@@ -904,6 +919,7 @@ CREATE TABLE pos_payment (
     qr_code         VARCHAR(512)            DEFAULT NULL COMMENT '扫码支付的二维码内容',
     orig_payment_id BIGINT                  DEFAULT NULL COMMENT '退款对应的原收款',
     refunded_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '已退金额（收款记录）',
+    points          DECIMAL(18, 2)          DEFAULT NULL COMMENT '积分抵现：使用（正）/ 退回（负）的积分',
     fail_reason     VARCHAR(255)            DEFAULT NULL COMMENT '失败原因',
     pay_time        DATETIME                DEFAULT NULL COMMENT '成功时间',
     create_by       BIGINT                  DEFAULT NULL COMMENT '收银员',
@@ -912,6 +928,7 @@ CREATE TABLE pos_payment (
     PRIMARY KEY (id),
     UNIQUE KEY uk_pos_payment_no (out_trade_no, tenant_id),
     KEY idx_pos_payment_sale (sale_id),
+    KEY idx_pos_payment_topup (topup_id),
     KEY idx_pos_payment_shift (shift_id),
     KEY idx_pos_payment_store_date (store_id, business_date)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'POS 收款 / 退款记录：一单可多种方式组合支付，退款按原支付方式原路退回';
@@ -939,6 +956,7 @@ CREATE TABLE pos_member_level (
     name           VARCHAR(32)    NOT NULL COMMENT '等级名称',
     discount_rate  DECIMAL(5, 2)  NOT NULL DEFAULT 100 COMMENT '会员折扣（%，100 为不打折）：没有会员价的商品按 门店价 × 折扣',
     upgrade_amount DECIMAL(18, 2)          DEFAULT NULL COMMENT '升级门槛：累计消费达到时自动升到该等级（只升不降），为空只能手动设置',
+    points_rate    DECIMAL(5, 2)  NOT NULL DEFAULT 1 COMMENT '积分倍率：消费积分 = 规则计算的积分 × 倍率（取整）',
     sort           INT            NOT NULL DEFAULT 0 COMMENT '排序',
     status         TINYINT        NOT NULL DEFAULT 1 COMMENT '状态 1启用 0停用',
     remark         VARCHAR(255)            DEFAULT NULL COMMENT '备注',
@@ -962,8 +980,8 @@ CREATE TABLE pos_member (
     total_amount    DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '累计消费（销售 - 退货）',
     visit_count     INT            NOT NULL DEFAULT 0 COMMENT '消费次数',
     last_visit_time DATETIME                DEFAULT NULL COMMENT '最近消费时间',
-    points          DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '积分（M4 启用）',
-    balance         DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '储值余额（M4 启用，全局一份）',
+    points          DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '积分（整数，变动见 pos_points_log；退货扣回已用掉的积分时可为负）',
+    balance         DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '储值余额（全局一份，全部门店通用，变动见 pos_stored_value_log；条件更新保证不为负）',
     remark          VARCHAR(255)            DEFAULT NULL COMMENT '备注',
     create_by       BIGINT                  DEFAULT NULL COMMENT '登记人',
     create_time     DATETIME                DEFAULT NULL COMMENT '创建时间',
@@ -1027,7 +1045,13 @@ CREATE TABLE pos_daily_close (
     sale_amount   DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '销售金额',
     return_count  INT            NOT NULL DEFAULT 0 COMMENT '退货单数',
     return_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '退货金额',
-    net_amount    DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '净收款（全部支付方式的收款 - 退款）',
+    net_amount    DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '净收款（全部支付方式的收款 - 退款，含储值、积分抵现，不含充值）',
+    topup_count   INT            NOT NULL DEFAULT 0 COMMENT '储值充值笔数',
+    topup_amount  DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '储值充值收款（实收，不含赠送）',
+    bonus_amount  DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '充值赠送金额',
+    stored_value_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '本店储值消费净额（消费 - 退回储值）',
+    points_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '积分抵现净额',
+    voucher_id    BIGINT                  DEFAULT NULL COMMENT '日结生成的储值凭证（储值消费转收入、充值赠送），反日结时删除',
     expected_cash DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '各班次应有现金合计',
     counted_cash  DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '各班次实点现金合计',
     cash_diff     DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '现金差额合计',
@@ -1070,6 +1094,166 @@ CREATE TABLE pos_pay_config (
     PRIMARY KEY (id),
     UNIQUE KEY uk_pos_pay_config (tenant_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '聚合支付通道设置（每个租户一条，没有时为线下登记）';
+
+-- ---------------------------------------------------------------- 会员营销（M4）：积分、储值、满减 / 满折 / 满赠
+
+CREATE TABLE pos_member_rule (
+    id                   BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id            BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    points_enabled       TINYINT        NOT NULL DEFAULT 1 COMMENT '启用消费积分',
+    earn_amount          DECIMAL(18, 2) NOT NULL DEFAULT 1 COMMENT '每消费金额（元，实收中可积分的部分）',
+    earn_points          DECIMAL(18, 2) NOT NULL DEFAULT 1 COMMENT '获得积分：积分 = 取整(可积分金额 ÷ 每消费金额 × 获得积分 × 等级倍率)',
+    redeem_enabled       TINYINT        NOT NULL DEFAULT 1 COMMENT '启用积分抵现',
+    redeem_points        INT            NOT NULL DEFAULT 100 COMMENT '多少积分抵 1 元',
+    redeem_max_rate      DECIMAL(5, 2)  NOT NULL DEFAULT 50 COMMENT '积分抵现最多占应收的百分比',
+    stored_value_enabled TINYINT        NOT NULL DEFAULT 1 COMMENT '启用储值（充值、储值支付）',
+    remark               VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    create_time          DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time          DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_pos_member_rule (tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '积分与储值规则（每个租户一条，没有时按默认值）';
+
+CREATE TABLE pos_points_exclude (
+    id            BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id     BIGINT      NOT NULL DEFAULT 1 COMMENT '租户ID',
+    target_type   VARCHAR(16) NOT NULL COMMENT '类型(字典 pos_goods_target_type) MATERIAL商品 CATEGORY分类（含下级分类）',
+    material_id   BIGINT               DEFAULT NULL COMMENT '商品',
+    category_code VARCHAR(32)          DEFAULT NULL COMMENT '物料分类编码',
+    create_time   DATETIME             DEFAULT NULL COMMENT '创建时间',
+    update_time   DATETIME             DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '不积分的商品 / 分类';
+
+CREATE TABLE pos_topup_tier (
+    id           BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id    BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    min_amount   DECIMAL(18, 2) NOT NULL COMMENT '充值满（元）',
+    bonus_amount DECIMAL(18, 2) NOT NULL COMMENT '赠送（元）',
+    create_time  DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time  DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_pos_topup_tier (min_amount, tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '充值赠送档位：按充值金额达到的最高档位赠送（充 X 送 Y），有「后台充值」权限的可修改赠送金额';
+
+CREATE TABLE pos_topup (
+    id            BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id     BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    topup_no      VARCHAR(32)    NOT NULL COMMENT '充值单号（编码规则 CZ）',
+    store_id      BIGINT         NOT NULL COMMENT '收款门店（跨店结算按它统计充值）',
+    terminal_id   BIGINT                  DEFAULT NULL COMMENT '收银台（后台充值为空）',
+    shift_id      BIGINT                  DEFAULT NULL COMMENT '班次（后台充值为空）',
+    member_id     BIGINT         NOT NULL COMMENT '会员',
+    business_date DATE           NOT NULL COMMENT '营业日期（门店日结按它汇总）',
+    amount        DECIMAL(18, 2) NOT NULL COMMENT '充值金额（实收）',
+    bonus_amount  DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '赠送金额',
+    balance_after DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '充值后余额',
+    pay_methods   VARCHAR(128)            DEFAULT NULL COMMENT '支付方式（逗号分隔）',
+    remark        VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    dept_id       BIGINT                  DEFAULT NULL COMMENT '操作人部门（数据权限）',
+    create_by     BIGINT                  DEFAULT NULL COMMENT '操作人',
+    create_time   DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time   DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_pos_topup_no (topup_no, tenant_id),
+    KEY idx_pos_topup_store_date (store_id, business_date),
+    KEY idx_pos_topup_member (member_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '储值充值单：收款记入 pos_payment（topup_id），门店日结生成其他收入单（会员储值，贷 预收账款）';
+
+CREATE TABLE pos_points_log (
+    id            BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id     BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    member_id     BIGINT         NOT NULL COMMENT '会员',
+    store_id      BIGINT                  DEFAULT NULL COMMENT '发生门店（后台调整、清零为空）',
+    change_type   VARCHAR(16)    NOT NULL COMMENT '类型(字典 pos_points_type) EARN消费获得 REDEEM抵现 RETURN退货扣回 REFUND退回抵现积分 ADJUST调整 CLEAR清零',
+    points        DECIMAL(18, 2) NOT NULL COMMENT '变动积分（增加为正、减少为负）',
+    balance_after DECIMAL(18, 2) NOT NULL COMMENT '变动后积分',
+    sale_id       BIGINT                  DEFAULT NULL COMMENT 'POS 单据',
+    source_no     VARCHAR(32)             DEFAULT NULL COMMENT '来源单号',
+    reason        VARCHAR(255)            DEFAULT NULL COMMENT '原因 / 备注',
+    create_by     BIGINT                  DEFAULT NULL COMMENT '操作人',
+    create_time   DATETIME                DEFAULT NULL COMMENT '发生时间',
+    PRIMARY KEY (id),
+    KEY idx_pos_points_log_member (member_id, id),
+    KEY idx_pos_points_log_time (create_time)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '积分流水';
+
+CREATE TABLE pos_stored_value_log (
+    id            BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id     BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    member_id     BIGINT         NOT NULL COMMENT '会员',
+    store_id      BIGINT         NOT NULL COMMENT '发生门店：充值为收款门店、消费 / 退回为消费门店（跨店结算按它统计）',
+    change_type   VARCHAR(16)    NOT NULL COMMENT '类型(字典 pos_stored_value_type) TOPUP充值 BONUS赠送 CONSUME消费 REFUND退回储值 ADJUST调整',
+    amount        DECIMAL(18, 2) NOT NULL COMMENT '变动金额（增加为正、减少为负）',
+    balance_after DECIMAL(18, 2) NOT NULL COMMENT '变动后余额',
+    business_date DATE           NOT NULL COMMENT '营业日期',
+    sale_id       BIGINT                  DEFAULT NULL COMMENT 'POS 单据（消费、退回）',
+    topup_id      BIGINT                  DEFAULT NULL COMMENT '充值单（充值、赠送）',
+    source_no     VARCHAR(32)             DEFAULT NULL COMMENT '来源单号',
+    remark        VARCHAR(255)            DEFAULT NULL COMMENT '备注 / 调整原因',
+    create_by     BIGINT                  DEFAULT NULL COMMENT '操作人',
+    create_time   DATETIME                DEFAULT NULL COMMENT '发生时间',
+    PRIMARY KEY (id),
+    KEY idx_pos_sv_log_member (member_id, id),
+    KEY idx_pos_sv_log_store_date (store_id, business_date)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '储值流水：余额全局一份，每笔记录门店，用于跨店结算';
+
+CREATE TABLE pos_promotion (
+    id              BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id       BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    name            VARCHAR(64)    NOT NULL COMMENT '活动名称',
+    kind            VARCHAR(16)    NOT NULL COMMENT '类型(字典 pos_promotion_kind) REDUCE满减 DISCOUNT满折 GIFT满赠',
+    threshold_type  VARCHAR(16)    NOT NULL DEFAULT 'AMOUNT' COMMENT '门槛(字典 pos_promotion_threshold) AMOUNT金额 QTY件数（录入数量）',
+    threshold       DECIMAL(18, 4) NOT NULL COMMENT '门槛值：满 X 元 / 件',
+    reduce_amount   DECIMAL(18, 2)          DEFAULT NULL COMMENT '满减：减 Y 元',
+    discount_rate   DECIMAL(5, 2)           DEFAULT NULL COMMENT '满折：折扣（%）',
+    stackable       TINYINT        NOT NULL DEFAULT 0 COMMENT '每满叠加（满减、满赠）：每满 X 减 Y / 赠一份',
+    goods_scope     VARCHAR(16)    NOT NULL DEFAULT 'ALL' COMMENT '参与商品(字典 pos_promotion_range) ALL全部 MATERIALS指定商品 CATEGORIES指定分类',
+    exclude_special TINYINT        NOT NULL DEFAULT 0 COMMENT '与特价互斥：特价商品不参与门槛和优惠',
+    priority        INT            NOT NULL DEFAULT 0 COMMENT '优先级：同时满足时先比优先级（大的优先），再比优惠金额',
+    begin_time      DATETIME       NOT NULL COMMENT '开始时间',
+    end_time        DATETIME       NOT NULL COMMENT '结束时间',
+    channel         VARCHAR(8)     NOT NULL DEFAULT 'POS' COMMENT '渠道(字典 pos_sale_channel)',
+    store_scope     VARCHAR(16)    NOT NULL DEFAULT 'ALL' COMMENT '适用门店(字典 pos_special_scope)',
+    member_only     TINYINT        NOT NULL DEFAULT 0 COMMENT '仅限会员',
+    status          VARCHAR(16)    NOT NULL DEFAULT 'DRAFT' COMMENT '状态(字典 pos_special_status) DRAFT草稿 ACTIVE进行中 ENDED已结束',
+    remark          VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    create_by       BIGINT                  DEFAULT NULL COMMENT '创建人',
+    create_time     DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time     DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_pos_promotion_status (status, begin_time)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '满减 / 满折 / 满赠活动：在特价（行级）之后按整单计算，每单只应用一个';
+
+CREATE TABLE pos_promotion_target (
+    id           BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id    BIGINT NOT NULL DEFAULT 1 COMMENT '租户ID',
+    promotion_id BIGINT NOT NULL COMMENT '活动',
+    target_id    BIGINT NOT NULL COMMENT '门店（指定门店）或区域（指定区域，含下级区域）',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_pos_promotion_target (promotion_id, target_id, tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '满减活动的适用门店 / 区域';
+
+CREATE TABLE pos_promotion_goods (
+    id            BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id     BIGINT      NOT NULL DEFAULT 1 COMMENT '租户ID',
+    promotion_id  BIGINT      NOT NULL COMMENT '活动',
+    material_id   BIGINT               DEFAULT NULL COMMENT '商品（指定商品）',
+    category_code VARCHAR(32)          DEFAULT NULL COMMENT '物料分类编码（指定分类，含下级分类）',
+    PRIMARY KEY (id),
+    KEY idx_pos_promotion_goods (promotion_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '满减活动的参与商品 / 分类';
+
+CREATE TABLE pos_promotion_gift (
+    id           BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id    BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    promotion_id BIGINT         NOT NULL COMMENT '活动',
+    material_id  BIGINT         NOT NULL COMMENT '赠品',
+    qty          DECIMAL(18, 4) NOT NULL COMMENT '每份赠送数量（基本单位）',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_pos_promotion_gift (promotion_id, material_id, tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '满赠的赠品';
+
 
 
 -- ---------------------------------------------------------------- 门店要货与配送：要货单 → 审核 → 配送单（在途调拨）→ 门店收货（差异）；门店退仓；门店往来；日期锁定
@@ -1244,6 +1428,139 @@ CREATE TABLE dist_date_lock (
     PRIMARY KEY (id),
     UNIQUE KEY uk_dist_date_lock (store_id, tenant_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '日期锁定（结账日）：全公司一条（store_id = 0），门店可另设（两者都检查）';
+
+-- ---------------------------------------------------------------- 连锁经营：加盟结算（账户、往来、对账单、保证金）、总部费用分摊、门店补货参数
+
+CREATE TABLE chain_franchise_account (
+    id           BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id    BIGINT        NOT NULL DEFAULT 1 COMMENT '租户ID',
+    store_id     BIGINT        NOT NULL COMMENT '加盟店',
+    customer_id  BIGINT        NOT NULL COMMENT '加盟商对应的客户（首次使用时自动创建）：加盟应收、预收、收款复用财务',
+    credit_limit DECIMAL(18, 2)         DEFAULT NULL COMMENT '信用额度（月结），为空不限',
+    remark       VARCHAR(255)           DEFAULT NULL COMMENT '备注',
+    create_time  DATETIME               DEFAULT NULL COMMENT '创建时间',
+    update_time  DATETIME               DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_chain_franchise_store (store_id, tenant_id),
+    KEY idx_chain_franchise_customer (customer_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '加盟商账户：每个加盟店一个，关联供应链客户';
+
+CREATE TABLE chain_franchise_ledger (
+    id          BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id   BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    store_id    BIGINT         NOT NULL COMMENT '加盟店',
+    kind        VARCHAR(16)    NOT NULL COMMENT '种类(字典 chain_ledger_kind) DELIVERY加盟配送 RETURN加盟退货',
+    transfer_id BIGINT         NOT NULL COMMENT '调拨单（冲销时为红字单据）',
+    transfer_no VARCHAR(32)    NOT NULL COMMENT '调拨单号',
+    source_no   VARCHAR(32)             DEFAULT NULL COMMENT '来源单号（配送单 / 退仓单）',
+    biz_date    DATE           NOT NULL COMMENT '业务日期',
+    amount      DECIMAL(18, 2) NOT NULL COMMENT '应收金额：配送为正数，退回为负数',
+    bill_id     BIGINT                  DEFAULT NULL COMMENT '生成的应收单',
+    bill_no     VARCHAR(32)             DEFAULT NULL COMMENT '应收单号',
+    create_time DATETIME                DEFAULT NULL COMMENT '创建时间',
+    PRIMARY KEY (id),
+    KEY idx_chain_ledger_store (store_id, biz_date),
+    KEY idx_chain_ledger_transfer (transfer_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '加盟往来：配送给加盟店 / 加盟店退回的调拨生成的加盟应收，只追加';
+
+CREATE TABLE chain_franchise_statement (
+    id              BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id       BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    statement_no    VARCHAR(32)    NOT NULL COMMENT '对账单号（编码规则 JMDZ）',
+    store_id        BIGINT         NOT NULL COMMENT '加盟店',
+    customer_id     BIGINT         NOT NULL COMMENT '加盟商客户',
+    period          VARCHAR(7)     NOT NULL COMMENT '对账月份 yyyy-MM',
+    begin_date      DATE           NOT NULL COMMENT '开始日期',
+    end_date        DATE           NOT NULL COMMENT '结束日期',
+    opening         DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '期初余额',
+    delivery_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '配送',
+    return_amount   DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '退货（正数，冲减）',
+    payment_amount  DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '收款（收款、预收、对冲，正数，冲减）',
+    other_amount    DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '其他应收（带符号）',
+    closing         DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '期末余额',
+    status          VARCHAR(16)    NOT NULL DEFAULT 'DRAFT' COMMENT '状态(字典 chain_statement_status) DRAFT待确认 CONFIRMED已确认',
+    confirm_by      BIGINT                  DEFAULT NULL COMMENT '确认人',
+    confirm_time    DATETIME                DEFAULT NULL COMMENT '确认时间',
+    remark          VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    create_by       BIGINT                  DEFAULT NULL COMMENT '制单人',
+    create_time     DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time     DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_chain_statement_no (statement_no, tenant_id),
+    UNIQUE KEY uk_chain_statement_period (store_id, period, tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '加盟对账单（月结）：期初 + 配送 − 退货 + 其他 − 收款 = 期末，取自财务往来对账单';
+
+CREATE TABLE chain_franchise_deposit (
+    id          BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id   BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    deposit_no  VARCHAR(32)    NOT NULL COMMENT '单号（编码规则 BZJ）',
+    store_id    BIGINT         NOT NULL COMMENT '加盟店',
+    kind        VARCHAR(16)    NOT NULL COMMENT '种类(字典 chain_deposit_kind) RECEIVE收取 REFUND退还',
+    biz_date    DATE           NOT NULL COMMENT '日期',
+    amount      DECIMAL(18, 2) NOT NULL COMMENT '金额',
+    account_id  BIGINT                  DEFAULT NULL COMMENT '结算账户（只做记录）',
+    remark      VARCHAR(255)            DEFAULT NULL COMMENT '备注',
+    create_by   BIGINT                  DEFAULT NULL COMMENT '登记人',
+    create_time DATETIME                DEFAULT NULL COMMENT '创建时间',
+    update_time DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_chain_deposit_no (deposit_no, tenant_id),
+    KEY idx_chain_deposit_store (store_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '加盟保证金收退记录（台账，不进入加盟应收）';
+
+CREATE TABLE chain_alloc_rule (
+    id                BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id         BIGINT      NOT NULL DEFAULT 1 COMMENT '租户ID',
+    basis             VARCHAR(16) NOT NULL DEFAULT 'SALES' COMMENT '分摊依据(字典 chain_alloc_basis) SALES按销售额 AREA按面积 EQUAL平均',
+    include_dc        TINYINT     NOT NULL DEFAULT 0 COMMENT '配送中心参与分摊 1是',
+    include_franchise TINYINT     NOT NULL DEFAULT 0 COMMENT '加盟店参与分摊 1是',
+    region_id         BIGINT               DEFAULT NULL COMMENT '参与分摊的区域（含下级），为空为全部门店',
+    remark            VARCHAR(255)         DEFAULT NULL COMMENT '备注',
+    create_time       DATETIME             DEFAULT NULL COMMENT '创建时间',
+    update_time       DATETIME             DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_chain_alloc_rule (tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '总部费用分摊设置（每个租户一条）';
+
+CREATE TABLE chain_alloc_run (
+    id          BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id   BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    period      VARCHAR(7)     NOT NULL COMMENT '月份 yyyy-MM',
+    basis       VARCHAR(16)    NOT NULL COMMENT '分摊依据(字典 chain_alloc_basis)',
+    pool_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '待分摊的总部费用',
+    store_count INT            NOT NULL DEFAULT 0 COMMENT '参与门店数',
+    create_by   BIGINT                  DEFAULT NULL COMMENT '运行人',
+    create_time DATETIME                DEFAULT NULL COMMENT '运行时间',
+    update_time DATETIME                DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_chain_alloc_run (period, tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '总部费用分摊：每月一次（重新运行时替换）';
+
+CREATE TABLE chain_alloc_record (
+    id          BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id   BIGINT         NOT NULL DEFAULT 1 COMMENT '租户ID',
+    run_id      BIGINT         NOT NULL COMMENT '分摊',
+    period      VARCHAR(7)     NOT NULL COMMENT '月份 yyyy-MM',
+    store_id    BIGINT         NOT NULL COMMENT '门店',
+    basis_value DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '分摊依据的数值（销售额 / 面积 / 1）',
+    ratio       DECIMAL(9, 6)  NOT NULL DEFAULT 0 COMMENT '分摊比例',
+    amount      DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '分摊金额',
+    PRIMARY KEY (id),
+    KEY idx_chain_alloc_record_run (run_id),
+    KEY idx_chain_alloc_record_period (period, store_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '总部费用分摊结果：某月分摊给某门店的金额';
+
+CREATE TABLE chain_replenish_param (
+    id          BIGINT   NOT NULL AUTO_INCREMENT COMMENT '主键',
+    tenant_id   BIGINT   NOT NULL DEFAULT 1 COMMENT '租户ID',
+    store_id    BIGINT   NOT NULL COMMENT '门店',
+    lead_days   INT               DEFAULT NULL COMMENT '到货天数，为空取业务参数',
+    safety_days INT               DEFAULT NULL COMMENT '安全天数，为空取业务参数',
+    create_time DATETIME          DEFAULT NULL COMMENT '创建时间',
+    update_time DATETIME          DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_chain_replenish_store (store_id, tenant_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '门店补货参数（补货建议）';
 
 -- ---------------------------------------------------------------- 仓库管理
 
@@ -4822,7 +5139,7 @@ INSERT INTO sys_menu (id, parent_id, name, type, path, component, perms, icon, s
 (4500, 450, '支付通道修改', 'F', NULL, NULL, 'pos:payConfig:edit', NULL, 1, 1, 1, NOW(), NOW());
 
 INSERT INTO sys_dict_type (id, name, type, kind, status, remark, create_time, update_time) VALUES
-(260, 'POS 支付方式', 'pos_pay_method', 'SYSTEM', 1, '现金、微信、支付宝、银行卡、储值（储值在会员储值上线前不可用）', NOW(), NOW()),
+(260, 'POS 支付方式', 'pos_pay_method', 'SYSTEM', 1, '现金、微信、支付宝、银行卡、储值、积分抵现（储值、积分抵现需要识别会员）', NOW(), NOW()),
 (261, 'POS 单据种类', 'pos_sale_kind', 'SYSTEM', 1, 'POS 销售、退货', NOW(), NOW()),
 (262, 'POS 单据状态', 'pos_sale_status', 'SYSTEM', 1, '结算即完成；当日日结前可作废', NOW(), NOW()),
 (263, '班次状态', 'pos_shift_status', 'SYSTEM', 1, '收银员开班后收银，交班后结束', NOW(), NOW()),
@@ -4926,6 +5243,79 @@ INSERT INTO sys_role_menu (role_id, menu_id)
 SELECT g.role_id, rm.menu_id FROM (SELECT 18 AS role_id UNION ALL SELECT 19) g
 JOIN sys_role_menu rm ON rm.role_id = 13;
 
+-- ---------------------------------------------------------------- 会员营销（M4）：积分、储值、满减 / 满折 / 满赠（菜单、字典、授权、收支类别）
+-- 会员营销分组（992）：满减满赠、积分储值规则、储值充值单、积分流水、储值流水；日结与报表（993）：储值跨店结算；收银台按钮：收银充值、积分抵现
+INSERT INTO sys_menu (id, parent_id, name, type, path, component, perms, icon, sort, visible, status, create_time, update_time) VALUES
+(456, 992, '满减满赠', 'C', 'promotion', 'pos/promotion/index', 'pos:promotion:list', 'GiftOutlined', 4, 1, 1, NOW(), NOW()),
+(451, 992, '积分储值规则', 'C', 'member-rule', 'pos/member-rule/index', 'pos:memberRule:list', 'SettingOutlined', 5, 1, 1, NOW(), NOW()),
+(454, 992, '储值充值单', 'C', 'topup', 'pos/topup/index', 'pos:topup:list', 'MoneyCollectOutlined', 6, 1, 1, NOW(), NOW()),
+(452, 992, '积分流水', 'C', 'points-log', 'pos/points-log/index', 'pos:points:list', 'StarOutlined', 7, 1, 1, NOW(), NOW()),
+(453, 992, '储值流水', 'C', 'stored-value-log', 'pos/stored-value-log/index', 'pos:storedValue:list', 'AccountBookOutlined', 8, 1, 1, NOW(), NOW()),
+(455, 993, '储值跨店结算', 'C', 'stored-value-settle', 'pos/report/stored-value', 'pos:report:storedValue', 'SwapOutlined', 4, 1, 1, NOW(), NOW()),
+(4510, 440, '收银充值', 'F', NULL, NULL, 'pos:sale:topup', NULL, 8, 1, 1, NOW(), NOW()),
+(4511, 440, '积分抵现', 'F', NULL, NULL, 'pos:sale:redeem', NULL, 9, 1, 1, NOW(), NOW()),
+(4520, 451, '积分储值规则修改', 'F', NULL, NULL, 'pos:memberRule:edit', NULL, 1, 1, 1, NOW(), NOW()),
+(4530, 452, '积分调整 / 清零', 'F', NULL, NULL, 'pos:member:points', NULL, 1, 1, 1, NOW(), NOW()),
+(4540, 453, '储值调整', 'F', NULL, NULL, 'pos:member:storedValue', NULL, 1, 1, 1, NOW(), NOW()),
+(4550, 454, '后台充值', 'F', NULL, NULL, 'pos:topup:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4560, 456, '满减满赠新增', 'F', NULL, NULL, 'pos:promotion:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4561, 456, '满减满赠修改', 'F', NULL, NULL, 'pos:promotion:edit', NULL, 2, 1, 1, NOW(), NOW()),
+(4562, 456, '满减满赠删除', 'F', NULL, NULL, 'pos:promotion:remove', NULL, 3, 1, 1, NOW(), NOW()),
+(4563, 456, '满减满赠开始 / 结束', 'F', NULL, NULL, 'pos:promotion:audit', NULL, 4, 1, 1, NOW(), NOW());
+
+-- 普通用户：新页面只读；总经理：全部；店长：新页面 + 收银充值、积分抵现、后台充值、满减满赠维护（不含规则修改、积分 / 储值调整）；收银员：收银充值、积分抵现
+INSERT INTO sys_role_menu (role_id, menu_id) VALUES
+(2, 451), (2, 452), (2, 453), (2, 454), (2, 455), (2, 456),
+(3, 451), (3, 452), (3, 453), (3, 454), (3, 455), (3, 456),
+(3, 4510), (3, 4511), (3, 4520), (3, 4530), (3, 4540), (3, 4550), (3, 4560), (3, 4561), (3, 4562), (3, 4563),
+(18, 451), (18, 452), (18, 453), (18, 454), (18, 455), (18, 456),
+(18, 4510), (18, 4511), (18, 4550), (18, 4560), (18, 4561), (18, 4562), (18, 4563),
+(19, 4510), (19, 4511);
+
+INSERT INTO sys_dict_type (id, name, type, kind, status, remark, create_time, update_time) VALUES
+(274, '积分变动类型', 'pos_points_type', 'SYSTEM', 1, '积分流水的类型：消费获得、抵现、退货扣回、退回抵现积分、调整、清零', NOW(), NOW()),
+(275, '储值变动类型', 'pos_stored_value_type', 'SYSTEM', 1, '储值流水的类型：充值、赠送、消费、退回储值、调整', NOW(), NOW()),
+(276, '满减活动类型', 'pos_promotion_kind', 'SYSTEM', 1, '满减、满折、满赠', NOW(), NOW()),
+(277, '满减活动门槛', 'pos_promotion_threshold', 'SYSTEM', 1, '按参与商品的金额或件数（录入数量）判断门槛', NOW(), NOW()),
+(278, '满减参与商品', 'pos_promotion_range', 'SYSTEM', 1, '全部商品、指定商品、指定分类（含下级分类）', NOW(), NOW()),
+(279, '商品范围类型', 'pos_goods_target_type', 'SYSTEM', 1, '按商品或分类（含下级分类）指定，如不积分的商品', NOW(), NOW());
+INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, status, builtin, create_time, update_time) VALUES
+('pos_pay_method', '积分抵现', 'POINTS', 'orange', 6, 1, 1, NOW(), NOW()),
+('pos_price_source', '赠品', 'GIFT', 'magenta', 6, 1, 1, NOW(), NOW()),
+('pos_points_type', '消费获得', 'EARN', 'green', 1, 1, 1, NOW(), NOW()),
+('pos_points_type', '抵现', 'REDEEM', 'orange', 2, 1, 1, NOW(), NOW()),
+('pos_points_type', '退货扣回', 'RETURN', 'volcano', 3, 1, 1, NOW(), NOW()),
+('pos_points_type', '退回抵现积分', 'REFUND', 'cyan', 4, 1, 1, NOW(), NOW()),
+('pos_points_type', '调整', 'ADJUST', 'purple', 5, 1, 1, NOW(), NOW()),
+('pos_points_type', '清零', 'CLEAR', 'red', 6, 1, 1, NOW(), NOW()),
+('pos_stored_value_type', '充值', 'TOPUP', 'green', 1, 1, 1, NOW(), NOW()),
+('pos_stored_value_type', '赠送', 'BONUS', 'lime', 2, 1, 1, NOW(), NOW()),
+('pos_stored_value_type', '消费', 'CONSUME', 'orange', 3, 1, 1, NOW(), NOW()),
+('pos_stored_value_type', '退回储值', 'REFUND', 'cyan', 4, 1, 1, NOW(), NOW()),
+('pos_stored_value_type', '调整', 'ADJUST', 'purple', 5, 1, 1, NOW(), NOW()),
+('pos_promotion_kind', '满减', 'REDUCE', 'red', 1, 1, 1, NOW(), NOW()),
+('pos_promotion_kind', '满折', 'DISCOUNT', 'orange', 2, 1, 1, NOW(), NOW()),
+('pos_promotion_kind', '满赠', 'GIFT', 'magenta', 3, 1, 1, NOW(), NOW()),
+('pos_promotion_threshold', '金额', 'AMOUNT', 'blue', 1, 1, 1, NOW(), NOW()),
+('pos_promotion_threshold', '件数', 'QTY', 'purple', 2, 1, 1, NOW(), NOW()),
+('pos_promotion_range', '全部商品', 'ALL', 'green', 1, 1, 1, NOW(), NOW()),
+('pos_promotion_range', '指定商品', 'MATERIALS', 'blue', 2, 1, 1, NOW(), NOW()),
+('pos_promotion_range', '指定分类', 'CATEGORIES', 'purple', 3, 1, 1, NOW(), NOW()),
+('pos_goods_target_type', '商品', 'MATERIAL', 'blue', 1, 1, 1, NOW(), NOW()),
+('pos_goods_target_type', '分类', 'CATEGORY', 'purple', 2, 1, 1, NOW(), NOW()),
+-- 门店日结生成的储值凭证（储值消费转收入、充值赠送）
+('fin_voucher_source', '门店日结', 'POS_DAILY_CLOSE', 'lime', 30, 1, 1, NOW(), NOW());
+
+-- 收支类别：会员储值（收入，贷 预收账款 2203：门店日结按结算账户汇总充值收款）；储值赠送（科目默认销售费用 6601：日结凭证 借 该科目 / 贷 会员储值的科目）。
+-- 储值消费在日结凭证中 借 会员储值的科目 / 贷 零售收入的科目
+INSERT INTO fin_io_category (name, code, direction, account_id, sort, status, remark, create_time, update_time)
+SELECT g.name, g.code, g.direction, a.id, g.sort, 1, g.remark, NOW(), NOW()
+FROM (
+    SELECT '会员储值' AS name, 'MEMBER_TOPUP' AS code, 'IN' AS direction, '2203' AS acct, 11 AS sort, '门店日结按结算账户汇总的储值充值收款（负债：预收账款）' AS remark
+    UNION ALL SELECT '储值赠送', 'MEMBER_BONUS', 'OUT', '6601', 14, '充值赠送金额：门店日结凭证 借 本类别科目 / 贷 会员储值科目（不生成收支单）'
+) g
+LEFT JOIN fin_account a ON a.code = g.acct AND a.tenant_id = 1;
+
 -- ---------------------------------------------------------------- 线上渠道：微信小店（菜单、字典、授权）
 -- 订单来源增加「微信小店」（scm_order_source.WX_SHOP）：渠道订单生成并直接审核的销售订单
 -- 定时任务「微信小店同步」（channel.wxShopSync，每 5 分钟，按各店铺的设置同步库存、订单、售后）由 WxShopSyncJob 在首次启动时写入 sys_job
@@ -5003,3 +5393,57 @@ INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, s
 ('ch_wx_sync_trigger', '定时任务', 'SCHEDULE', 'blue', 2, 1, 1, NOW(), NOW()),
 ('ch_wx_sync_trigger', '消息推送', 'CALLBACK', 'cyan', 3, 1, 1, NOW(), NOW()),
 ('scm_order_source', '微信小店', 'WX_SHOP', 'green', 11, 1, 1, NOW(), NOW());
+
+-- ---------------------------------------------------------------- 连锁经营：加盟结算、门店损益与费用分摊、门店补货建议（菜单、字典、授权）
+-- 菜单：模块 21，分组 480 加盟管理、481 经营分析、482 补货，页面 483–499，按钮 4800–4999
+INSERT INTO sys_menu (id, parent_id, name, type, path, component, perms, icon, sort, visible, status, create_time, update_time) VALUES
+(21,  0, '连锁经营', 'M', '/chain', NULL, NULL, 'ApartmentOutlined', 6, 1, 1, NOW(), NOW()),
+(480, 21, '加盟管理', 'M', NULL, NULL, NULL, NULL, 1, 1, 1, NOW(), NOW()),
+(481, 21, '经营分析', 'M', NULL, NULL, NULL, NULL, 2, 1, 1, NOW(), NOW()),
+(482, 21, '补货', 'M', NULL, NULL, NULL, NULL, 3, 1, 1, NOW(), NOW()),
+(483, 480, '加盟商账户', 'C', 'franchise-account', 'chain/franchise/account/index', 'chain:franchise:list', 'WalletOutlined', 1, 1, 1, NOW(), NOW()),
+(484, 480, '加盟对账单', 'C', 'franchise-statement', 'chain/franchise/statement/index', 'chain:statement:list', 'ReconciliationOutlined', 2, 1, 1, NOW(), NOW()),
+(485, 480, '保证金', 'C', 'franchise-deposit', 'chain/franchise/deposit/index', 'chain:deposit:list', 'SafetyCertificateOutlined', 3, 1, 1, NOW(), NOW()),
+(486, 480, '加盟结算报表', 'C', 'franchise-report', 'chain/franchise/report/index', 'chain:franchise:report', 'FundOutlined', 4, 1, 1, NOW(), NOW()),
+(487, 481, '门店损益', 'C', 'store-pnl', 'chain/pnl/index', 'chain:pnl:list', 'LineChartOutlined', 1, 1, 1, NOW(), NOW()),
+(488, 481, '费用分摊', 'C', 'expense-alloc', 'chain/alloc/index', 'chain:alloc:list', 'PieChartOutlined', 2, 1, 1, NOW(), NOW()),
+(489, 482, '门店补货建议', 'C', 'replenish', 'chain/replenish/index', 'chain:replenish:list', 'ShoppingOutlined', 1, 1, 1, NOW(), NOW()),
+(4830, 483, '加盟商账户设置', 'F', NULL, NULL, 'chain:franchise:edit', NULL, 1, 1, 1, NOW(), NOW()),
+(4831, 483, '加盟商充值', 'F', NULL, NULL, 'chain:franchise:topup', NULL, 2, 1, 1, NOW(), NOW()),
+(4840, 484, '生成对账单', 'F', NULL, NULL, 'chain:statement:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4841, 484, '确认对账单', 'F', NULL, NULL, 'chain:statement:confirm', NULL, 2, 1, 1, NOW(), NOW()),
+(4842, 484, '删除对账单', 'F', NULL, NULL, 'chain:statement:remove', NULL, 3, 1, 1, NOW(), NOW()),
+(4850, 485, '保证金登记', 'F', NULL, NULL, 'chain:deposit:add', NULL, 1, 1, 1, NOW(), NOW()),
+(4851, 485, '保证金删除', 'F', NULL, NULL, 'chain:deposit:remove', NULL, 2, 1, 1, NOW(), NOW()),
+(4880, 488, '分摊设置', 'F', NULL, NULL, 'chain:alloc:edit', NULL, 1, 1, 1, NOW(), NOW()),
+(4881, 488, '运行分摊', 'F', NULL, NULL, 'chain:alloc:run', NULL, 2, 1, 1, NOW(), NOW()),
+(4890, 489, '生成要货单', 'F', NULL, NULL, 'chain:replenish:requisition', NULL, 1, 1, 1, NOW(), NOW()),
+(4891, 489, '补货参数设置', 'F', NULL, NULL, 'chain:replenish:param', NULL, 2, 1, 1, NOW(), NOW());
+
+-- 普通用户只读；总经理全部；会计：加盟管理全部；店长：门店损益（本店，门店范围由用户设置）、补货建议与生成要货单
+INSERT INTO sys_role_menu (role_id, menu_id) VALUES
+(2, 21), (2, 480), (2, 481), (2, 482), (2, 483), (2, 484), (2, 485), (2, 486), (2, 487), (2, 488), (2, 489),
+(3, 21), (3, 480), (3, 481), (3, 482), (3, 483), (3, 484), (3, 485), (3, 486), (3, 487), (3, 488), (3, 489),
+(3, 4830), (3, 4831), (3, 4840), (3, 4841), (3, 4842), (3, 4850), (3, 4851), (3, 4880), (3, 4881), (3, 4890), (3, 4891),
+(9, 21), (9, 480), (9, 483), (9, 484), (9, 485), (9, 486),
+(9, 4830), (9, 4831), (9, 4840), (9, 4841), (9, 4842), (9, 4850), (9, 4851),
+(18, 21), (18, 481), (18, 482), (18, 487), (18, 489), (18, 4890);
+
+INSERT INTO sys_dict_type (id, name, type, kind, status, remark, create_time, update_time) VALUES
+(300, '加盟往来种类', 'chain_ledger_kind', 'SYSTEM', 1, '配送给加盟店生成应收、加盟店退回生成红字应收', NOW(), NOW()),
+(301, '加盟对账单状态', 'chain_statement_status', 'SYSTEM', 1, '待确认（可重新生成、删除）、已确认', NOW(), NOW()),
+(302, '保证金收退', 'chain_deposit_kind', 'SYSTEM', 1, '收取、退还', NOW(), NOW()),
+(303, '费用分摊依据', 'chain_alloc_basis', 'SYSTEM', 1, '总部费用分摊到门店的依据：按销售额、按面积、平均', NOW(), NOW());
+INSERT INTO sys_dict_data (dict_type, dict_label, dict_value, tag_color, sort, status, builtin, create_time, update_time) VALUES
+('chain_ledger_kind', '加盟配送', 'DELIVERY', 'blue', 1, 1, 1, NOW(), NOW()),
+('chain_ledger_kind', '加盟退货', 'RETURN', 'orange', 2, 1, 1, NOW(), NOW()),
+('chain_statement_status', '待确认', 'DRAFT', 'orange', 1, 1, 1, NOW(), NOW()),
+('chain_statement_status', '已确认', 'CONFIRMED', 'green', 2, 1, 1, NOW(), NOW()),
+('chain_deposit_kind', '收取', 'RECEIVE', 'green', 1, 1, 1, NOW(), NOW()),
+('chain_deposit_kind', '退还', 'REFUND', 'red', 2, 1, 1, NOW(), NOW()),
+('chain_alloc_basis', '按销售额', 'SALES', 'blue', 1, 1, 1, NOW(), NOW()),
+('chain_alloc_basis', '按面积', 'AREA', 'cyan', 2, 1, 1, NOW(), NOW()),
+('chain_alloc_basis', '平均', 'EQUAL', 'default', 3, 1, 1, NOW(), NOW()),
+-- 加盟结算生成的应收应付来源
+('fin_bill_source', '加盟配送', 'FRANCHISE_DELIVERY', 'purple', 21, 1, 1, NOW(), NOW()),
+('fin_bill_source', '加盟退货', 'FRANCHISE_RETURN', 'purple', 22, 1, 1, NOW(), NOW());

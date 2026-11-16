@@ -82,6 +82,11 @@ public class PosMember extends BaseEntity {
     @TableField(exist = false)
     private BigDecimal discountRate;
 
+    /** 会员等级的积分倍率，计算消费积分使用 */
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    @TableField(exist = false)
+    private BigDecimal pointsRate;
+
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     @TableField(exist = false)
     private String storeName;

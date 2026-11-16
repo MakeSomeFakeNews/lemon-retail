@@ -20,6 +20,10 @@
         <a-descriptions-item :label="$t('pos.sale.listAmount')">{{ money(detail.listAmount) }}</a-descriptions-item>
         <a-descriptions-item :label="$t('pos.sale.amount')">{{ money(detail.amount) }}</a-descriptions-item>
         <a-descriptions-item :label="$t('pos.sale.orderDiscount')">{{ money(detail.orderDiscount) }} / {{ $t('pos.sale.roundOff') }} {{ money(detail.roundOff) }}</a-descriptions-item>
+        <a-descriptions-item v-if="detail.promotionId" :label="$t('pos.sale.promotion')">
+          {{ detail.promotionName }}<span v-if="Number(detail.promoAmount)"> −{{ money(detail.promoAmount) }}</span>
+        </a-descriptions-item>
+        <a-descriptions-item v-if="Number(detail.pointsEarned)" :label="$t('pos.sale.pointsEarned')">{{ qty(detail.pointsEarned) }}</a-descriptions-item>
         <a-descriptions-item :label="$t('pos.sale.payable')"><b>{{ money(detail.payableAmount) }}</b></a-descriptions-item>
         <a-descriptions-item :label="$t('pos.sale.paid')">{{ money(detail.paidAmount) }}</a-descriptions-item>
         <a-descriptions-item :label="$t('pos.sale.change')">{{ money(detail.changeAmount) }}</a-descriptions-item>
@@ -33,7 +37,7 @@
       <a-table row-key="id" size="small" :columns="itemColumns" :data-source="detail.items" :pagination="false" :scroll="{ x: 900 }" class="block">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'material'">
-            <div>{{ record.materialCode }} {{ record.materialName }}</div>
+            <div>{{ record.materialCode }} {{ record.materialName }} <a-tag v-if="record.gift" color="magenta">{{ $t('pos.sale.gift') }}</a-tag></div>
             <div class="sub-text">{{ record.spec }}</div>
           </template>
           <template v-else-if="column.key === 'qty'">{{ qty(record.inputQty) }} {{ record.unit }}</template>
@@ -41,7 +45,7 @@
             <DictTag type="pos_price_source" :value="record.priceSource" />
             <div v-if="record.specialName" class="sub-text">{{ record.specialName }}</div>
           </template>
-          <template v-else-if="['listPrice', 'price', 'salePrice', 'amount', 'orderShare', 'finalAmount'].includes(column.key)">{{ money(record[column.key]) }}</template>
+          <template v-else-if="['listPrice', 'price', 'salePrice', 'amount', 'promoShare', 'orderShare', 'finalAmount'].includes(column.key)">{{ money(record[column.key]) }}</template>
           <template v-else-if="column.key === 'returned'">{{ Number(record.returnedQty) ? qty(record.returnedQty) : '-' }}</template>
         </template>
       </a-table>
@@ -54,7 +58,10 @@
             <DictTag type="pos_payment_status" :value="record.status" />
             <div v-if="record.failReason" class="sub-text">{{ record.failReason }}</div>
           </template>
-          <template v-else-if="column.key === 'amount'">{{ money(record.amount) }}</template>
+          <template v-else-if="column.key === 'amount'">
+            {{ money(record.amount) }}
+            <div v-if="record.points != null" class="sub-text">{{ $t('pos.sale.pointsN', { n: qty(record.points) }) }}</div>
+          </template>
           <template v-else-if="column.key === 'tendered'">{{ record.tendered == null ? '-' : `${money(record.tendered)} / ${money(record.changeAmount)}` }}</template>
           <template v-else-if="column.key === 'action'">
             <a-button v-if="record.status === PaymentStatus.FAILED && record.amount < 0" type="link" size="small" @click="retry(record)">{{ $t('pos.sale.retryRefund') }}</a-button>
@@ -93,6 +100,7 @@ const itemColumns = computed(() => [
   { title: t('pos.sale.priceSource'), key: 'priceSource', width: 120 },
   { title: t('pos.sale.salePrice'), key: 'salePrice', width: 90, align: 'right' },
   { title: t('pos.sale.lineAmount'), key: 'amount', width: 100, align: 'right' },
+  { title: t('pos.sale.promoShare'), key: 'promoShare', width: 90, align: 'right' },
   { title: t('pos.sale.orderShare'), key: 'orderShare', width: 90, align: 'right' },
   { title: t('pos.sale.finalAmount'), key: 'finalAmount', width: 100, align: 'right' },
   { title: t('pos.sale.returned'), key: 'returned', width: 80, align: 'right' }

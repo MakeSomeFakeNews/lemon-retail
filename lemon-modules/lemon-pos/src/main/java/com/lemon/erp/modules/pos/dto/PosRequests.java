@@ -1,7 +1,11 @@
 package com.lemon.erp.modules.pos.dto;
 
+import com.lemon.erp.modules.pos.entity.PosMemberRule;
 import com.lemon.erp.modules.pos.model.PayMethod;
 import com.lemon.erp.modules.pos.model.PayProviderType;
+import com.lemon.erp.modules.pos.model.PromotionKind;
+import com.lemon.erp.modules.pos.model.PromotionRange;
+import com.lemon.erp.modules.pos.model.PromotionThreshold;
 import com.lemon.erp.modules.pos.model.SaleChannel;
 import com.lemon.erp.modules.pos.model.SpecialScope;
 import jakarta.validation.Valid;
@@ -206,5 +210,121 @@ public final class PosRequests {
                             @Size(max = 2000, message = "{pos.valid.secretTooLong}") String apiSecret,
                             @Size(max = 255, message = "{pos.valid.notifyUrlTooLong}") String notifyUrl,
                             @Size(max = 255, message = "{pos.valid.remarkTooLong}") String remark) {
+    }
+
+    // ---------------------------------------------------------------- 会员营销（M4）
+
+    /**
+     * 积分与储值规则：规则、不积分的商品 / 分类、充值赠送档位（整体保存）
+     */
+    public record MemberRuleSave(@NotNull(message = "{pos.valid.ruleRequired}") @Valid PosMemberRule rule,
+                                 @Size(max = 1000, message = "{pos.valid.linesTooMany}") List<@Valid @NotNull GoodsItem> excludes,
+                                 @Size(max = 50, message = "{pos.valid.linesTooMany}") List<@Valid @NotNull TopupTier> tiers) {
+    }
+
+    /** 商品范围：商品（materialId）或分类编码（categoryCode，含下级分类）二选一 */
+    public record GoodsItem(Long materialId, @Size(max = 32, message = "{pos.valid.codeFormat}") String categoryCode) {
+    }
+
+    /** 充值赠送档位：充值满 minAmount 送 bonusAmount */
+    public record TopupTier(@NotNull(message = "{pos.valid.amountRequired}")
+                            @DecimalMin(value = "0.01", message = "{pos.valid.amountPositive}")
+                            @Digits(integer = 14, fraction = 2, message = "{pos.valid.amountScale}") BigDecimal minAmount,
+                            @NotNull(message = "{pos.valid.amountRequired}")
+                            @DecimalMin(value = "0", message = "{pos.valid.amountNonNegative}")
+                            @Digits(integer = 14, fraction = 2, message = "{pos.valid.amountScale}") BigDecimal bonusAmount) {
+    }
+
+    /** 积分调整（pos:member:points）：points 增加为正、减少为负（整数） */
+    public record PointsAdjust(@NotNull(message = "{pos.valid.memberRequired}") Long memberId,
+                               @NotNull(message = "{pos.valid.pointsRequired}")
+                               @Digits(integer = 12, fraction = 0, message = "{pos.valid.pointsInteger}") BigDecimal points,
+                               @NotBlank(message = "{pos.valid.reasonRequired}") @Size(max = 255, message = "{pos.valid.remarkTooLong}") String reason) {
+    }
+
+    /**
+     * 积分清零（pos:member:points）：清除 before 之前获得、至今还没有用掉的积分（先获得的先用），before 为空时清除全部积分
+     */
+    public record PointsClear(LocalDate before,
+                              @NotBlank(message = "{pos.valid.reasonRequired}") @Size(max = 255, message = "{pos.valid.remarkTooLong}") String reason) {
+    }
+
+    /** 储值调整（pos:member:storedValue）：amount 增加为正、减少为负；门店为空时记总部 */
+    public record StoredValueAdjust(@NotNull(message = "{pos.valid.memberRequired}") Long memberId,
+                                    @NotNull(message = "{pos.valid.amountRequired}")
+                                    @Digits(integer = 14, fraction = 2, message = "{pos.valid.amountScale}") BigDecimal amount,
+                                    Long storeId,
+                                    @NotBlank(message = "{pos.valid.reasonRequired}") @Size(max = 255, message = "{pos.valid.remarkTooLong}") String reason) {
+    }
+
+    /**
+     * 收银台充值（pos:sale:topup）：付款方式同收银（不能用储值、积分），赠送金额为空时按档位，与档位不同时需要「后台充值」权限
+     */
+    public record Topup(@NotNull(message = "{pos.valid.terminalRequired}") Long terminalId,
+                        @NotNull(message = "{pos.valid.memberRequired}") Long memberId,
+                        @NotNull(message = "{pos.valid.amountRequired}")
+                        @DecimalMin(value = "0.01", message = "{pos.valid.amountPositive}")
+                        @Digits(integer = 14, fraction = 2, message = "{pos.valid.amountScale}") BigDecimal amount,
+                        @DecimalMin(value = "0", message = "{pos.valid.amountNonNegative}")
+                        @Digits(integer = 14, fraction = 2, message = "{pos.valid.amountScale}") BigDecimal bonusAmount,
+                        @NotEmpty(message = "{pos.valid.tendersRequired}") @Size(max = 10, message = "{pos.valid.tendersTooMany}") List<@Valid @NotNull Tender> tenders,
+                        @Size(max = 255, message = "{pos.valid.remarkTooLong}") String remark) {
+    }
+
+    /**
+     * 后台充值（pos:topup:add）：登记收款方式与结算账户（为空取门店默认结算账户），微信、支付宝为线下登记
+     */
+    public record AdminTopup(@NotNull(message = "{pos.valid.storeRequired}") Long storeId,
+                             @NotNull(message = "{pos.valid.memberRequired}") Long memberId,
+                             @NotNull(message = "{pos.valid.amountRequired}")
+                             @DecimalMin(value = "0.01", message = "{pos.valid.amountPositive}")
+                             @Digits(integer = 14, fraction = 2, message = "{pos.valid.amountScale}") BigDecimal amount,
+                             @DecimalMin(value = "0", message = "{pos.valid.amountNonNegative}")
+                             @Digits(integer = 14, fraction = 2, message = "{pos.valid.amountScale}") BigDecimal bonusAmount,
+                             @NotNull(message = "{pos.valid.payMethodRequired}") PayMethod payMethod,
+                             Long accountId,
+                             @Size(max = 64, message = "{pos.valid.refNoTooLong}") String refNo,
+                             @Size(max = 255, message = "{pos.valid.remarkTooLong}") String remark) {
+    }
+
+    /**
+     * 满减 / 满折 / 满赠活动
+     *
+     * @param threshold    门槛：满 X 元（金额）或 X 件（录入数量）
+     * @param reduceAmount 满减：减 Y 元
+     * @param discountRate 满折：折扣（%）
+     * @param stackable    每满叠加（满减、满赠）
+     * @param goods        参与商品（指定商品）/ 分类（指定分类）
+     * @param gifts        满赠的赠品
+     */
+    public record Promotion(@NotBlank(message = "{pos.valid.promotionNameRequired}") @Size(max = 64, message = "{pos.valid.nameTooLong}") String name,
+                            @NotNull(message = "{pos.valid.promotionKindRequired}") PromotionKind kind,
+                            PromotionThreshold thresholdType,
+                            @NotNull(message = "{pos.valid.thresholdRequired}")
+                            @DecimalMin(value = "0", inclusive = false, message = "{pos.valid.thresholdPositive}")
+                            @Digits(integer = 14, fraction = 4, message = "{pos.valid.qtyScale}") BigDecimal threshold,
+                            @DecimalMin(value = "0", inclusive = false, message = "{pos.valid.amountPositive}")
+                            @Digits(integer = 14, fraction = 2, message = "{pos.valid.amountScale}") BigDecimal reduceAmount,
+                            @DecimalMin(value = "1", message = "{pos.valid.discountRateRange}")
+                            @DecimalMax(value = "99.99", message = "{pos.valid.discountRateRange}") BigDecimal discountRate,
+                            Boolean stackable,
+                            PromotionRange goodsScope,
+                            Boolean excludeSpecial,
+                            Integer priority,
+                            @NotNull(message = "{pos.valid.beginTimeRequired}") LocalDateTime beginTime,
+                            @NotNull(message = "{pos.valid.endTimeRequired}") LocalDateTime endTime,
+                            SaleChannel channel,
+                            @NotNull(message = "{pos.valid.storeScopeRequired}") SpecialScope storeScope,
+                            List<Long> targetIds,
+                            Boolean memberOnly,
+                            @Size(max = 255, message = "{pos.valid.remarkTooLong}") String remark,
+                            @Size(max = 1000, message = "{pos.valid.linesTooMany}") List<@Valid @NotNull GoodsItem> goods,
+                            @Size(max = 20, message = "{pos.valid.linesTooMany}") List<@Valid @NotNull GiftItem> gifts) {
+    }
+
+    public record GiftItem(@NotNull(message = "{pos.valid.materialRequired}") Long materialId,
+                           @NotNull(message = "{pos.valid.qtyRequired}")
+                           @DecimalMin(value = "0", inclusive = false, message = "{pos.valid.qtyPositive}")
+                           @Digits(integer = 14, fraction = 4, message = "{pos.valid.qtyScale}") BigDecimal qty) {
     }
 }

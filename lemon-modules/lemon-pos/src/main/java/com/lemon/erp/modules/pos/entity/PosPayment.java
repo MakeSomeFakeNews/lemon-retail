@@ -24,6 +24,8 @@ public class PosPayment extends BaseEntity {
 
     private Long saleId;
 
+    private Long topupId;
+
     private Long storeId;
 
     private Long terminalId;
@@ -57,6 +59,8 @@ public class PosPayment extends BaseEntity {
     private Long origPaymentId;
 
     private BigDecimal refundedAmount;
+
+    private BigDecimal points;
 
     private String failReason;
 

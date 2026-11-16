@@ -5,9 +5,12 @@ import com.lemon.erp.common.enums.EnableStatus;
 import com.lemon.erp.common.exception.BizException;
 import com.lemon.erp.framework.tenant.TenantContext;
 import com.lemon.erp.framework.tenant.TenantProperties;
+import com.lemon.erp.framework.tenant.TenantQuotaLookup;
 import com.lemon.erp.modules.system.entity.SysTenant;
+import com.lemon.erp.modules.system.entity.SysTenantPackage;
 import com.lemon.erp.modules.system.entity.SysTenantPackageMenu;
 import com.lemon.erp.modules.system.mapper.SysTenantMapper;
+import com.lemon.erp.modules.system.mapper.SysTenantPackageMapper;
 import com.lemon.erp.modules.system.mapper.SysTenantPackageMenuMapper;
 import com.lemon.erp.modules.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
@@ -21,16 +24,17 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 租户的只读查询：登录确定租户、租户是否可用、当前租户的套餐与账号上限。
+ * 租户的只读查询：登录确定租户、租户是否可用、当前租户的套餐与账号上限、门店数量上限（{@link TenantQuotaLookup}）。
  * 供登录、权限加载、菜单、定时任务等使用（与租户管理 SysTenantService 分开，避免与 TokenService 循环依赖）
  */
 @Component
 @RequiredArgsConstructor
-public class SysTenantLookup {
+public class SysTenantLookup implements TenantQuotaLookup {
 
     private final TenantProperties properties;
     private final SysTenantMapper tenantMapper;
     private final SysTenantPackageMenuMapper packageMenuMapper;
+    private final SysTenantPackageMapper packageMapper;
     private final SysUserMapper userMapper;
 
     /** 是否开启 SaaS 模式 */
@@ -115,6 +119,18 @@ public class SysTenantLookup {
                 && userMapper.selectCount(Wrappers.emptyWrapper()) >= tenant.getAccountLimit()) {
             throw new BizException("system.error.tenantHasReachedAccountLimitContact", tenant.getAccountLimit());
         }
+    }
+
+
+    /** 当前租户套餐的门店数量上限，平台租户、未开启 SaaS 模式或套餐不限时为空 */
+    @Override
+    public Integer storeLimit() {
+        Long packageId = currentPackageId();
+        if (packageId == null) {
+            return null;
+        }
+        SysTenantPackage pkg = packageMapper.selectById(packageId);
+        return pkg == null ? null : pkg.getStoreLimit();
     }
 
 

@@ -359,6 +359,22 @@ export default {
   4470: 'Close Day', // 门店日结
   4471: 'Reopen Day', // 反日结
   4500: 'Edit Payment Provider', // 支付通道修改
+  456: 'Threshold Promotions', // 满减满赠
+  451: 'Points & Stored Value Rules', // 积分储值规则
+  454: 'Stored-value Top-ups', // 储值充值单
+  452: 'Points Ledger', // 积分流水
+  453: 'Stored-value Ledger', // 储值流水
+  455: 'Stored-value Settlement', // 储值跨店结算
+  4510: 'Top Up at POS', // 收银充值
+  4511: 'Redeem Points at POS', // 积分抵现
+  4520: 'Edit Points & Stored Value Rules', // 积分储值规则修改
+  4530: 'Adjust / Clear Points', // 积分调整 / 清零
+  4540: 'Adjust Stored Value', // 储值调整
+  4550: 'Admin Top-up', // 后台充值
+  4560: 'Create Promotion', // 满减满赠新增
+  4561: 'Edit Promotion', // 满减满赠修改
+  4562: 'Delete Promotion', // 满减满赠删除
+  4563: 'Start / End Promotion', // 满减满赠开始 / 结束
   20: 'Distribution', // 配送
   460: 'Store Requisitions', // 门店要货
   461: 'Delivery & Receiving', // 配送与收货
@@ -411,4 +427,27 @@ export default {
   4320: 'Ship & Process Orders', // 订单发货与处理
   4321: 'View Receiver Info', // 查看收货信息
   4330: 'Handle After-sales', // 售后处理
+  // 连锁经营
+  21: 'Chain Operations', // 连锁经营
+  480: 'Franchise', // 加盟管理
+  481: 'Business Analysis', // 经营分析
+  482: 'Replenishment', // 补货
+  483: 'Franchisee Accounts', // 加盟商账户
+  484: 'Franchise Statements', // 加盟对账单
+  485: 'Deposits', // 保证金
+  486: 'Franchise Settlement Report', // 加盟结算报表
+  487: 'Store P&L', // 门店损益
+  488: 'Expense Allocation', // 费用分摊
+  489: 'Store Replenishment', // 门店补货建议
+  4830: 'Edit Franchisee Account', // 加盟商账户设置
+  4831: 'Franchisee Top-up', // 加盟商充值
+  4840: 'Generate Statement', // 生成对账单
+  4841: 'Confirm Statement', // 确认对账单
+  4842: 'Delete Statement', // 删除对账单
+  4850: 'Record Deposit', // 保证金登记
+  4851: 'Delete Deposit', // 保证金删除
+  4880: 'Allocation Settings', // 分摊设置
+  4881: 'Run Allocation', // 运行分摊
+  4890: 'Create Requisition', // 生成要货单
+  4891: 'Replenishment Settings', // 补货参数设置
 }

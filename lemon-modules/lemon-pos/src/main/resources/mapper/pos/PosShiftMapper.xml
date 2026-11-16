@@ -42,7 +42,7 @@
                SUM(p.amount) AS amount, COUNT(*) AS pay_count
         FROM pos_payment p
         LEFT JOIN fin_account a ON a.id = p.account_id
-        WHERE p.shift_id = #{shiftId} AND p.status = 'SUCCESS' AND p.sale_id IS NOT NULL
+        WHERE p.shift_id = #{shiftId} AND p.status = 'SUCCESS' AND (p.sale_id IS NOT NULL OR p.topup_id IS NOT NULL)
         GROUP BY p.pay_method, p.account_id, a.name
         ORDER BY p.pay_method
     </select>
@@ -60,7 +60,7 @@
     <select id="countUnsettled" resultType="int">
         SELECT COUNT(*) FROM pos_payment
         WHERE shift_id = #{shiftId}
-          AND ((status = 'SUCCESS' AND sale_id IS NULL AND amount &gt; 0) OR (amount &lt; 0 AND status = 'PENDING'))
+          AND ((status = 'SUCCESS' AND sale_id IS NULL AND topup_id IS NULL AND amount &gt; 0) OR (amount &lt; 0 AND status = 'PENDING'))
     </select>
 
     <select id="countOpenUntil" resultType="int">

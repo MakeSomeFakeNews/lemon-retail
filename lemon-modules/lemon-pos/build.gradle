@@ -2,7 +2,7 @@ plugins {
     id 'lemon.java-conventions'
 }
 
-description = '零售前台：收银台、班次交班、POS 销售 / 退货 / 作废、聚合支付（可插拔通道）、会员与会员等级、特价活动、门店日结、收银报表'
+description = '零售前台：收银台、班次交班、POS 销售 / 退货 / 作废、聚合支付（可插拔通道）、会员与会员等级、积分、储值与跨店结算、特价活动、满减 / 满折 / 满赠、门店日结、收银报表'
 
 dependencies {
     // POS 销售经 wms 出入库（实时成本），取价用 scm 的门店价格方案与价格控制，日结经 fin 生成其他收入 / 费用支出单，门店信息经 StoreLookup

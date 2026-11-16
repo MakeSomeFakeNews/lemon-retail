@@ -59,6 +59,12 @@ public class PosSale extends BaseEntity {
 
     private BigDecimal paidAmount;
 
+    private Long promotionId;
+
+    private BigDecimal promoAmount;
+
+    private BigDecimal pointsEarned;
+
     private BigDecimal changeAmount;
 
     private Long wmsDocId;
@@ -108,6 +114,9 @@ public class PosSale extends BaseEntity {
 
     @TableField(exist = false)
     private String voidByName;
+
+    @TableField(exist = false)
+    private String promotionName;
 
     /** 支付方式摘要（列表），如 现金、微信 */
     @TableField(exist = false)

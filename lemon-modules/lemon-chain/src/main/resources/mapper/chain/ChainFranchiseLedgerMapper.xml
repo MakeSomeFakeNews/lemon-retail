@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lemon.erp.modules.chain.mapper.ChainFranchiseLedgerMapper">
+
+    <select id="selectPageList" resultType="com.lemon.erp.modules.chain.entity.ChainFranchiseLedger">
+        SELECT l.*, s.name AS store_name
+        FROM chain_franchise_ledger l
+        LEFT JOIN store_info s ON s.id = l.store_id
+        <where>
+            <if test="storeId != null">l.store_id = #{storeId}</if>
+            <if test="begin != null">AND l.biz_date &gt;= #{begin}</if>
+            <if test="end != null">AND l.biz_date &lt;= #{end}</if>
+            <if test="keyword != null and keyword != ''">
+                AND (l.transfer_no LIKE CONCAT('%', #{keyword}, '%') OR l.source_no LIKE CONCAT('%', #{keyword}, '%')
+                     OR l.bill_no LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="storeIds != null">
+                AND l.store_id IN <foreach collection="storeIds" item="sid" open="(" separator="," close=")">#{sid}</foreach>
+            </if>
+        </where>
+        ORDER BY l.biz_date DESC, l.id DESC
+    </select>
+
+    <!-- 调拨单明细：只读关联仓库模块的出入库单明细 -->
+    <select id="selectTransferLines" resultType="com.lemon.erp.modules.chain.dto.ChainViews$TransferLine">
+        SELECT i.material_id, i.qty, i.transfer_amount
+        FROM wms_stock_doc_item i
+        WHERE i.doc_id = #{transferId}
+        ORDER BY i.id
+    </select>
+
+</mapper>

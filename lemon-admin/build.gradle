@@ -19,6 +19,7 @@ dependencies {
     implementation project(':lemon-modules:lemon-bi')
     implementation project(':lemon-modules:lemon-ai')
     implementation project(':lemon-modules:lemon-channel')
+    implementation project(':lemon-modules:lemon-chain')
     runtimeOnly libs.mysql.connector
 
     testImplementation libs.spring.boot.starter.webmvc.test

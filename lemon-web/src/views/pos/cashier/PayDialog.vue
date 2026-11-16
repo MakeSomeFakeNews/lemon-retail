@@ -35,9 +35,16 @@
 
     <a-form layout="vertical" class="tender-form">
       <a-row :gutter="12">
+        <a-col v-if="method === PayMethod.POINTS" :span="12">
+          <a-form-item :label="$t('pos.pay.points')" :extra="$t('pos.pay.pointsTip', { have: qty(member?.points), rate: rule?.redeemPoints, max: money(maxRedeem) })">
+            <a-input-number ref="amountRef" v-model:value="points" :min="0" :precision="0" class="full" size="large" @change="onPoints" @press-enter="addTender" />
+          </a-form-item>
+        </a-col>
         <a-col :span="method === PayMethod.CASH ? 24 : 12">
-          <a-form-item :label="method === PayMethod.CASH ? $t('pos.pay.tendered') : $t('pos.pay.amount')">
-            <a-input-number ref="amountRef" v-model:value="amount" :min="0" :precision="2" class="full" size="large" @press-enter="addTender" />
+          <a-form-item :label="method === PayMethod.CASH ? $t('pos.pay.tendered') : $t('pos.pay.amount')"
+                       :extra="method === PayMethod.STORED_VALUE ? $t('pos.pay.balanceTip', { balance: money(member?.balance) }) : ''">
+            <a-input-number :ref="method === PayMethod.POINTS ? undefined : (el) => (amountRef = el)" v-model:value="amount" :min="0" :precision="2" class="full" size="large"
+                            :disabled="method === PayMethod.POINTS" @press-enter="addTender" />
           </a-form-item>
         </a-col>
         <a-col v-if="isElectronic" :span="12">
@@ -77,7 +84,7 @@
         <template v-if="column.key === 'method'">{{ dictLabel('pos_pay_method', record.payMethod) }}</template>
         <template v-else-if="column.key === 'amount'">{{ money(record.amount) }}</template>
         <template v-else-if="column.key === 'info'">
-          <span class="sub-text">{{ record.outTradeNo || record.refNo || '' }}</span>
+          <span class="sub-text">{{ record.points ? $t('pos.sale.pointsN', { n: record.points }) : record.outTradeNo || record.refNo || '' }}</span>
         </template>
         <template v-else-if="column.key === 'action'">
           <a-button type="text" danger size="small" @click="removeTender(index)"><DeleteOutlined /></a-button>
@@ -93,15 +100,18 @@ import { useI18n } from 'vue-i18n'
 import { Modal, message } from 'ant-design-vue'
 import { DeleteOutlined } from '@ant-design/icons-vue'
 import { cancelPay, checkoutSale, confirmPay, createPay, queryPay } from '@/api/pos'
-import { money, round2 } from '@/utils/number'
+import { money, qty, round2 } from '@/utils/number'
 import { PayMethod, PayProviderType, PaymentStatus } from '@/constants/enums'
+import { maxRedeemAmount } from '../marketing'
 import { dictLabel, newTradeNo } from '../pos'
 
 /**
  * 结算：多种支付方式组合。现金录入顾客付款（多于现金应收的部分找零）；微信、支付宝先经聚合支付收款（付款码扫顾客手机或生成二维码），
- * 成功后才加入付款；银行卡登记凭证号。付足后结算，已收款的聚合支付在取消结算时提示撤销（原路退回）
+ * 成功后才加入付款；银行卡登记凭证号。储值、积分抵现需要识别会员：储值不超过余额（收银员向顾客确认后加入），
+ * 积分抵现按「多少积分抵 1 元」折算（积分须为整数），不超过应收的抵现上限和会员积分（需要 pos:sale:redeem）。
+ * 付足后结算，已收款的聚合支付在取消结算时提示撤销（原路退回）
  */
-const props = defineProps({ terminalId: Number, ctx: Object })
+const props = defineProps({ terminalId: Number, ctx: Object, member: Object })
 const emit = defineEmits(['paid', 'closed'])
 const { t } = useI18n()
 
@@ -119,7 +129,23 @@ const pending = ref(null)
 const offlineRef = ref('')
 const amountRef = ref()
 
-const methods = computed(() => props.ctx?.payMethods || [PayMethod.CASH])
+const points = ref()
+const rule = computed(() => props.ctx?.memberRule)
+const canRedeem = computed(() => (props.ctx?.perms || []).includes('pos:sale:redeem'))
+/** 储值、积分抵现只在识别了会员时可选，积分抵现还需要权限 */
+const methods = computed(() => (props.ctx?.payMethods || [PayMethod.CASH]).filter((m) => {
+  if (m === PayMethod.STORED_VALUE) return !!props.member
+  if (m === PayMethod.POINTS) return !!props.member && canRedeem.value
+  return true
+}))
+const usedPoints = computed(() => tenders.value.filter((x) => x.payMethod === PayMethod.POINTS).reduce((s, x) => s + Number(x.points || 0), 0))
+const usedBalance = computed(() => tenders.value.filter((x) => x.payMethod === PayMethod.STORED_VALUE).reduce((s, x) => s + Number(x.amount), 0))
+const maxRedeem = computed(() => {
+  const usedAmount = tenders.value.filter((x) => x.payMethod === PayMethod.POINTS).reduce((s, x) => s + Number(x.amount), 0)
+  const byRule = maxRedeemAmount(rule.value, payable.value, Number(props.member?.points || 0) - usedPoints.value, remaining.value)
+  const byRate = rule.value ? Math.floor(Number(payable.value) * Number(rule.value.redeemMaxRate) + 1e-6) / 100 - usedAmount : 0
+  return Math.max(0, round2(Math.min(byRule, byRate)))
+})
 const isElectronic = computed(() => method.value === PayMethod.WECHAT || method.value === PayMethod.ALIPAY)
 const nonCash = computed(() => tenders.value.filter((x) => x.payMethod !== PayMethod.CASH).reduce((s, x) => s + Number(x.amount), 0))
 const cash = computed(() => tenders.value.filter((x) => x.payMethod === PayMethod.CASH).reduce((s, x) => s + Number(x.amount), 0))
@@ -146,9 +172,24 @@ function open(due, payload) {
 function selectMethod(m) {
   method.value = m
   amount.value = remaining.value > 0 ? remaining.value : undefined
+  points.value = undefined
+  if (m === PayMethod.STORED_VALUE) {
+    amount.value = Math.max(0, round2(Math.min(remaining.value, Number(props.member?.balance || 0) - usedBalance.value))) || undefined
+  } else if (m === PayMethod.POINTS) {
+    // 默认可抵的最大积分（按整数积分折算）
+    const rate = Number(rule.value?.redeemPoints || 1)
+    points.value = Math.floor(maxRedeem.value * rate + 1e-6) || undefined
+    onPoints()
+  }
   authCode.value = ''
   refNo.value = ''
   nextTick(() => amountRef.value?.focus())
+}
+
+/** 积分 → 抵现金额（积分 ÷ 每元积分，保留 2 位；不能整除到分的积分无效） */
+function onPoints() {
+  const rate = Number(rule.value?.redeemPoints || 1)
+  amount.value = points.value ? round2(Number(points.value) / rate) : undefined
 }
 
 async function addTender() {
@@ -156,6 +197,36 @@ async function addTender() {
   if (value <= 0 || paying.value) return
   if (method.value !== PayMethod.CASH && value > remaining.value + 0.004) {
     message.warning(t('pos.pay.overRemaining'))
+    return
+  }
+  if (method.value === PayMethod.STORED_VALUE) {
+    if (value > Number(props.member?.balance || 0) - usedBalance.value + 0.004) {
+      message.warning(t('pos.pay.balanceInsufficient'))
+      return
+    }
+    // 收银员向顾客确认使用储值
+    Modal.confirm({
+      title: t('pos.pay.storedValueConfirm', { amount: money(value) }),
+      content: t('pos.pay.storedValueConfirmContent', { name: props.member?.name || props.member?.memberCode, balance: money(props.member?.balance) }),
+      onOk: () => {
+        tenders.value.push({ key: `s${Date.now()}`, payMethod: PayMethod.STORED_VALUE, amount: value })
+        selectMethod(PayMethod.CASH)
+      }
+    })
+    return
+  }
+  if (method.value === PayMethod.POINTS) {
+    const rate = Number(rule.value?.redeemPoints || 1)
+    if (Math.abs(value * rate - Number(points.value)) > 1e-6) {
+      message.warning(t('pos.pay.pointsNotInteger', { rate }))
+      return
+    }
+    if (value > maxRedeem.value + 0.004) {
+      message.warning(t('pos.pay.redeemExceeded', { max: money(maxRedeem.value) }))
+      return
+    }
+    tenders.value.push({ key: `p${Date.now()}`, payMethod: PayMethod.POINTS, amount: value, points: Number(points.value) })
+    selectMethod(PayMethod.CASH)
     return
   }
   if (method.value === PayMethod.CASH) {

@@ -28,7 +28,10 @@ export const SOURCE_DOCS = {
   },
   [BillSource.OFFSET]: { perm: 'fin:offset:list', path: '/fin/offset' },
   // 门店日结：其他收入单 / 费用支出单的来源为日结记录
-  [BillSource.POS_DAILY_CLOSE]: { perm: 'pos:dailyClose:list', path: '/pos/daily-close' }
+  [BillSource.POS_DAILY_CLOSE]: { perm: 'pos:dailyClose:list', path: '/pos/daily-close' },
+  // 加盟配送 / 加盟退货：加盟应收的来源为调拨单（来源单号为配送单 / 退仓单号）
+  [BillSource.FRANCHISE_DELIVERY]: { perm: 'wms:transfer:list', path: '/wms/transfer' },
+  [BillSource.FRANCHISE_RETURN]: { perm: 'wms:transfer:list', path: '/wms/transfer' }
 }
 
 const resolve = (v, doc) => (typeof v === 'function' ? v(doc) : v)
