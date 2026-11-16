@@ -30,7 +30,6 @@ export const AUX_ITEMS = [
   { value: 'DEPT', label: t('fin.finUtil.aux.dept'), key: 'deptId', name: 'deptName' },
   { value: 'CUSTOMER', label: t('fin.finUtil.aux.customer'), key: 'customerId', name: 'customerName' },
   { value: 'SUPPLIER', label: t('fin.finUtil.aux.supplier'), key: 'supplierId', name: 'supplierName' },
-  { value: 'PROJECT', label: t('fin.finUtil.aux.project'), key: 'projectId', name: 'projectName' },
   { value: 'MATERIAL', label: t('fin.finUtil.aux.material'), key: 'materialId', name: 'materialName' }
 ]
 
@@ -82,9 +81,6 @@ export function moneyUpper(n) {
 export const UNDELETABLE_SOURCES = [
   VoucherSource.ADVANCE,
   VoucherSource.BAD_DEBT,
-  VoucherSource.CLAIM,
-  VoucherSource.LOAN,
-  VoucherSource.NOTE,
   VoucherSource.TRANSFER,
   VoucherSource.INCOME_EXPENSE,
   VoucherSource.NETTING
@@ -119,7 +115,7 @@ function offsetRed(bills, remainingOf) {
 
 /**
  * 收付款自动核销：先用红字单据（退货、冲账）冲抵（冲抵总额不超过勾选的蓝字欠款，见 offsetRed），再按单据日期从早到晚
- * （同日按到期日）把目标金额分配到蓝字单据，早的欠款先结清。收款单 / 付款单、票据收票背书共用。
+ * （同日按到期日）把目标金额分配到蓝字单据，早的欠款先结清。收款单 / 付款单共用。
  *
  * @param {Array}    bills       参与分配的单据（已勾选的）
  * @param {number}   target      本次收付款金额

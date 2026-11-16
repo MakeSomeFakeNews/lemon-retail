@@ -24,6 +24,6 @@ public interface FinStockAgeMapper {
     List<FinAnalysis.StockInflow> selectInflows(@Param("asOf") LocalDate asOf, @Param("warehouseId") Long warehouseId,
                                             @Param("materialIds") Collection<Long> materialIds);
 
-    /** 物料截至期间最近一次核算的单价，没有时取参考成本价：[{materialId, unitCost}] */
-    List<FinAnalysis.UnitCost> selectUnitCosts(@Param("period") int period, @Param("materialIds") Collection<Long> materialIds);
+    /** 物料的实时移动加权平均单价，没有时取参考成本价：[{materialId, unitCost}] */
+    List<FinAnalysis.UnitCost> selectUnitCosts(@Param("materialIds") Collection<Long> materialIds);
 }

@@ -18,15 +18,7 @@ public interface BiOlapMapper {
 
     List<Map<String, Object>> pivotInventory(@Param("q") PivotQuery query);
 
-    List<Map<String, Object>> pivotProduction(@Param("q") PivotQuery query);
-
     List<Map<String, Object>> pivotFinance(@Param("q") PivotQuery query);
-
-    List<Map<String, Object>> pivotHr(@Param("q") PivotQuery query);
-
-    List<Map<String, Object>> pivotCrm(@Param("q") PivotQuery query);
-
-    List<Map<String, Object>> pivotProject(@Param("q") PivotQuery query);
 
     /**
      * @param source customer、supplier、user、material、warehouse、dept、account

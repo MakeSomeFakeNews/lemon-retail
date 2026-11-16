@@ -38,11 +38,4 @@ public interface ScmOrderMapper extends BaseMapper<ScmOrder> {
     List<Map<String, Object>> selectOpenQty(@Param("kind") OrderKind kind, @Param("statuses") Collection<OrderStatus> statuses,
                                             @Param("materialIds") Collection<Long> materialIds);
 
-    /**
-     * 供应商门户：本供应商已审核及以后的采购订单
-     *
-     * @param pending 只看未确认的
-     */
-    IPage<ScmOrder> selectPortalPage(IPage<ScmOrder> page, @Param("supplierId") Long supplierId, @Param("pending") Boolean pending,
-                                     @Param("keyword") String keyword);
 }

@@ -48,8 +48,8 @@ import static com.lemon.erp.modules.scm.model.ScmConstants.ORDER_RULE;
  * 在流程中心发布了对应的审批流程（OrderKind.processKey）时，审核改为发起审批，审批通过后自动变为已审核。
  * 数据权限按制单人部门 + 制单人过滤。
  * <p>
- * 本类负责编排和事务边界：请求转换由 {@link ScmOrderAssembler}，合同价、促销返利、限价由 {@link ScmOrderPricingService}，
- * 信用额度由 {@link ScmOrderCreditChecker}，门户通知由 {@link ScmOrderNotifier} 完成
+ * 本类负责编排和事务边界：请求转换由 {@link ScmOrderAssembler}，促销、限价由 {@link ScmOrderPricingService}，
+ * 信用额度由 {@link ScmOrderCreditChecker} 完成
  */
 @Service
 @RequiredArgsConstructor
@@ -72,7 +72,6 @@ public class ScmOrderService {
     private final ScmOrderAssembler assembler;
     private final ScmOrderPricingService pricing;
     private final ScmOrderCreditChecker creditChecker;
-    private final ScmOrderNotifier notifier;
     private final ScmOrderCloseAdjuster closeAdjuster;
     private final ScmTaxRates taxRates;
 
@@ -147,12 +146,11 @@ public class ScmOrderService {
     private ScmOrder insertDraft(OrderKind kind, OrderRequest req, OrderSource source, boolean promote, boolean checkPrice,
                                  Long salesmanId) {
         if (source == OrderSource.MANUAL || source == OrderSource.DIRECT) {
-            // 手工录入、直接开单时校验发票类型；由报价单等生成时沿用来源单据保存时校验过的值
+            // 手工录入、直接开单时校验发票类型
             taxRates.checkInvoiceKind(req.invoiceKind(), null);
         }
         List<ScmOrderItem> items = assembler.toItems(kind, req);
-        pricing.applyContract(kind, req, items, null);
-        ScmPromotionService.Applied applied = promote ? pricing.promote(req, items, null) : null;
+        ScmPromotionService.Applied applied = promote ? pricing.promote(req, items) : null;
         if (applied != null) {
             items = applied.items();
         }
@@ -174,7 +172,6 @@ public class ScmOrderService {
         }
         if (applied != null) {
             order.setDiscountAmount(applied.discountAmount());
-            order.setRebateAmount(ScmOrderPricingService.rebateOf(req));
         }
         order.setWholeDiscount(wholeDiscount);
         orderMapper.insert(order);
@@ -198,8 +195,7 @@ public class ScmOrderService {
         ScmOrder old = getDraft(kind, id);
         taxRates.checkInvoiceKind(req.invoiceKind(), old.getInvoiceKind());
         List<ScmOrderItem> items = assembler.toItems(kind, req);
-        pricing.applyContract(kind, req, items, id);
-        ScmPromotionService.Applied applied = kind == OrderKind.SALES ? pricing.promote(req, items, id) : null;
+        ScmPromotionService.Applied applied = kind == OrderKind.SALES ? pricing.promote(req, items) : null;
         if (applied != null) {
             items = applied.items();
         }
@@ -218,10 +214,8 @@ public class ScmOrderService {
                 .set(ScmOrder::getTaxAmount, order.getTaxAmount())
                 .set(ScmOrder::getCurrency, order.getCurrency())
                 .set(ScmOrder::getExchangeRate, order.getExchangeRate())
-                .set(ScmOrder::getContractId, order.getContractId())
                 .set(ScmOrder::getInvoiceKind, order.getInvoiceKind())
                 .set(applied != null, ScmOrder::getDiscountAmount, applied == null ? null : applied.discountAmount())
-                .set(applied != null, ScmOrder::getRebateAmount, ScmOrderPricingService.rebateOf(req))
                 .set(ScmOrder::getWholeDiscount, wholeDiscount)
                 .set(ScmOrder::getUpdateTime, LocalDateTime.now())
                 .eq(ScmOrder::getId, id)
@@ -271,17 +265,12 @@ public class ScmOrderService {
         if (kind == OrderKind.SALES) {
             creditChecker.checkOnApprove(order);
         }
-        pricing.checkContractOnApprove(order,
-                () -> itemMapper.selectList(Wrappers.<ScmOrderItem>lambdaQuery().eq(ScmOrderItem::getOrderId, id)));
         // 先改状态再发起：流程没有审批节点时会在发起过程中直接结束并回调 onFlowFinished
         return approvalSupport.submit(flowOf(kind), id, Map.of(
                         "amount", order.getTotalAmount().doubleValue(),
                         "wholeDiscount", order.getWholeDiscount() == null ? 0d : order.getWholeDiscount().doubleValue(),
                         "orderNo", order.getOrderNo()),
-                () -> {
-                    changeStatus(id, OrderStatus.DRAFT, OrderStatus.APPROVED, true);
-                    notifier.approved(order);
-                },
+                () -> changeStatus(id, OrderStatus.DRAFT, OrderStatus.APPROVED, true),
                 () -> changeStatus(id, OrderStatus.DRAFT, OrderStatus.APPROVING, false),
                 instanceId -> orderMapper.update(Wrappers.<ScmOrder>lambdaUpdate()
                         .set(ScmOrder::getFlowInstanceId, instanceId).eq(ScmOrder::getId, id)));
@@ -347,14 +336,10 @@ public class ScmOrderService {
         // 只处理仍在审批中的订单（已撤回、删除的忽略），不抛异常，避免回滚审批操作
         flowOf(kind).onFinished(e, (id, approved) -> {
             if (approved) {
-                boolean updated = StatusTransitions.tryChange(orderMapper, ScmOrder::getId, id, ScmOrder::getStatus,
+                StatusTransitions.tryChange(orderMapper, ScmOrder::getId, id, ScmOrder::getStatus,
                         OrderStatus.APPROVING, OrderStatus.APPROVED, w -> w
                                 .set(ScmOrder::getApproveBy, SecurityUtils.getUserIdOrNull())
                                 .set(ScmOrder::getApproveTime, LocalDateTime.now()));
-                if (updated) {
-                    ScmOrder order = orderMapper.selectById(id);
-                    notifier.approved(order);
-                }
             } else {
                 StatusTransitions.tryChange(orderMapper, ScmOrder::getId, id, ScmOrder::getStatus, OrderStatus.APPROVING, OrderStatus.DRAFT, null);
             }

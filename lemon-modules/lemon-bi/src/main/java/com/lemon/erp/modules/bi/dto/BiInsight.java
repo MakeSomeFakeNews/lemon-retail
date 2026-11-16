@@ -69,14 +69,6 @@ public final class BiInsight {
         private BigDecimal arOverdue;
         private BigDecimal apBalance;
         private BigDecimal openSalesAmount;
-        private Long openWorkOrders;
-        private Long lateWorkOrders;
-        private Long activeProjects;
-        private BigDecimal projectProgress;
-        private Long headcount;
-        private BigDecimal pipeline;
-        private Long openTickets;
-        private Long overdueTickets;
     }
 
     /** 排行：客户（金额、毛利）、物料（数量、金额） */
@@ -106,7 +98,7 @@ public final class BiInsight {
      * @param costWarning 本月账务利润不完整的提示（本月有收入但尚未成本核算或成本结转凭证未记账），没有时为空
      */
     public record Cockpit(CockpitKpi kpi, List<CockpitTrend> trend, List<TopItem> topCustomers, List<TopItem> topMaterials,
-                          List<InventoryCategory> inventory, LocalDateTime lastSync, String costWarning) {
+                          List<InventoryCategory> inventory, LocalDateTime lastSync) {
     }
 
     // ---------------------------------------------------------------- 决策
@@ -187,11 +179,7 @@ public final class BiInsight {
         private Long purchase;
         private Long inventory;
         private Long snapshots;
-        private Long production;
         private Long finance;
-        private Long hr;
-        private Long crm;
-        private Long project;
         private Boolean running;
         private LocalDateTime lastSuccess;
     }
@@ -208,7 +196,6 @@ public final class BiInsight {
     }
 
     /** 投屏链接的公开信息 */
-    public record ShareInfo(String name, String company, List<ScreenOption> screens, Integer intervalSeconds,
-                            Long workCenterId, String workCenterName) {
+    public record ShareInfo(String name, String company, List<ScreenOption> screens, Integer intervalSeconds) {
     }
 }

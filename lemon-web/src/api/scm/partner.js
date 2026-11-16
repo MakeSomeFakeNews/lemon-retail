@@ -24,9 +24,6 @@ export const partnersByIds = (type, idList) => byIds[type](idList)
 /** 承运商下拉（只列出物流公司，没有标记时为全部供应商）：{ marked, options: [{ id, code, name, contact, phone, address }] } */
 export const carrierOptions = (keyword, page) => request.get('/scm/supplier/carrier-options', { params: { keyword, ...page } })
 
-/** 供应商绩效 */
-export const supplierKpi = (params) => request.get('/scm/supplier/kpi', { params })
-
 /** 供货价格 */
 export const pagePrice = (params) => request.get('/scm/supplier-price', { params })
 export const supplierPrices = (supplierId) => request.get(`/scm/supplier-price/supplier/${supplierId}`)
@@ -34,14 +31,8 @@ export const addPrice = (data) => request.post('/scm/supplier-price', data)
 export const updatePrice = (id, data) => request.put(`/scm/supplier-price/${id}`, data)
 export const deletePrice = (id) => request.delete(`/scm/supplier-price/${ids(id)}`)
 
-/** 供应商评估 */
-export const pageEval = (params) => request.get('/scm/supplier-eval', { params })
-export const addEval = (data) => request.post('/scm/supplier-eval', data)
-export const deleteEval = (id) => request.delete(`/scm/supplier-eval/${ids(id)}`)
 /** Excel 导入：{ rows: [{ rowNum, data }] } */
 export const importPartner = (type, data) => request.post(`/scm/${type}/import`, data)
-/** 客户信用占用：{ creditLimit, receivable, openOrders, available } */
-export const customerCredit = (id) => request.get(`/scm/customer/${id}/credit`)
 /** 供货价格的阶梯价：[{ minQty, price }] */
 export const priceTiers = (id) => request.get(`/scm/supplier-price/${id}/tiers`)
 /** 采购入库价格历史：{ materialId, supplierId } */

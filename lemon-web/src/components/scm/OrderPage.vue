@@ -33,9 +33,6 @@
           <template #icon><PlusOutlined /></template>{{ $t('scm.order.addOrder', { kind: conf.label }) }}
         </a-button>
         <AiExtractButton :target="`scm.${kind}-order`" :perm="`scm:${kind}:add`" :title="conf.label" @result="ai.apply" />
-        <a-button v-if="kind === 'sales'" v-perm="'scm:sales:add'" @click="importOpen = true">
-          <template #icon><ImportOutlined /></template>{{ $t('scm.order.importExternal') }}
-        </a-button>
         <span v-perm="`scm:${kind}:remove`">
           <a-popconfirm
             :title="$t('scm.order.confirmDeleteDrafts', { n: selectedKeys.length })"
@@ -64,12 +61,8 @@
           <template v-if="column.key === 'orderNo'">
             <a @click="openDetail(record)">{{ record.orderNo }}</a>
             <a-tag v-if="record.version > 1" color="blue" :bordered="false" class="source-tag">V{{ record.version }}</a-tag>
-            <a-tag v-if="record.source === OrderSource.MRP" color="purple" :bordered="false" class="source-tag">MRP</a-tag>
-            <a-tag v-else-if="record.source === OrderSource.CONSIGN" color="cyan" :bordered="false" class="source-tag">{{ $t('scm.order.sourceConsign') }}</a-tag>
-            <a-tag v-else-if="record.source === OrderSource.DEALER" color="purple" :bordered="false" class="source-tag">{{ $t('scm.order.sourceDealer') }}</a-tag>
-            <a-tag v-else-if="record.source === OrderSource.IMPORT" color="lime" :bordered="false" class="source-tag">{{ $t('scm.order.sourceImport') }}</a-tag>
+            <a-tag v-if="record.source === OrderSource.REORDER" color="lime" :bordered="false" class="source-tag">{{ $t('scm.order.sourceReorder') }}</a-tag>
             <a-tag v-else-if="record.source === OrderSource.DIRECT" color="blue" :bordered="false" class="source-tag">{{ $t('scm.order.sourceDirect') }}</a-tag>
-            <div v-if="record.externalNo" class="sub-text">{{ $t('scm.order.externalNoValue', { no: record.externalNo }) }}</div>
           </template>
           <template v-else-if="column.key === 'partner'">
             <div>{{ record.partnerName }}</div>
@@ -99,15 +92,6 @@
     </a-card>
 
     <OrderForm ref="form" :kind="kind" :ai="ai" @success="onSaved" />
-    <ImportModal
-      v-if="kind === 'sales'"
-      v-model:open="importOpen"
-      :title="$t('scm.order.externalOrder')"
-      :columns="importColumns"
-      :importer="importOrders"
-      :sample="{ externalNo: 'TB20261015001', customerCode: 'C001', orderDate: '2026-10-15', materialCode: 'M0001', qty: 2, price: 99 }"
-      @success="search"
-    />
     <OrderDetail
       ref="detailRef"
       v-model:open="detailOpen"
@@ -128,7 +112,6 @@ import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { DeleteOutlined, ExportOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import DictTag from '@/components/DictTag.vue'
-import ImportModal from '@/components/ImportModal.vue'
 import SearchForm from '@/components/SearchForm.vue'
 import TableToolbar from '@/components/TableToolbar.vue'
 import OrderDetail from './OrderDetail.vue'
@@ -138,7 +121,6 @@ import TradeDocForm from './TradeDocForm.vue'
 import AiExtractButton from '@/components/ai/AiExtractButton.vue'
 import { useAiPrefill } from '@/composables/useAiPrefill'
 import { deleteOrder, pageOrder } from '@/api/scm/order'
-import { importSalesOrders } from '@/api/scm/dealer'
 import { useColumns } from '@/composables/useColumns'
 import TableActions from '@/components/common/TableActions.vue'
 import { actionColumn } from '@/components/common/tableActions'
@@ -160,30 +142,6 @@ const props = defineProps({
 const { t } = useI18n()
 const conf = ORDER_KINDS[props.kind]
 
-// 外部订单导入（电商 / 门店）：同一外部单号的多行为一张订单，单价为空按价目表，已导入的外部单号跳过
-const importOpen = ref(false)
-const importColumns = [
-  { title: t('scm.order.externalNo'), key: 'externalNo', required: true },
-  { title: t('scm.order.customerCode'), key: 'customerCode', required: true },
-  { title: t('scm.order.placedDate'), key: 'orderDate', type: 'date', required: true },
-  { title: t('scm.order.deliveryDate'), key: 'deliveryDate', type: 'date' },
-  { title: t('scm.order.materialCode'), key: 'materialCode', required: true },
-  { title: t('common.field.quantity'), key: 'qty', type: 'number', required: true },
-  { title: t('scm.order.taxPrice'), key: 'price', type: 'number' },
-  { title: t('common.field.remark'), key: 'remark' },
-  { title: t('scm.order.importWholeDiscount'), key: 'wholeDiscount', type: 'number' }
-]
-async function importOrders(req) {
-  const res = await importSalesOrders(req)
-  if (!res.errors.length) {
-    message.success(
-      res.skipped.length
-        ? t('scm.order.importDoneSkipped', { n: res.orders, skipped: res.skipped.length, list: res.skipped.join(t('scm.order.listSep')) })
-        : t('scm.order.importDone', { n: res.orders })
-    )
-  }
-  return res
-}
 const dict = useDict('scm_order_status')
 useCurrencies()
 
@@ -258,7 +216,7 @@ const route = useRoute()
 const router = useRouter()
 onMounted(() => {
   load()
-  // 从请购单、询价单、报价单等跳转过来时（?id=订单ID）直接打开订单详情
+  // 从其他页面跳转过来时（?id=订单ID）直接打开订单详情
   const id = Number(route.query.id)
   if (id) {
     openDetail({ id })

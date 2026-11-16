@@ -109,13 +109,11 @@ const kpis = computed(() => {
     { key: 'inventory', label: t('jxc.assets.inventory'), value: d.inventoryAmount },
     { key: 'ar', label: t('jxc.assets.receivable'), value: b.arBalance,
       extra: num(b.arOverdue) ? t('jxc.assets.overdue', { v: money(b.arOverdue) }) : '' },
-    { key: 'notesIn', label: t('jxc.assets.notesReceivable'), value: b.notesReceivable, optional: true },
     { key: 'prepaid', label: t('jxc.assets.prepaid'), value: b.advancePaid },
     { key: 'ap', label: t('jxc.assets.payable'), value: b.apBalance },
-    { key: 'notesOut', label: t('jxc.assets.notesPayable'), value: b.notesPayable, optional: true },
     { key: 'advance', label: t('jxc.assets.advance'), value: b.advanceReceived },
     { key: 'net', label: t('jxc.assets.netAssets'), value: d.netAssets, main: true, neg: num(d.netAssets) < 0 }
-  ].filter((k) => !k.optional || num(k.value) !== 0)
+  ]
 })
 const unvouchered = computed(() => data.value.unvouchered || {})
 

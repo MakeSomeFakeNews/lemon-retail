@@ -276,7 +276,7 @@ public class AiReportService {
     private <T> T asSystem(Supplier<T> action) {
         SecurityContext saved = SecurityContextHolder.getContext();
         LoginUser system = new LoginUser(null, "system", null, Set.of(), Set.of(PermissionService.ALL_PERMISSION), DataScope.ALL,
-                null, TenantContext.currentOrPlatform(), null, null);
+                null, TenantContext.currentOrPlatform());
         SecurityContext ctx = SecurityContextHolder.createEmptyContext();
         ctx.setAuthentication(new UsernamePasswordAuthenticationToken(system, null, List.of()));
         SecurityContextHolder.setContext(ctx);

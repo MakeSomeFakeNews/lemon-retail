@@ -104,7 +104,7 @@ public class SysMiniappAuthService {
                 continue;
             }
             SysUser user = TenantContext.callAs(b.getTenantId(), () -> userMapper.selectById(b.getUserId()));
-            if (user != null && user.getStatus() == EnableStatus.ENABLED && user.getSupplierId() == null && user.getCustomerId() == null) {
+            if (user != null && user.getStatus() == EnableStatus.ENABLED) {
                 list.add(new Candidate(b, user));
             }
         }

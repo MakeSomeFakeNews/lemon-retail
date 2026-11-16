@@ -44,7 +44,7 @@
           </template>
           <template v-else-if="column.key === 'qty'">{{ formatQty(record.qty) }} {{ record.unit }}</template>
           <template v-else-if="column.key === 'status'">
-            <a-tag :color="record.status === WmsDocStatus.DONE ? 'green' : 'default'" :bordered="false">{{ record.status === WmsDocStatus.DONE ? $t('wms.assembly.done') : $t('wms.assembly.draft') }}</a-tag>
+            <a-tag :color="record.status === DocStatus.DONE ? 'green' : 'default'" :bordered="false">{{ record.status === DocStatus.DONE ? $t('wms.assembly.done') : $t('wms.assembly.draft') }}</a-tag>
           </template>
           <template v-else-if="column.key === 'action'">
             <TableActions :actions="rowActions(record)" />
@@ -118,7 +118,6 @@
         <div class="items-head">
           <span class="section-title">{{ form.kind === AssemblyKind.ASSEMBLE ? $t('wms.assembly.compOut', { n: form.items.length }) : $t('wms.assembly.compIn', { n: form.items.length }) }}</span>
           <a-space>
-            <a-button :disabled="!form.materialId || !form.qty" @click="fromBom">{{ $t('wms.assembly.fromBom') }}</a-button>
             <a-button type="primary" ghost @click="addRow"><template #icon><PlusOutlined /></template>{{ $t('wms.assembly.addComp') }}</a-button>
           </a-space>
         </div>
@@ -163,7 +162,7 @@
           <a-descriptions-item :label="$t('wms.assembly.kit')">{{ detail.materialCode }} {{ detail.materialName }} {{ detail.spec || '' }}</a-descriptions-item>
           <a-descriptions-item :label="$t('common.field.quantity')">{{ formatQty(detail.qty) }} {{ detail.unit }}</a-descriptions-item>
           <a-descriptions-item :label="$t('wms.assembly.locationBatch')">{{ detail.locationCode || $t('wms.common.unspecified') }} {{ detail.batchNo || '' }}</a-descriptions-item>
-          <a-descriptions-item :label="$t('common.field.status')">{{ detail.status === WmsDocStatus.DONE ? $t('wms.assembly.done') : $t('wms.assembly.draft') }}</a-descriptions-item>
+          <a-descriptions-item :label="$t('common.field.status')">{{ detail.status === DocStatus.DONE ? $t('wms.assembly.done') : $t('wms.assembly.draft') }}</a-descriptions-item>
           <a-descriptions-item v-if="detail.outDocNo" :label="$t('wms.assembly.docs')">{{ $t('wms.assembly.docsValue', { out: detail.outDocNo, in: detail.inDocNo }) }}</a-descriptions-item>
           <a-descriptions-item :label="$t('wms.common.createBy')">{{ detail.createByName }}</a-descriptions-item>
           <a-descriptions-item v-if="detail.serialNos" :label="$t('wms.common.serialNo')"><SerialTags :value="detail.serialNos" :limit="10" /></a-descriptions-item>
@@ -183,7 +182,6 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { message } from 'ant-design-vue'
 import SerialTags from '@/components/wms/SerialTags.vue'
 import { CheckOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import DictTag from '@/components/DictTag.vue'
@@ -197,8 +195,6 @@ import LocationSelect from '@/components/wms/LocationSelect.vue'
 import MaterialSelect from '@/components/wms/MaterialSelect.vue'
 import WarehouseSelect from '@/components/wms/WarehouseSelect.vue'
 import { addAssembly, confirmAssembly, deleteAssembly, getAssembly, pageAssembly, updateAssembly } from '@/api/wms/assembly'
-import { bomsOfMaterial, getBom } from '@/api/mes/base'
-import { getMaterial } from '@/api/wms/material'
 import { formatQty, rowKey, today } from '@/components/wms/wms'
 import { sumWidth } from '@/composables/useColumns'
 import { useDict } from '@/composables/useDict'
@@ -207,7 +203,7 @@ import { useTable } from '@/composables/useTable'
 import { toOptions } from '@/utils/dict'
 import { useAction } from '@/composables/useAction'
 
-import { AssemblyKind, WmsDocStatus } from '@/constants/enums'
+import { AssemblyKind, DocStatus } from '@/constants/enums'
 const { t } = useI18n()
 
 /** 组装拆卸单：组装消耗子件得到成套件，拆卸相反；确认后生成出入库单 */
@@ -231,7 +227,7 @@ const columns = [
 const scrollX = sumWidth(columns)
 
 const rowActions = (record) => {
-  const draft = record.status === WmsDocStatus.DRAFT
+  const draft = record.status === DocStatus.DRAFT
   return [
     { type: 'view', show: !draft, onClick: () => openDetail(record.id) },
     { type: 'edit', show: draft, perm: 'wms:assembly:add', onClick: () => drawer.openEdit(record) },
@@ -335,27 +331,6 @@ function addRow() {
 }
 function applyMaterial(row, m) {
   Object.assign(row, { materialLabel: label(m), unit: m.unit, batchEnabled: m.batchEnabled, serialEnabled: m.serialEnabled })
-}
-
-/** 按成套件的默认 BOM（没有默认时取第一个启用的）带出子件：用量 × 成套件数量 */
-async function fromBom() {
-  const boms = await bomsOfMaterial(form.value.materialId).catch(() => null)
-  if (!boms?.length) {
-    message.warning(t('wms.assembly.noBom'))
-    return
-  }
-  const bom = await getBom((boms.find((b) => b.isDefault === 1) || boms[0]).id)
-  // BOM 子件不带批次 / 序列号管理标识，逐个读取物料
-  const flags = await Promise.all(bom.items.map((i) => getMaterial(i.materialId).catch(() => ({}))))
-  form.value.items = bom.items.map((i, idx) =>
-    toItem({
-      ...i,
-      qty: Math.round(Number(i.qty) * Number(form.value.qty) * 10000) / 10000,
-      batchEnabled: flags[idx].batchEnabled,
-      serialEnabled: flags[idx].serialEnabled
-    })
-  )
-  message.success(t('wms.assembly.bomLoaded', { version: bom.version || '', n: bom.items.length }))
 }
 
 const confirm = useAction(confirmAssembly, { successKey: 'wms.assembly.confirmed', reload: () => load() })

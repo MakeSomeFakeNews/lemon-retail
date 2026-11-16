@@ -102,7 +102,7 @@ const dict = useDict('wms_material_category', 'wms_material_brand')
 const userStore = useUserStore()
 const canHistory = userStore.hasPerm('wms:stock:list')
 const canCost = userStore.hasPerm('wms:stock:cost')
-const canSalesPrice = userStore.hasPerm(['scm:sales:list', 'scm:salesOut:list', 'scm:quotation:list', 'scm:goodsPrice:list'])
+const canSalesPrice = userStore.hasPerm(['scm:sales:list', 'scm:salesOut:list', 'scm:goodsPrice:list'])
 const { enabledLevels, levelName } = usePriceLevels()
 const presets = rangePresets()
 

@@ -30,9 +30,7 @@ public class SysDeptController {
 
     /** 数据权限范围内的部门树；用户管理选择部门、角色管理分配数据权限时也会用到 */
     @GetMapping
-    @PreAuthorize("@ss.hasAnyPerm('sys:dept:list', 'sys:user:list', 'sys:role:list', 'fin:voucher:add', 'fin:voucher:edit', "
-            + "'fin:asset:list', 'fin:budget:list', 'hr:employee:list', 'hr:recruit:list', 'hr:attendance:list', "
-            + "'hr:leave:list', 'hr:salary:list', 'hr:perf:list', 'pm:member:list')")
+    @PreAuthorize("@ss.hasAnyPerm('sys:dept:list', 'sys:user:list', 'sys:role:list', 'fin:voucher:add', 'fin:voucher:edit')")
     public R<List<SysDept>> tree() {
         return R.ok(deptService.tree());
     }

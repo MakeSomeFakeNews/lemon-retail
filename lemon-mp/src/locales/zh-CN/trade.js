@@ -2,7 +2,8 @@
 export default {
   entry: {
     purchase: '快速入库',
-    draft: '单据草稿'
+    draft: '单据草稿',
+    order: '销售订单'
   },
   kind: {
     salesOut: '销售出库',
@@ -62,5 +63,34 @@ export default {
     isDefault: '默认',
     more: '更多格式…',
     formatTagged: '{name}（{tags}）'
+  },
+  order: {
+    searchCustomerPh: '搜索客户名称、编码',
+    byOrderNo: '订单号',
+    byCustomer: '客户',
+    title: '销售订单',
+    detailTitle: '订单详情',
+    searchPh: '搜索订单号',
+    customer: '客户',
+    orderDate: '订单日期',
+    deliveryDate: '交货日期',
+    salesman: '业务员',
+    warehouse: '发货仓库',
+    totalAmount: '订单金额',
+    wholeDiscount: '整单优惠',
+    taxAmount: '税额',
+    remark: '备注',
+    progress: '发货进度',
+    shipped: '已发 {done} / {total}',
+    items: '明细',
+    qty: '数量',
+    doneQty: '已发',
+    returnQty: '退货',
+    price: '单价',
+    gift: '赠品',
+    outDocs: '出库记录',
+    bills: '应收',
+    billSummary: '应收 {total}，已收 {settled}',
+    settled: '已收 {amount}'
   }
 }

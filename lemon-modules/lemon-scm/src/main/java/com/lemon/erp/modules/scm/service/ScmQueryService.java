@@ -7,7 +7,6 @@ import com.lemon.erp.modules.scm.entity.ScmSupplierPrice;
 import com.lemon.erp.modules.scm.entity.ScmSupplierPriceTier;
 import com.lemon.erp.modules.scm.entity.ScmTradeDoc;
 import com.lemon.erp.modules.scm.mapper.ScmOrderMapper;
-import com.lemon.erp.modules.scm.mapper.ScmPurchaseContractMapper;
 import com.lemon.erp.modules.scm.mapper.ScmSupplierPriceMapper;
 import com.lemon.erp.modules.scm.mapper.ScmSupplierPriceTierMapper;
 import com.lemon.erp.modules.scm.mapper.ScmTradeDocItemMapper;
@@ -37,7 +36,6 @@ public class ScmQueryService {
     private final ScmTradeDocMapper tradeDocMapper;
     private final ScmTradeDocItemMapper tradeDocItemMapper;
     private final ScmSupplierPriceTierMapper tierMapper;
-    private final ScmPurchaseContractMapper contractMapper;
 
     /** 采购在途：未结束采购订单的未入库数量，按物料 */
     public Map<Long, BigDecimal> openPurchaseQty(Collection<Long> materialIds) {
@@ -81,11 +79,6 @@ public class ScmQueryService {
                 .eq(ScmSupplierPrice::getMaterialId, materialId)
                 .and(w -> w.isNull(ScmSupplierPrice::getValidFrom).or().le(ScmSupplierPrice::getValidFrom, today))
                 .and(w -> w.isNull(ScmSupplierPrice::getValidTo).or().ge(ScmSupplierPrice::getValidTo, today)));
-    }
-
-    /** 采购入库 / 退货单的订单引用了采购合同且合同约定了付款天数时返回该天数，否则 null（应付单按供应商账期） */
-    public Integer contractPaymentDays(Long tradeDocId) {
-        return contractMapper.selectPaymentDaysByTradeDoc(tradeDocId);
     }
 
     public String orderNo(Long orderId) {

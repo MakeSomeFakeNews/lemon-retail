@@ -265,7 +265,7 @@ public class FinCommissionService {
         Set<Long> materialIds = sales.stream().map(r -> ((Number) r.get("materialId")).longValue()).collect(Collectors.toSet());
         Map<Long, BigDecimal> units = new HashMap<>();
         if (!materialIds.isEmpty()) {
-            queryMapper.selectUnitCosts(period, materialIds).forEach(r -> units.put(((Number) r.get("materialId")).longValue(), dec(r.get("unitCost"))));
+            queryMapper.selectUnitCosts(materialIds).forEach(r -> units.put(((Number) r.get("materialId")).longValue(), dec(r.get("unitCost"))));
         }
         Map<Long, Perf> perfs = new LinkedHashMap<>();
         for (Map<String, Object> r : sales) {

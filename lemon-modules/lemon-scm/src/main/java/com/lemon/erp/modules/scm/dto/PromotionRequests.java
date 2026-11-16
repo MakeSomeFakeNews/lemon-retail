@@ -45,12 +45,11 @@ public final class PromotionRequests {
             @Size(max = 255, message = "{scm.valid.descriptionCannotExceedCharacters}") String remark) {
     }
 
-    /** 下单前预览：客户、订单日期、明细（原价）、返利抵扣 */
+    /** 下单前预览：客户、订单日期、明细（原价） */
     public record Preview(
             @NotNull(message = "{scm.valid.selectCustomer}") Long customerId,
             @NotNull(message = "{scm.valid.selectOrderDate}") LocalDate orderDate,
-            @NotEmpty(message = "{scm.valid.addLineItems}") @Size(max = 500) List<@Valid @NotNull Line> items,
-            @DecimalMin(value = "0", message = "{scm.valid.rebateDeductionCannotNegative}") BigDecimal rebateAmount) {
+            @NotEmpty(message = "{scm.valid.addLineItems}") @Size(max = 500) List<@Valid @NotNull Line> items) {
     }
 
     public record Line(@NotNull Long materialId, @NotNull @DecimalMin("0") BigDecimal qty, @NotNull @DecimalMin("0") BigDecimal price) {

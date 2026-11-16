@@ -22,7 +22,7 @@ async function get(url, { params, auth } = {}) {
   }
 }
 
-/** 登录后查看：key 为 factory / warehouse / sales / quality */
+/** 登录后查看：key 为 sales / warehouse */
 export const screenData = (key, params) => get(`/bi/screen/${key.toLowerCase()}`, { params, auth: true })
 /** 投屏链接（免登录） */
 export const shareInfo = (token) => get(`/screen-share/${token}`)

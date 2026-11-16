@@ -27,12 +27,4 @@ public interface ScmMergeMapper {
      */
     int mergeRef(@Param("ref") String ref, @Param("ids") List<Long> sourceIds, @Param("targetId") Long targetId);
 
-    /** 两份以上资料（ids 含保留的资料）参与了同一张询价单：返回询价单号 */
-    List<String> sharedInquiries(@Param("ids") List<Long> ids);
-
-    /** 两份以上资料被邀请或投标了同一次招标：返回招标编号 */
-    List<String> sharedTenders(@Param("ids") List<Long> ids);
-
-    /** 两份以上资料（经销商）上报了同一期间的渠道库存：返回期间 yyyyMM */
-    List<Integer> sharedChannelPeriods(@Param("ids") List<Long> ids);
 }

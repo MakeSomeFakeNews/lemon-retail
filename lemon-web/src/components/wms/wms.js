@@ -4,7 +4,7 @@ import { currentLocale, t } from '@/locales'
 import { qty } from '@/utils/number'
 import { rowKey as newRowKey } from '@/composables/useLineItems'
 
-import { StockInType, StockOutType, TransferFeeSettle, TransferPricing, WmsDocStatus } from '@/constants/enums'
+import { StockInType, StockOutType, TransferFeeSettle, TransferPricing, DocStatus } from '@/constants/enums'
 /** 出入库单的种类（与后端 StockBizType 的路径一致） */
 export const DOC_KINDS = {
   in: {
@@ -36,23 +36,13 @@ export const MANUAL_TYPES = { in: ['OTHER', 'CONSIGN_IN'], out: ['OTHER', 'SCRAP
 export const AUTO_TYPE_SOURCES = {
   in: {
     PURCHASE: 'purchaseIn',
-    PRODUCTION: 'woFinish',
     SALES_RETURN: 'salesReturn',
-    PRODUCTION_RETURN: 'woReturn',
-    OUTSOURCE_RETURN: 'outsourceReturn',
-    SCRAP_IN: 'woScrap',
     OPENING: 'opening',
     ASSEMBLY: 'assembly'
   },
   out: {
     SALES: 'salesOut',
-    PRODUCTION: 'woIssue',
     PURCHASE_RETURN: 'purchaseReturn',
-    PROJECT: 'project',
-    OUTSOURCE: 'outsourceIssue',
-    SERVICE: 'service',
-    CONSIGN: 'consign',
-    CONSUME: 'consume',
     ASSEMBLY: 'assembly'
   }
 }
@@ -84,7 +74,7 @@ export const formatQty = (n) => qty(n, 4, currentLocale())
 export const warehouseText = (r) => (r.warehouseNames?.length ? r.warehouseNames : [r.warehouseName]).filter(Boolean).join(t('components.excel.listSep'))
 
 /** 已完成、非业务单据生成、非红字、未冲销的单据可以冲销 */
-export const canReverse = (d) => d.status === WmsDocStatus.DONE && !d.sourceNo && !d.redOf && d.reversed !== 1
+export const canReverse = (d) => d.status === DocStatus.DONE && !d.sourceNo && !d.redOf && d.reversed !== 1
 
 /** 负数（红字单据）标红 */
 export const negativeClass = (n) => (Number(n) < 0 ? 'qty-negative' : undefined)

@@ -12,11 +12,7 @@ dependencies {
     implementation project(':lemon-modules:lemon-dashboard')
     implementation project(':lemon-modules:lemon-wms')
     implementation project(':lemon-modules:lemon-scm')
-    implementation project(':lemon-modules:lemon-mes')
     implementation project(':lemon-modules:lemon-fin')
-    implementation project(':lemon-modules:lemon-hr')
-    implementation project(':lemon-modules:lemon-crm')
-    implementation project(':lemon-modules:lemon-pm')
     implementation project(':lemon-modules:lemon-bi')
     implementation project(':lemon-modules:lemon-ai')
     runtimeOnly libs.mysql.connector

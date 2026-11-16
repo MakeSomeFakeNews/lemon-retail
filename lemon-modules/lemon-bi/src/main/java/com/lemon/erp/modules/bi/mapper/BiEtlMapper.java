@@ -30,26 +30,9 @@ public interface BiEtlMapper {
 
     void costInventory(@Param("today") LocalDate today);
 
-    void clearProduction();
-
-    List<Map<String, Object>> selectProduction(@Param("today") LocalDate today);
-
     void clearFinance();
 
     List<Map<String, Object>> selectFinance();
-
-    void clearHr();
-
-    /** 人力：一个月份的部门、岗位类别汇总 */
-    List<Map<String, Object>> selectHr(@Param("period") int period, @Param("begin") LocalDate begin, @Param("end") LocalDate end);
-
-    void clearCrm();
-
-    List<Map<String, Object>> selectCrm();
-
-    void clearProject();
-
-    List<Map<String, Object>> selectProject();
 
     /** 批量写入事实表，rows 中每行的值与 columns 顺序一致 */
     void insertFacts(@Param("table") String table, @Param("columns") List<String> columns,

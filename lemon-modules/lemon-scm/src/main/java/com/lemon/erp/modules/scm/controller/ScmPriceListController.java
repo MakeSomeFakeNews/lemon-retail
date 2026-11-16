@@ -50,7 +50,7 @@ public class ScmPriceListController {
 
     /** 取价：销售订单、报价单选择物料后带出单价；没有匹配的价格时返回空 */
     @GetMapping("/quote")
-    @PreAuthorize("@ss.hasAnyPerm('scm:price:list', 'scm:sales:add', 'scm:sales:edit', 'scm:quotation:add', 'scm:quotation:edit')")
+    @PreAuthorize("@ss.hasAnyPerm('scm:price:list', 'scm:sales:add', 'scm:sales:edit')")
     public R<ScmPriceList> quote(@RequestParam Long materialId, @RequestParam(required = false) Long customerId,
                                  @RequestParam(required = false) BigDecimal qty,
                                  @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {

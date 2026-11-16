@@ -70,7 +70,6 @@ export default {
   ref: {
     title: '价格参考',
     keywordPh: '往来单位编码或名称',
-    quotations: '报价',
     sales: '销售',
     purchases: '进货',
     customerCompare: '客户',

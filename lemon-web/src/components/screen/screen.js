@@ -2,7 +2,6 @@
 import { isZh, t, tt } from '@/locales'
 import { formatDecimal, num } from '@/utils/number'
 
-import { ScreenKey } from '@/constants/enums'
 /** 设计稿尺寸，页面按比例缩放铺满屏幕 */
 export const DESIGN_WIDTH = 1920
 export const DESIGN_HEIGHT = 1080
@@ -20,14 +19,9 @@ export const COLORS = {
 export const PALETTE = [COLORS.cyan, COLORS.green, COLORS.orange, COLORS.purple, COLORS.blue, COLORS.red, '#ff7ad9', '#7cf06b']
 
 export const SCREENS = [
-  { key: 'FACTORY', label: t('screen.screens.factory'), desc: t('screen.screens.factoryDesc') },
-  { key: 'PROGRESS', label: t('screen.screens.progress'), desc: t('screen.screens.progressDesc') },
-  { key: 'WAREHOUSE', label: t('screen.screens.warehouse'), desc: t('screen.screens.warehouseDesc') },
   { key: 'SALES', label: t('screen.screens.sales'), desc: t('screen.screens.salesDesc') },
-  { key: 'QUALITY', label: t('screen.screens.quality'), desc: t('screen.screens.qualityDesc') }
+  { key: 'WAREHOUSE', label: t('screen.screens.warehouse'), desc: t('screen.screens.warehouseDesc') }
 ]
-/** 可以只看某个工作中心的大屏 */
-export const WORK_CENTER_SCREENS = [ScreenKey.FACTORY, ScreenKey.PROGRESS]
 /** 后端按字典关联出的中文名称：按原始值取界面语言的字典译文，没有值或译文时用原名称 */
 export const dictLabel = (type, value, label) => (value === null || value === undefined || value === '' ? label : tt(`dict.${type}.${value}`, label))
 /** 列表中某个字段按字典翻译：rows 中 labelKey ← valueKey */

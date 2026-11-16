@@ -13,7 +13,6 @@ import com.lemon.erp.framework.log.OperLog;
 import com.lemon.erp.framework.log.OperType;
 import com.lemon.erp.modules.scm.dto.CarrierOptions;
 import com.lemon.erp.modules.scm.dto.PartnerOption;
-import com.lemon.erp.modules.scm.dto.SupplierKpi;
 import com.lemon.erp.modules.scm.entity.ScmSupplier;
 import com.lemon.erp.modules.scm.model.SupplierLevel;
 import com.lemon.erp.modules.scm.service.ScmSupplierService;
@@ -22,7 +21,6 @@ import com.lemon.erp.modules.scm.dto.PartnerMergeRequests;
 import com.lemon.erp.framework.ref.PartnerType;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -35,7 +33,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -73,17 +70,6 @@ public class ScmSupplierController {
                                             @RequestParam(defaultValue = "1") long current,
                                             @RequestParam(defaultValue = "20") long size) {
         return R.ok(supplierService.carrierOptions(keyword, current, size));
-    }
-
-    /** 供应商绩效：订单数、入库金额、准时交货率、退货率、最近评估 */
-    @GetMapping("/kpi")
-    @PreAuthorize("@ss.hasAnyPerm('scm:eval:list', 'scm:supplier:list')")
-    public R<PageResult<SupplierKpi>> kpi(@RequestParam(defaultValue = "1") long current,
-                                         @RequestParam(defaultValue = "10") long size,
-                                         @RequestParam(required = false) String keyword,
-                                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate beginDate,
-                                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        return R.ok(supplierService.kpi(current, size, keyword, beginDate, endDate));
     }
 
     @GetMapping("/{id}")

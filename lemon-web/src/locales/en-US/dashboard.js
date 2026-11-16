@@ -15,9 +15,7 @@ export default {
     receivableSub: 'Open receivables',
     payableSub: 'Open payables',
     orderUnit: 'orders',
-    toShipSub: 'Approved, not fully shipped',
-    woUnit: 'orders',
-    wipSub: 'Released or in production'
+    toShipSub: 'Approved, not fully shipped'
   },
   trend: {
     new: 'New',
@@ -26,10 +24,7 @@ export default {
   quick: {
     sales: 'Sales Orders',
     purchase: 'Purchase Orders',
-    wo: 'Work Orders',
     stock: 'Inventory',
-    voucher: 'Vouchers',
-    claim: 'Expense Claims',
-    self: 'Employee Self-service'
+    voucher: 'Vouchers'
   }
 }

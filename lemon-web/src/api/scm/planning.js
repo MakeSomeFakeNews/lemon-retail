@@ -37,5 +37,5 @@ export const deletePackage = (id, packageId) => request.delete(`/scm/delivery/${
 
 /** 补货建议（再订货点）：{ keyword, onlyNeeded }，返回数组（不分页） */
 export const listReorder = (params) => request.get('/scm/reorder', { params })
-/** 选中的建议生成请购单（草稿）：{ items: [{ materialId, qty, supplierId, requiredDate }] }，返回请购单 ID */
-export const reorderToRequisition = (data) => request.post('/scm/reorder/requisition', data)
+/** 选中的建议生成采购订单（草稿，按供应商分单）：{ warehouseId?, items: [{ materialId, qty, supplierId?, remark? }] }，返回订单 ID 列表 */
+export const reorderToOrders = (data) => request.post('/scm/reorder/orders', data)

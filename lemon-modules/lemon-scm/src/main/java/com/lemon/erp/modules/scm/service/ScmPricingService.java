@@ -3,15 +3,12 @@ package com.lemon.erp.modules.scm.service;
 import com.lemon.erp.framework.security.PermissionService;
 import com.lemon.erp.framework.security.SecurityUtils;
 import com.lemon.erp.framework.security.datascope.DataPermissionContext;
-import com.lemon.erp.framework.security.datascope.DataPermissionRule;
 import com.lemon.erp.modules.scm.dto.PricingViews;
 import com.lemon.erp.modules.scm.dto.PricingViews.DefaultPrice;
 import com.lemon.erp.modules.scm.entity.ScmCustomer;
 import com.lemon.erp.modules.scm.entity.ScmCustomerPrice;
 import com.lemon.erp.modules.scm.entity.ScmPriceList;
 import com.lemon.erp.modules.scm.entity.ScmPriceMemory;
-import com.lemon.erp.modules.scm.entity.ScmPurchaseContract;
-import com.lemon.erp.modules.scm.entity.ScmPurchaseContractItem;
 import com.lemon.erp.modules.scm.entity.ScmSupplierPrice;
 import com.lemon.erp.modules.scm.mapper.ScmPriceMemoryMapper;
 import com.lemon.erp.modules.scm.mapper.ScmPricingMapper;
@@ -47,12 +44,10 @@ public class ScmPricingService {
     /** 价格参考每个分区最多返回的行数 */
     public static final int REFERENCE_LIMIT = 200;
 
-    private static final DataPermissionRule QUOTATION_RULE = new DataPermissionRule("scm_quotation", "dept_id", "create_by");
 
     private final ScmCustomerService customerService;
     private final ScmCustomerPriceService customerPriceService;
     private final ScmPriceListService priceListService;
-    private final ScmPurchaseContractService contractService;
     private final ScmQueryService queryService;
     private final ScmPriceMemoryService memoryService;
     private final ScmPriceMemoryMapper memoryMapper;
@@ -90,17 +85,11 @@ public class ScmPricingService {
                         customerPrices.get(id), partnerId, qty, day, level, enabledLevels, memory.get(id))));
             }
         } else {
-            Map<Long, ScmPurchaseContractItem> contractPrices = new HashMap<>();
-            if (partnerId != null) {
-                for (ScmPurchaseContract c : contractService.active(partnerId, day)) {
-                    c.getItems().forEach(i -> contractPrices.putIfAbsent(i.getMaterialId(), i));
-                }
-            }
             for (int i = 0; i < materialIds.size(); i++) {
                 Long id = materialIds.get(i);
                 BigDecimal qty = lineQty(qtys, i);
                 result.add(cache.computeIfAbsent(id + "|" + qty.toPlainString(), k -> purchasePrice(id, materials.get(id),
-                        contractPrices.get(id), partnerId, qty, memory.get(id))));
+                        partnerId, qty, memory.get(id))));
             }
         }
         return result;
@@ -135,11 +124,8 @@ public class ScmPricingService {
         return new DefaultPrice(id, null, null, null);
     }
 
-    private DefaultPrice purchasePrice(Long id, WmsMaterial material, ScmPurchaseContractItem contractItem, Long supplierId, BigDecimal qty,
+    private DefaultPrice purchasePrice(Long id, WmsMaterial material, Long supplierId, BigDecimal qty,
                                        ScmPriceMemory memory) {
-        if (contractItem != null) {
-            return new DefaultPrice(id, contractItem.getPrice(), contractItem.getTaxRate(), PriceSource.CONTRACT_PRICE);
-        }
         ScmSupplierPrice supplierPrice = supplierId == null ? null : queryService.supplierPrice(supplierId, id);
         if (supplierPrice != null) {
             return new DefaultPrice(id, queryService.effectivePrice(supplierPrice, qty), supplierPrice.getTaxRate(), PriceSource.SUPPLIER_PRICE);
@@ -157,7 +143,7 @@ public class ScmPricingService {
 
     /** 是否可以查看销售方面的价格（报价、销售历史、客户对比） */
     public boolean canViewSales() {
-        return permissionService.hasAnyPerm("scm:sales:list", "scm:salesOut:list", "scm:quotation:list");
+        return permissionService.hasAnyPerm("scm:sales:list", "scm:salesOut:list");
     }
 
     /** 是否可以查看采购方面的价格（进货历史、进货数量、供商对比） */
@@ -167,7 +153,7 @@ public class ScmPricingService {
 
     /**
      * 价格参考：没有销售查看权限时不返回报价、销售历史、客户对比，没有采购查看权限时不返回进货历史、进货数量、供商对比。
-     * 报价、出入库历史、进货数量按制单人部门 + 制单人做数据权限；供商 / 客户对比在有「全部数据」权限时取价格记忆，
+     * 出入库历史、进货数量按制单人部门 + 制单人做数据权限；供商 / 客户对比在有「全部数据」权限时取价格记忆，
      * 否则按看得到的出入库单计算（只列出这些单据的往来单位，价格也只来自这些单据，不会透露其他人的成交价）
      */
     public PricingViews.Reference reference(PricingViews.ReferenceQuery q) {
@@ -184,7 +170,6 @@ public class ScmPricingService {
         PricingViews.ReferenceQuery sq = partnerKind == OrderKind.PURCHASE ? withoutPartner(q) : q;
         PricingViews.ReferenceQuery pq = partnerKind == OrderKind.SALES ? withoutPartner(q) : q;
         return new PricingViews.Reference(
-                sales ? DataPermissionContext.execute(QUOTATION_RULE, () -> pricingMapper.selectQuotationHistory(sq)) : null,
                 sales ? DataPermissionContext.execute(ScmConstants.TRADE_RULE, () -> pricingMapper.selectTradeHistory(TradeKind.SALES_OUT, true, sq)) : null,
                 purchase ? DataPermissionContext.execute(ScmConstants.TRADE_RULE, () -> pricingMapper.selectTradeHistory(TradeKind.PURCHASE_IN, false, pq)) : null,
                 purchase ? DataPermissionContext.execute(ScmConstants.TRADE_RULE, () -> pricingMapper.selectPurchaseQty(pq)) : null,

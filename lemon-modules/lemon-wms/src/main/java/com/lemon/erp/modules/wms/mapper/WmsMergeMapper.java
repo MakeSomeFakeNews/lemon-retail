@@ -24,9 +24,6 @@ public interface WmsMergeMapper {
     int mergeStockDoc(@Param("customer") boolean customer, @Param("ids") List<Long> sourceIds, @Param("targetId") Long targetId,
                       @Param("targetName") String targetName);
 
-    /** 来料检验暂存（只有供应商） */
-    int mergeStockHold(@Param("ids") List<Long> sourceIds, @Param("targetId") Long targetId);
-
     /** 调拨费用的承运商（只有供应商） */
     int mergeFeeCarrier(@Param("ids") List<Long> sourceIds, @Param("targetId") Long targetId);
 }

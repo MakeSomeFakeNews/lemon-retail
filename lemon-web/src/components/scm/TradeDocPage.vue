@@ -69,12 +69,7 @@
                 <div v-if="Number(record.freight)" class="sub-text">{{ $t('scm.freight.value', { amount: '¥' + formatMoney(record.freight) }) }}</div>
               </template>
               <template v-else-if="column.key === 'action'">
-                <TableActions
-                  :actions="[
-                    { type: 'view', onClick: () => openDetail(record) },
-                    { key: 'ship', label: $t('scm.trade.ship'), icon: CarOutlined, show: kind === 'salesOut', perm: 'scm:shipment:add', onClick: () => createShipment(record) }
-                  ]"
-                />
+                <TableActions :actions="[{ type: 'view', onClick: () => openDetail(record) }]" />
               </template>
             </template>
           </a-table>
@@ -106,7 +101,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { CarOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined } from '@ant-design/icons-vue'
 import SearchForm from '@/components/SearchForm.vue'
 import TableToolbar from '@/components/TableToolbar.vue'
 import WarehouseSelect from '@/components/wms/WarehouseSelect.vue'
@@ -167,7 +162,7 @@ const columns = [
   { title: t('scm.trade.wmsDocNo'), dataIndex: 'wmsDocNo', width: 170 },
   { title: t('scm.trade.createBy'), dataIndex: 'createByName', width: 120 },
   { title: t('common.field.createTime'), dataIndex: 'createTime', width: 170 },
-  actionColumn(props.kind === 'salesOut' ? 2 : 1, [t('common.action.view')])
+  actionColumn(1, [t('common.action.view')])
 ]
 const { checked, visibleColumns, scrollX } = useColumns(columns, `scm-${props.kind}`)
 const showSearch = ref(true)
@@ -228,7 +223,6 @@ function openDetail(record) {
   detailOpen.value = true
 }
 
-const createShipment = (record) => router.push({ path: '/scm/shipment', query: { tradeDocId: record.id } })
 </script>
 
 <style scoped>

@@ -75,7 +75,7 @@ public class ScmCustomerController {
 
     /** 信用占用：额度、应收余额、未完成订单金额（客户管理、CRM 客户详情） */
     @GetMapping("/{id}/credit")
-    @PreAuthorize("@ss.hasAnyPerm('scm:customer:list', 'crm:customer:list')")
+    @PreAuthorize("@ss.hasPerm('scm:customer:list')")
     public R<CreditUsage> credit(@PathVariable Long id) {
         return R.ok(creditChecker.usage(id));
     }

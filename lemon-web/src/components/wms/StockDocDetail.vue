@@ -65,7 +65,7 @@
         </a-descriptions>
 
         <a-alert
-          v-if="detail.status === WmsDocStatus.APPROVING"
+          v-if="detail.status === DocStatus.APPROVING"
           type="info"
           show-icon
           class="doc-desc"
@@ -110,7 +110,7 @@
 
     <template v-if="showFooter" #footer>
       <div class="drawer-footer">
-        <template v-if="detail.status === WmsDocStatus.DRAFT">
+        <template v-if="detail.status === DocStatus.DRAFT">
           <a-button v-if="canEdit" @click="emit('edit', detail)">
             <template #icon><EditOutlined /></template>{{ $t('common.action.edit') }}
           </a-button>
@@ -159,7 +159,7 @@ import { money, price } from '@/utils/number'
 import { useRouter } from 'vue-router'
 import { usePriceLevels } from './priceLevels'
 
-import { TransferPricing, WmsDocStatus } from '@/constants/enums'
+import { TransferPricing, DocStatus } from '@/constants/enums'
 /**
  * 出入库单详情；草稿可以编辑（触发 edit）、确认（更新库存后触发 changed）
  */
@@ -180,11 +180,11 @@ const canEdit = computed(() => userStore.hasPerm(`wms:${props.kind}:edit`))
 const canConfirm = computed(() => userStore.hasPerm(`wms:${props.kind}:confirm`))
 const inTransit = computed(() => detail.value?.inTransit === true || detail.value?.inTransit === 1)
 const showReceive = computed(
-  () => props.kind === 'transfer' && detail.value?.status === WmsDocStatus.TRANSIT && userStore.hasPerm('wms:transfer:receive')
+  () => props.kind === 'transfer' && detail.value?.status === DocStatus.TRANSIT && userStore.hasPerm('wms:transfer:receive')
 )
 const showReverse = computed(() => !!detail.value && canReverse(detail.value) && userStore.hasPerm(`wms:${props.kind}:reverse`))
 const showFooter = computed(
-  () => !!detail.value && ((detail.value.status === WmsDocStatus.DRAFT && (canEdit.value || canConfirm.value)) || showReceive.value || showReverse.value)
+  () => !!detail.value && ((detail.value.status === DocStatus.DRAFT && (canEdit.value || canConfirm.value)) || showReceive.value || showReverse.value)
 )
 
 const hasCost = computed(() => (detail.value?.items || []).some((i) => i.costPrice != null))

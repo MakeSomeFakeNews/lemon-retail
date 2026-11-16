@@ -26,9 +26,6 @@
         <a-button v-perm="'scm:delivery:add'" type="primary" @click="form.openCreate()">
           <template #icon><PlusOutlined /></template>{{ $t('scm.delivery.addTitle') }}
         </a-button>
-        <a-button v-perm="'scm:wave:add'" :disabled="!selectedKeys.length" @click="createWave">
-          <template #icon><MergeCellsOutlined /></template>{{ $t('scm.delivery.createWave') }}{{ selectedKeys.length ? ` (${selectedKeys.length})` : '' }}
-        </a-button>
       </TableToolbar>
 
       <a-table
@@ -38,7 +35,6 @@
         :data-source="list"
         :loading="loading"
         :pagination="pagination"
-        :row-selection="{ ...rowSelection, getCheckboxProps: (r) => ({ disabled: r.status !== DeliveryStatus.PENDING || !!r.waveNo }) }"
         :scroll="{ x: scrollX + 32, y: '100%' }"
         @change="onTableChange"
       >
@@ -52,7 +48,6 @@
           <template v-else-if="column.key === 'totalQty'">{{ formatQty(record.totalQty) }}</template>
           <template v-else-if="column.key === 'status'">
             <DictTag type="scm_delivery_status" :value="record.status" />
-            <div v-if="record.waveNo" class="sub-text">{{ $t('scm.delivery.waveN', { no: record.waveNo }) }}</div>
           </template>
           <template v-else-if="column.key === 'pick'">
             <template v-if="record.pickTime">{{ record.pickByName || '-' }} {{ record.pickTime }}</template>
@@ -77,8 +72,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
-import { MergeCellsOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined } from '@ant-design/icons-vue'
 import DictTag from '@/components/DictTag.vue'
 import SearchForm from '@/components/SearchForm.vue'
 import TableToolbar from '@/components/TableToolbar.vue'
@@ -86,7 +80,6 @@ import WarehouseSelect from '@/components/wms/WarehouseSelect.vue'
 import DeliveryDetail from '@/components/scm/DeliveryDetail.vue'
 import DeliveryForm from '@/components/scm/DeliveryForm.vue'
 import { pageDelivery } from '@/api/scm/planning'
-import { addWave } from '@/api/scm/shipment'
 import { formatQty } from '@/components/wms/wms'
 import { useColumns } from '@/composables/useColumns'
 import { useDict } from '@/composables/useDict'
@@ -94,7 +87,6 @@ import { useTable } from '@/composables/useTable'
 import { toOptions } from '@/utils/dict'
 import { useI18n } from 'vue-i18n'
 
-import { DeliveryStatus } from '@/constants/enums'
 import TableActions from '@/components/common/TableActions.vue'
 import { actionColumn } from '@/components/common/tableActions'
 const { t } = useI18n()
@@ -120,15 +112,7 @@ const showSearch = ref(true)
 
 const emptyQuery = () => ({ keyword: undefined, status: undefined, warehouseId: undefined })
 const query = reactive(emptyQuery())
-const { list, loading, size, pagination, selectedKeys, rowSelection, load, search, onTableChange, exportAll } = useTable(pageDelivery, query)
-
-/** 选中的待拣货通知（同一仓库）生成拣货波次 */
-async function createWave() {
-  const id = await addWave({ deliveryIds: selectedKeys.value })
-  message.success(t('scm.delivery.waveCreated'))
-  selectedKeys.value = []
-  router.push({ path: '/scm/wave', query: { id } })
-}
+const { list, loading, size, pagination, load, search, onTableChange, exportAll } = useTable(pageDelivery, query)
 
 function resetQuery() {
   Object.assign(query, emptyQuery())

@@ -263,11 +263,9 @@ public class WmsVariantService {
             m.setCategory(template.getCategory());
             m.setBatchEnabled(template.getBatchEnabled());
             m.setSerialEnabled(template.getSerialEnabled());
-            m.setIqcRequired(template.getIqcRequired());
             m.setDefaultWarehouseId(template.getDefaultWarehouseId());
             m.setDefaultLocationId(template.getDefaultLocationId());
             m.setRefCost(template.getRefCost());
-            m.setCostMethod(template.getCostMethod());
             m.setIsTemplate(0);
             m.setTemplateId(templateId);
             m.setVariantText(text);

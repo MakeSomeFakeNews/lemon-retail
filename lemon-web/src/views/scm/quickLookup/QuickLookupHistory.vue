@@ -60,7 +60,7 @@ import { price, qty } from '@/utils/number'
 /**
  * 售价 / 进价历史参考：最近 3 次、系统最新价、最高价、最低价（按看得到的出入库单统计，优惠前含税单价）；
  * 更多交易历史（往来明细：日期范围、单位编号 / 名称 / 电话筛选，日期 / 数量 / 单价 / 单位 / 制单 / 复核）；
- * 更多内容打开与销售单明细相同的「价格参考」（报价、销售、进货、客户、供应商，按权限显示）。
+ * 更多内容打开与销售单明细相同的「价格参考」（销售、进货、客户、供应商，按权限显示）。
  * 只能看售价的人没有「进价」。用法：ref.open(row, kind)
  */
 const { t } = useI18n()
@@ -78,7 +78,7 @@ const trades = reactive({ list: [], total: 0, current: 1, loading: false, range:
 /** 与后端 ScmPricingService.canViewSales / canViewPurchase 一致，只决定显示哪些分段 */
 const kinds = computed(() =>
   [
-    userStore.hasPerm(['scm:sales:list', 'scm:salesOut:list', 'scm:quotation:list']) ? { value: OrderKind.SALES, label: t('pricing.lookup.sales') } : null,
+    userStore.hasPerm(['scm:sales:list', 'scm:salesOut:list']) ? { value: OrderKind.SALES, label: t('pricing.lookup.sales') } : null,
     userStore.hasPerm(['scm:purchase:list', 'scm:purchaseIn:list']) ? { value: OrderKind.PURCHASE, label: t('pricing.lookup.purchase') } : null
   ].filter(Boolean)
 )

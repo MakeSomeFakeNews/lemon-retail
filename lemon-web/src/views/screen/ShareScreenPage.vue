@@ -5,7 +5,6 @@
     :interval="info.intervalSeconds"
     :fetcher="(key) => shareData(token, key)"
     :company="info.company"
-    :title-suffix="info.workCenterName"
   />
   <div v-else class="share-state">
     <div class="state-title">{{ error ? $t('screen.share.openFailed') : $t('screen.share.opening') }}</div>

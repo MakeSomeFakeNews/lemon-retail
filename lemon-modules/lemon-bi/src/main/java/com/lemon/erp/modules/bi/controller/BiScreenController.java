@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -82,13 +81,13 @@ public class BiScreenController {
         return R.ok();
     }
 
-    /** 大屏数据：key 为 factory / progress / warehouse / sales / quality */
+    /** 大屏数据：key 为 warehouse / sales */
     @GetMapping("/{key}")
     @PreAuthorize("@ss.hasPerm('bi:screen:list')")
-    public R<BiScreen.ScreenData> data(@PathVariable String key, @RequestParam(required = false) Long workCenterId) {
+    public R<BiScreen.ScreenData> data(@PathVariable String key) {
         requireAllData();
         ScreenKey screen = parse(key);
-        return R.ok(screenService.data(screen, screen.isByWorkCenter() ? workCenterId : null));
+        return R.ok(screenService.data(screen));
     }
 
     private static void requireAllData() {

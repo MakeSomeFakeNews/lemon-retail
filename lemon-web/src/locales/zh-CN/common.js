@@ -129,7 +129,6 @@ export default {
   },
   unit: {
     piece: '个',
-    day: '天',
     times: '次',
     people: '人'
   }

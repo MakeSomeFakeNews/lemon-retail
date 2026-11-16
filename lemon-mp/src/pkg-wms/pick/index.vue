@@ -6,7 +6,6 @@
       <view v-for="d in deliveries" :key="d.id" class="m-card" @click="selectDelivery(d.id)">
         <view class="m-row">
           <text class="m-title">{{ d.deliveryNo }}</text>
-          <l-tag v-if="d.waveNo" :text="d.waveNo" color="blue" />
         </view>
         <view class="m-row m-sub">
           <text class="m-grow">{{ d.customerName }} · {{ d.warehouseName }}</text>

@@ -57,11 +57,7 @@ public class BiOlapService {
     /** 数据权限规则：采购、库存不区分部门 */
     private static final Map<BiCube, DataPermissionRule> DATA_RULES = Map.of(
             BiCube.SALES, new DataPermissionRule("bi_fact_sales", "dept_id", "owner_id"),
-            BiCube.PRODUCTION, new DataPermissionRule("bi_fact_production", "dept_id", null),
-            BiCube.FINANCE, new DataPermissionRule("bi_fact_finance", "dept_id", null),
-            BiCube.HR, new DataPermissionRule("bi_fact_hr", "dept_id", null),
-            BiCube.CRM, new DataPermissionRule("bi_fact_crm", "dept_id", "owner_id"),
-            BiCube.PROJECT, new DataPermissionRule("bi_fact_project", "dept_id", "manager_id"));
+            BiCube.FINANCE, new DataPermissionRule("bi_fact_finance", "dept_id", null));
 
     public PivotResult pivot(PivotRequest req) {
         BiCube cube = cube(req.cube());
@@ -130,11 +126,7 @@ public class BiOlapService {
             case SALES -> olapMapper::pivotSales;
             case PURCHASE -> olapMapper::pivotPurchase;
             case INVENTORY -> olapMapper::pivotInventory;
-            case PRODUCTION -> olapMapper::pivotProduction;
             case FINANCE -> olapMapper::pivotFinance;
-            case HR -> olapMapper::pivotHr;
-            case CRM -> olapMapper::pivotCrm;
-            case PROJECT -> olapMapper::pivotProject;
         };
         DataPermissionRule rule = DATA_RULES.get(cube);
         if (rule == null || SecurityUtils.getDataScope().all()) {

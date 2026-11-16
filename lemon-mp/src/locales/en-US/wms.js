@@ -1,4 +1,4 @@
-/** Scanning and inquiry (wms.xxx): stock, movement history, quick sale, receiving, put-away, picking, counting, production reporting */
+/** Scanning and inquiry (wms.xxx): stock, movement history, quick sale, receiving, put-away, picking, counting */
 export default {
   entry: {
     stock: 'Stock',
@@ -7,7 +7,6 @@ export default {
     putaway: 'Put Away',
     pick: 'Pick',
     check: 'Count',
-    report: 'Report',
     quickSale: 'Quick Sale'
   },
   common: {
@@ -260,36 +259,5 @@ export default {
     costPrice: 'Cost',
     costPricePh: 'Default avg cost {n}',
     costPriceDefault: 'Defaults to the average cost at confirmation'
-  },
-  report: {
-    scanWo: 'Scan or enter work order No.',
-    noWo: 'No released or in-progress work orders',
-    woNotFound: 'No reportable work order {no}',
-    planQty: 'Planned {n} {unit}',
-    changeWo: 'Change',
-    selectOp: 'Select an operation to report',
-    noOps: 'This work order has no operations',
-    firstArticle: 'First article',
-    firstArticlePending: 'Until the first article inspection passes, only 1 piece in total can be reported',
-    opProgress: 'Good {good}, scrap {scrap}, planned {total}',
-    opHours: 'Hours {n}',
-    changeOp: 'Change',
-    reportDate: 'Report date',
-    goodQty: 'Good qty',
-    scrapQty: 'Scrap qty',
-    hours: 'Actual hours',
-    equipment: 'Equipment',
-    mold: 'Mold',
-    notSpecified: 'Not specified',
-    notUsed: 'Not used',
-    moldOption: '{code} {name} ({n} cavities)',
-    shotsHint: '{shots} shots this time, {used} in total',
-    shotsHintLife: '{shots} shots this time, {used} / {life} in total',
-    operatorSelf: 'Reported as yourself; report for others on a computer',
-    goodQtyRequired: 'Please enter the good qty',
-    scrapQtyInvalid: 'Scrap qty cannot be negative',
-    hoursRequired: 'Please enter the actual hours',
-    submit: 'Submit',
-    done: 'Reported'
   }
 }

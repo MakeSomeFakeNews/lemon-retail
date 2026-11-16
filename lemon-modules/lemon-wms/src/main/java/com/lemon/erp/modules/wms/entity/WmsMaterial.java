@@ -11,7 +11,6 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import com.lemon.erp.modules.wms.model.CostMethod;
 import com.lemon.erp.modules.wms.model.StockAlertMode;
 import com.baomidou.mybatisplus.annotation.TableField;
 import jakarta.validation.Valid;
@@ -58,9 +57,6 @@ public class WmsMaterial extends BaseEntity implements Searchable {
     /** 是否启用序列号管理：数量必须为整数，出入库逐个登记序列号。产生库存业务后不能修改 */
     private Integer serialEnabled;
 
-    /** 是否来料检验：采购入库后冻结为待检，来料检验合格后才能出库 */
-    private Integer iqcRequired;
-
     /**
      * 安全库存（库存下限）：按总库存预警时所有仓库的合计低于该值时预警；
      * 分仓库预警时为各仓库下限之和（保存时计算，供补货建议、MRP 使用）
@@ -96,7 +92,7 @@ public class WmsMaterial extends BaseEntity implements Searchable {
 
     private Long defaultLocationId;
 
-    /** 参考成本价：没有核算单价时按此计价 */
+    /** 参考成本价：没有实时成本单价时按此计价 */
     @DecimalMin(value = "0", message = "{wms.valid.referenceCostCannotLess}")
     private BigDecimal refCost;
 
@@ -127,9 +123,6 @@ public class WmsMaterial extends BaseEntity implements Searchable {
 
     @DecimalMin(value = "0", message = "{wms.valid.priceCannotLess}")
     private BigDecimal wholesalePrice8;
-
-    /** 存货计价方法，默认月末一次加权平均；修改后从下一次成本核算开始生效 */
-    private CostMethod costMethod;
 
     /** 是否多规格款式（1 是）：按规格属性生成 SKU，款式本身不能出入库；由「多规格」功能设置 */
     private Integer isTemplate;
@@ -164,10 +157,6 @@ public class WmsMaterial extends BaseEntity implements Searchable {
 
     public boolean isBatchManaged() {
         return Integer.valueOf(1).equals(batchEnabled);
-    }
-
-    public boolean needsIqc() {
-        return Integer.valueOf(1).equals(iqcRequired);
     }
 
     public boolean isSerialManaged() {

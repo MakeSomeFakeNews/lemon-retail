@@ -19,7 +19,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +35,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class BiEtlService {
 
     /** 人力事实表计算的月份数 */
-    private static final int HR_MONTHS = 24;
     /** 每条 INSERT 写入的行数 */
     private static final int BATCH_SIZE = 500;
 
@@ -50,16 +48,8 @@ public class BiEtlService {
             "material_id", "category", "warehouse_id", "qty", "amount"));
     private static final Fact INVENTORY = new Fact("bi_fact_inventory", List.of("snap_date", "period", "warehouse_id",
             "material_id", "category", "qty", "amount"));
-    private static final Fact PRODUCTION = new Fact("bi_fact_production", List.of("wo_no", "period", "material_id", "category",
-            "dept_id", "status", "plan_qty", "finished_qty", "scrap_qty", "hours", "late"));
     private static final Fact FINANCE = new Fact("bi_fact_finance", List.of("period", "account_id", "category", "dept_id",
             "debit", "credit"));
-    private static final Fact HR = new Fact("bi_fact_hr", List.of("period", "dept_id", "category", "headcount", "hires",
-            "leaves", "gross_pay", "labor_cost"));
-    private static final Fact CRM = new Fact("bi_fact_crm", List.of("period", "owner_id", "dept_id", "leads", "followups",
-            "opps", "won", "lost", "won_amount"));
-    private static final Fact PROJECT = new Fact("bi_fact_project", List.of("period", "project_id", "dept_id", "manager_id",
-            "hours", "labor_cost", "expense", "revenue", "cost"));
 
     private final BiEtlMapper etlMapper;
     private final BiEtlLogMapper logMapper;
@@ -140,23 +130,8 @@ public class BiEtlService {
         counts.put("inventory", write(INVENTORY, etlMapper.selectInventory(),
                 Map.of("snap_date", today, "period", today.getYear() * 100 + today.getMonthValue(), "amount", 0)));
         etlMapper.costInventory(today);
-        etlMapper.clearProduction();
-        counts.put("production", write(PRODUCTION, etlMapper.selectProduction(today), Map.of()));
         etlMapper.clearFinance();
         counts.put("finance", write(FINANCE, etlMapper.selectFinance(), Map.of()));
-        // 人力按月份逐月计算（月末在职人数），最近 24 个月
-        etlMapper.clearHr();
-        int hr = 0;
-        YearMonth month = YearMonth.from(today);
-        for (int i = 0; i < HR_MONTHS; i++, month = month.minusMonths(1)) {
-            int period = month.getYear() * 100 + month.getMonthValue();
-            hr += write(HR, etlMapper.selectHr(period, month.atDay(1), month.atEndOfMonth()), Map.of("period", period));
-        }
-        counts.put("hr", hr);
-        etlMapper.clearCrm();
-        counts.put("crm", write(CRM, etlMapper.selectCrm(), Map.of()));
-        etlMapper.clearProject();
-        counts.put("project", write(PROJECT, etlMapper.selectProject(), Map.of()));
         return counts;
     }
 

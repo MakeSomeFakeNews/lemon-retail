@@ -7,12 +7,12 @@ const call = (v, args) => (typeof v === 'function' ? v(...args) : v)
  * 单条操作的通用流程：（可选确认）→ 调接口 → 提示成功 → 刷新。
  * 返回一个函数，参数原样传给 api，可直接用在模板事件或 a-popconfirm 的 @confirm 上：
  *
- *   const remove = useAction(deleteProject, { successKey: 'common.msg.deleteSuccess', reload: () => load() })
+ *   const remove = useAction(deletePromotion, { successKey: 'common.msg.deleteSuccess', reload: () => load() })
  *   <a-popconfirm @confirm="remove(record.id)">
  *
- *   const close = useAction((d) => closeWo(d.id), {
- *     confirm: (d) => ({ title: t('mes.wo.closeConfirm'), content: t('mes.wo.closeContent') }),
- *     successKey: 'mes.wo.closed',
+ *   const close = useAction((d) => closeOrder('sales', d.id), {
+ *     confirm: (d) => ({ title: t('scm.order.closeTitle'), content: t('scm.order.closeContentOut') }),
+ *     successKey: 'scm.order.closed',
  *     reload: () => refreshDetail()
  *   })
  *

@@ -15,9 +15,6 @@ public final class ScmConstants {
     public static final DataPermissionRule ORDER_RULE = new DataPermissionRule("scm_order", "dept_id", "create_by");
     public static final DataPermissionRule TRADE_RULE = new DataPermissionRule("scm_trade_doc", "dept_id", "create_by");
     public static final DataPermissionRule TRADE_DRAFT_RULE = new DataPermissionRule("scm_trade_draft", "dept_id", "create_by");
-    public static final DataPermissionRule SHIPMENT_RULE = new DataPermissionRule("scm_shipment", "dept_id", "create_by");
-    public static final DataPermissionRule CONTRACT_RULE = new DataPermissionRule("scm_purchase_contract", "dept_id", "create_by");
-    public static final DataPermissionRule TENDER_RULE = new DataPermissionRule("scm_tender", "dept_id", "create_by");
 
     private ScmConstants() {
     }

@@ -8,14 +8,10 @@ import com.lemon.erp.modules.scm.entity.ScmDeliveryPick;
 import com.lemon.erp.modules.scm.model.DeliveryStatus;
 import org.apache.ibatis.annotations.Param;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
 public interface ScmDeliveryMapper extends BaseMapper<ScmDelivery> {
-
-    /** 波次中的发货通知 */
-    List<ScmDelivery> selectByWave(@Param("waveId") Long waveId);
 
     Page<ScmDelivery> selectPageList(Page<ScmDelivery> page, @Param("keyword") String keyword, @Param("status") DeliveryStatus status,
                                      @Param("warehouseId") Long warehouseId, @Param("orderId") Long orderId);

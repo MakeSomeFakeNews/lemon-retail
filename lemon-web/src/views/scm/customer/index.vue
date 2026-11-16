@@ -128,7 +128,7 @@
             </a-form-item>
           </a-col>
           <a-col :xs="24" :sm="12">
-            <a-form-item :label="$t('scm.customer.salesChannel')" name="channel" :extra="$t('scm.customer.channelTip')">
+            <a-form-item :label="$t('scm.customer.salesChannel')" name="channel">
               <a-radio-group v-model:value="form.channel">
                 <a-radio v-for="o in dict.scm_channel" :key="o.value" :value="o.value">{{ o.label }}</a-radio>
               </a-radio-group>
@@ -213,7 +213,6 @@
       :biz-id="extrasId"
       :editable="userStore.hasPerm('scm:customer:edit')"
     />
-    <PortalAccountDrawer v-model:open="portalOpen" kind="customer" :partner="portalCustomer" />
     <PartnerMergeModal ref="mergeRef" type="customer" @merged="load" />
     <CustomerPriceDrawer ref="customerPriceRef" />
   </div>
@@ -222,7 +221,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { DollarOutlined, DownOutlined, ExportOutlined, ImportOutlined, MergeCellsOutlined, PaperClipOutlined, PlusOutlined, UserOutlined } from '@ant-design/icons-vue'
+import { DollarOutlined, DownOutlined, ExportOutlined, ImportOutlined, MergeCellsOutlined, PaperClipOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import DictTag from '@/components/DictTag.vue'
 import FormDrawer from '@/components/FormDrawer.vue'
 import ImportModal from '@/components/ImportModal.vue'
@@ -231,7 +230,6 @@ import SearchForm from '@/components/SearchForm.vue'
 import StatusSwitch from '@/components/StatusSwitch.vue'
 import TableToolbar from '@/components/TableToolbar.vue'
 import IdentityUserSelect from '@/components/common/IdentityUserSelect.vue'
-import PortalAccountDrawer from '@/components/scm/PortalAccountDrawer.vue'
 import PartnerMergeModal from '@/components/scm/PartnerMergeModal.vue'
 import CustomerPriceDrawer from '@/components/scm/CustomerPriceDrawer.vue'
 import { usePriceLevels } from '@/components/wms/priceLevels'
@@ -252,7 +250,6 @@ import AiExtractButton from '@/components/ai/AiExtractButton.vue'
 import AiPrefillAlert from '@/components/ai/AiPrefillAlert.vue'
 import { useAiPrefill } from '@/composables/useAiPrefill'
 
-import { SalesChannel } from '@/constants/enums'
 import { STATUS_ENABLED } from '@/utils/constants'
 import TableActions from '@/components/common/TableActions.vue'
 import { actionColumn } from '@/components/common/tableActions'
@@ -261,12 +258,6 @@ const userStore = useUserStore()
 const dict = useDict('sys_common_status', 'scm_customer_level', 'scm_channel', 'scm_region')
 
 // 经销商门户账号
-const portalOpen = ref(false)
-const portalCustomer = ref()
-function openPortal(record) {
-  portalCustomer.value = record
-  portalOpen.value = true
-}
 
 // 价格等级（启用的价格列；当前值所在的列已停用时仍列出）与客户执行价
 const { levels, levelName } = usePriceLevels()
@@ -373,7 +364,6 @@ const rowActions = (record) => [
   { key: 'price', label: t('pricing.customerPrice.open'), icon: DollarOutlined, onClick: () => customerPriceRef.value.open(record) },
   { type: 'delete', perm: 'scm:customer:remove', confirm: t('scm.customer.confirmDelete', { name: record.name }), onClick: () => remove(record.id) },
   { key: 'extras', label: t('scm.customer.extras'), icon: PaperClipOutlined, more: true, onClick: () => openExtras(record) },
-  { key: 'portal', label: t('scm.customer.portal'), icon: UserOutlined, show: record.channel === SalesChannel.DEALER, perm: 'scm:customer:portal', more: true, onClick: () => openPortal(record) },
   { key: 'merge', label: t('scm.partnerMerge.action'), icon: MergeCellsOutlined, perm: 'scm:customer:merge', show: !record.mergedTo, more: true, onClick: () => mergeRef.value.open(record) }
 ]
 </script>

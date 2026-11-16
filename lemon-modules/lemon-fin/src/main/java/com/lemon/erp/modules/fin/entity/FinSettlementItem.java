@@ -54,8 +54,5 @@ public class FinSettlementItem extends BaseEntity {
     private Long sourceId;
 
     @TableField(exist = false)
-    private Long projectId;
-
-    @TableField(exist = false)
     private com.lemon.erp.modules.fin.model.BillKind billKind;
 }

@@ -16,15 +16,6 @@ export const changeSalesman = (id, salesmanId) => request.put(`/scm/sales/order/
 export const deleteOrder = (kind, ids) => request.delete(`/scm/${kind}/order/${[].concat(ids).join(',')}`)
 /** 单据追溯：订单的下游单据（按权限返回） */
 export const orderTrace = (kind, id) => request.get(`/bi/trace/order/${kind}/${id}`)
-/** 委外加工：委外订单的用料、发料、退料 */
-export const outsourceMaterials = (orderId) => request.get(`/mes/outsource/${orderId}/materials`)
-export const outsourceIssue = (orderId, data) => request.post(`/mes/outsource/${orderId}/issue`, data)
-export const outsourceCandidates = (orderId) => request.get(`/mes/outsource/${orderId}/candidates`)
-export const outsourceAddLines = (orderId, data) => request.post(`/mes/outsource/${orderId}/lines`, data)
-export const outsourceReturn = (orderId, data) => request.post(`/mes/outsource/${orderId}/return`, data)
 /** 订单变更：data { reason, lines: [{ action: MODIFY | REMOVE | ADD, orderItemId, materialId, qty, price, taxRate, deliveryDate }] } */
 export const changeOrder = (kind, id, data) => request.post(`/scm/${kind}/order/${id}/change`, data)
 export const orderChanges = (kind, id) => request.get(`/scm/${kind}/order/${id}/changes`)
-/** 寄售结算：客户寄售 → { orderId, tradeDocId }；供应商寄售 → { orderId, tradeDocId, consumeDocId } */
-export const consignCustomer = (data) => request.post('/scm/consign/customer', data)
-export const consignSupplier = (data) => request.post('/scm/consign/supplier', data)

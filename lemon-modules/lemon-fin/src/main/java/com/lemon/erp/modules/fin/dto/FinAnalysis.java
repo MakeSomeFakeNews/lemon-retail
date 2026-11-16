@@ -23,9 +23,9 @@ public final class FinAnalysis {
      * 毛利汇总的一行：按物料、客户或月份汇总的销售出库 / 退货（不含税，退货为负），口径同 issue #93：
      * 货款（优惠前）− 整单优惠 = 销售收入（revenue，记账的主营业务收入）；
      * 销售金额 = 销售收入 − 本公司承担运费 − 收款折让 / 抹零 − 坏账核销；毛利 = 销售金额 − 成本，毛利率 = 毛利 ÷ 销售金额。
-     * 成本 = 数量 × 当期加权平均单价，missingCost 为没有当期核算单价（取参考成本价）的明细行数。
+     * 成本 = 数量 × 出库时的实时成本单价（库存流水成本），missingCost 为没有流水成本（取参考成本价）的明细行数。
      * 整单优惠按行分摊（含税的分摊额按行税率折算为不含税）；坏账为销售出库单应收单上的核销金额、收款折让为这些单据应收单在收款时的折让
-     * （多次收款累计），都按应收单的不含税比例折算、跟随出库单的业务日期归属；运费为本公司承担的发运运费等；三者按行金额分摊。
+     * （多次收款累计），都按应收单的不含税比例折算、跟随出库单的业务日期归属；运费为本公司承担的运费；三者按行金额分摊。
      * 折让、坏账、运费在财务报表中分别计入财务费用、营业外支出、销售费用，利润表的毛利 = 销售收入 − 成本，不扣它们
      */
     @Data
@@ -120,36 +120,6 @@ public final class FinAnalysis {
     public record MarginDetail(List<MarginDetailRow> rows, MarginTotal total, List<AdjustRow> adjustments, boolean truncated) {
     }
 
-    // ---------------------------------------------------------------- 存货对账
-
-    /** 成本核算期末金额按物料分类汇总 */
-    @Data
-    public static class CategoryAmount {
-        private String category;
-        private BigDecimal closeAmount;
-    }
-
-    /**
-     * 存货科目：总账余额与成本核算期末金额（委托加工物资没有成本核算金额，为空）
-     */
-    public record InventoryAccount(String code, String name, BigDecimal glBalance, BigDecimal costAmount, BigDecimal diff) {
-    }
-
-    /** 成本核算期末数量与库存流水不一致的物料 */
-    @Data
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public static class QtyDiff {
-        private Long materialId;
-        private String code;
-        private String name;
-        private BigDecimal costQty;
-        private BigDecimal stockQty;
-    }
-
-    /** 存货对账 */
-    public record InventoryReconciliation(int period, List<InventoryAccount> accounts, List<QtyDiff> qtyDiffs) {
-    }
-
     // ---------------------------------------------------------------- 现金流量表
 
     /** 涉及现金、银行科目的已记账凭证的分录 */
@@ -159,14 +129,6 @@ public final class FinAnalysis {
         private String accountCode;
         private BigDecimal debit;
         private BigDecimal credit;
-    }
-
-    /** 核销了固定资产购置应付单的付款凭证 */
-    @Data
-    public static class AssetPayment {
-        private Long voucherId;
-        private BigDecimal assetAmount;
-        private BigDecimal totalAmount;
     }
 
     /** 现金流量表的行：标题行金额为空 */

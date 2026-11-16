@@ -64,10 +64,10 @@
             <TableActions
               :actions="[
                 { type: 'view', onClick: () => openDetail(record) },
-                { type: 'edit', label: $t('wms.check.count'), show: record.status === WmsDocStatus.DRAFT, perm: 'wms:check:edit', onClick: () => form.openEdit(record) },
+                { type: 'edit', label: $t('wms.check.count'), show: record.status === DocStatus.DRAFT, perm: 'wms:check:edit', onClick: () => form.openEdit(record) },
                 {
                   type: 'delete',
-                  show: record.status === WmsDocStatus.DRAFT,
+                  show: record.status === DocStatus.DRAFT,
                   perm: 'wms:check:remove',
                   confirm: $t('wms.check.confirmDelete', { no: record.docNo }),
                   onClick: () => remove(record.id)
@@ -103,7 +103,7 @@ import { useTable } from '@/composables/useTable'
 import { toOptions } from '@/utils/dict'
 import { useAction } from '@/composables/useAction'
 
-import { WmsDocStatus } from '@/constants/enums'
+import { DocStatus } from '@/constants/enums'
 const { t } = useI18n()
 
 const dict = useDict('wms_doc_status')

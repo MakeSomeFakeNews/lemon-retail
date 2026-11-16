@@ -1,7 +1,7 @@
 package com.lemon.erp.modules.bi.model;
 
 /**
- * 预警规则可以监控的指标（取值 SQL 见 BiInsightMapper.selectMetric，预算超支由财务预算执行计算）
+ * 预警规则可以监控的指标（取值 SQL 见 BiInsightMapper.selectMetric）
  */
 public enum BiAlertMetric {
 
@@ -9,11 +9,7 @@ public enum BiAlertMetric {
     STOCK_BELOW_SAFETY("bi.label.materialsBelowSafetyStock", "bi.label.items"),
     STOCK_ABOVE_MAX("bi.label.materialsAboveMaxStock", "bi.label.items"),
     SLOW_MOVING("bi.label.slowMovingMaterialsNoOutboundDays", "bi.label.items"),
-    GROSS_MARGIN("bi.label.grossMarginMonth", "bi.label.percent"),
-    TICKET_OVERDUE("bi.label.overdueUnresolvedServiceTickets", "bi.label.docs"),
-    TASK_OVERDUE("bi.label.overdueProjectTasks", "bi.label.items2"),
-    WO_LATE("bi.label.lateWorkOrders", "bi.label.docs"),
-    BUDGET_OVERRUN("bi.label.accountsOverBudgetYtd", "bi.label.items2");
+    GROSS_MARGIN("bi.label.grossMarginMonth", "bi.label.percent");
 
     /** 名称、单位的消息键，输出时按请求语言取消息 */
     private final String label;

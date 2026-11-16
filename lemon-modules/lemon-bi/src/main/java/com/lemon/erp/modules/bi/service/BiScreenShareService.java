@@ -70,14 +70,13 @@ public class BiScreenShareService {
 
     // ---------------------------------------------------------------- 免登录访问
 
-    /** 链接信息：{name, company, screens: [{key, label}], intervalSeconds, workCenterId, workCenterName} */
+    /** 链接信息：{name, company, screens: [{key, label}], intervalSeconds} */
     public BiInsight.ShareInfo publicInfo(String token) {
         BiScreenShare share = resolve(token);
         return TenantContext.callAs(tenantOf(share), () -> new BiInsight.ShareInfo(share.getName(),
                 screenMapper.tenantName(tenantOf(share)),
                 keys(share).stream().map(k -> new BiInsight.ScreenOption(k.name(), Messages.get(k.getLabel()))).toList(),
-                share.getIntervalSeconds(), share.getWorkCenterId(),
-                share.getWorkCenterId() == null ? null : screenMapper.workCenterName(share.getWorkCenterId())));
+                share.getIntervalSeconds()));
     }
 
     public BiScreen.ScreenData publicData(String token, ScreenKey key) {
@@ -85,7 +84,7 @@ public class BiScreenShareService {
         if (!keys(share).contains(key)) {
             throw new BizException("bi.error.screenNotIncludedLink");
         }
-        return TenantContext.callAs(tenantOf(share), () -> screenService.data(key, key.isByWorkCenter() ? share.getWorkCenterId() : null));
+        return TenantContext.callAs(tenantOf(share), () -> screenService.data(key));
     }
 
     /** 按令牌查找（跨租户），校验启用和有效期，按间隔记录访问时间 */
@@ -118,7 +117,6 @@ public class BiScreenShareService {
         share.setName(req.name().trim());
         share.setScreens(req.screens().stream().distinct().map(ScreenKey::name).collect(Collectors.joining(",")));
         share.setIntervalSeconds(req.intervalSeconds());
-        share.setWorkCenterId(req.workCenterId());
         share.setExpireTime(req.expireTime());
         share.setStatus(req.status());
     }

@@ -45,7 +45,7 @@ public class WmsStockController {
      */
     private static final String STOCK_READ_PERMS = "@ss.hasAnyPerm('wms:stock:list', 'wms:trace:list', 'wms:out:add', "
             + "'wms:out:edit', 'wms:transfer:add', 'wms:transfer:edit', 'wms:check:add', 'wms:check:edit', "
-            + "'scm:salesOut:add', 'scm:purchaseReturn:add', 'mes:wo:issue', 'mes:supplement:issue', 'pm:cost:issue')";
+            + "'scm:salesOut:add', 'scm:purchaseReturn:add')";
 
     private final WmsStockQueryService queryService;
     private final WmsStockLimitService limitService;

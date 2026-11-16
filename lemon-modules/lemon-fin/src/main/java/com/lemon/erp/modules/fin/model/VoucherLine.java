@@ -7,16 +7,15 @@ import java.util.Objects;
  * 业务生成凭证的一条分录（借方、贷方只填一边）。辅助核算各项可同时填写
  *
  * @param deptId     辅助核算：部门
- * @param projectId  辅助核算：项目
  * @param customerId 辅助核算：客户
  * @param supplierId 辅助核算：供应商
  * @param materialId 辅助核算：存货（物料）
  */
 public record VoucherLine(String summary, Long accountId, Long deptId, BigDecimal debit, BigDecimal credit,
-                          Long projectId, Long customerId, Long supplierId, Long materialId) {
+                          Long customerId, Long supplierId, Long materialId) {
 
     public VoucherLine(String summary, Long accountId, Long deptId, BigDecimal debit, BigDecimal credit) {
-        this(summary, accountId, deptId, debit, credit, null, null, null, null);
+        this(summary, accountId, deptId, debit, credit, null, null, null);
     }
 
     public static VoucherLine debit(String summary, Long accountId, Long deptId, BigDecimal amount) {
@@ -31,31 +30,27 @@ public record VoucherLine(String summary, Long accountId, Long deptId, BigDecima
     }
 
     public VoucherLine withSummary(String s) {
-        return new VoucherLine(s, accountId, deptId, debit, credit, projectId, customerId, supplierId, materialId);
+        return new VoucherLine(s, accountId, deptId, debit, credit, customerId, supplierId, materialId);
     }
 
     public VoucherLine withAmounts(BigDecimal d, BigDecimal c) {
-        return new VoucherLine(summary, accountId, deptId, d, c, projectId, customerId, supplierId, materialId);
+        return new VoucherLine(summary, accountId, deptId, d, c, customerId, supplierId, materialId);
     }
 
     public VoucherLine withDept(Long dept) {
-        return new VoucherLine(summary, accountId, dept, debit, credit, projectId, customerId, supplierId, materialId);
-    }
-
-    public VoucherLine withProject(Long project) {
-        return new VoucherLine(summary, accountId, deptId, debit, credit, project, customerId, supplierId, materialId);
+        return new VoucherLine(summary, accountId, dept, debit, credit, customerId, supplierId, materialId);
     }
 
     public VoucherLine withCustomer(Long customer) {
-        return new VoucherLine(summary, accountId, deptId, debit, credit, projectId, customer, supplierId, materialId);
+        return new VoucherLine(summary, accountId, deptId, debit, credit, customer, supplierId, materialId);
     }
 
     public VoucherLine withSupplier(Long supplier) {
-        return new VoucherLine(summary, accountId, deptId, debit, credit, projectId, customerId, supplier, materialId);
+        return new VoucherLine(summary, accountId, deptId, debit, credit, customerId, supplier, materialId);
     }
 
     public VoucherLine withMaterial(Long material) {
-        return new VoucherLine(summary, accountId, deptId, debit, credit, projectId, customerId, supplierId, material);
+        return new VoucherLine(summary, accountId, deptId, debit, credit, customerId, supplierId, material);
     }
 
     public boolean isZero() {
@@ -64,7 +59,7 @@ public record VoucherLine(String summary, Long accountId, Long deptId, BigDecima
 
     /** 合并分录时的辅助核算是否相同 */
     public boolean sameAux(VoucherLine o) {
-        return Objects.equals(deptId, o.deptId) && Objects.equals(projectId, o.projectId) && Objects.equals(customerId, o.customerId)
+        return Objects.equals(deptId, o.deptId) && Objects.equals(customerId, o.customerId)
                 && Objects.equals(supplierId, o.supplierId) && Objects.equals(materialId, o.materialId);
     }
 
@@ -74,7 +69,6 @@ public record VoucherLine(String summary, Long accountId, Long deptId, BigDecima
             case DEPT -> deptId != null;
             case CUSTOMER -> customerId != null;
             case SUPPLIER -> supplierId != null;
-            case PROJECT -> projectId != null;
             case MATERIAL -> materialId != null;
         };
     }

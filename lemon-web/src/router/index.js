@@ -9,9 +9,6 @@ import BasicLayout from '@/layout/BasicLayout.vue'
 
 import { MenuType } from '@/constants/enums'
 export const LAYOUT_NAME = 'Layout'
-/** 移动作业（手机 / PDA）：模块路由 /m 下的页面不使用后台布局，在全屏的移动端布局中显示 */
-export const MOBILE_NAME = 'Mobile'
-export const MOBILE_PATH = '/m'
 
 const constantRoutes = [
   {
@@ -66,14 +63,6 @@ const constantRoutes = [
     ]
   }
 ]
-
-constantRoutes.push({
-  path: MOBILE_PATH,
-  name: MOBILE_NAME,
-  component: () => import('@/layout/MobileLayout.vue'),
-  meta: { title: t('route.mobile') },
-  children: [{ path: '', name: 'MobileHome', component: () => import('@/views/mobile/home.vue'), meta: { title: t('route.mobile') } }]
-})
 
 /** 数据大屏：全屏显示，不使用后台布局；/screen-share 为投屏链接，免登录 */
 export const SCREEN_SHARE_PATH = '/screen-share/'
@@ -130,8 +119,6 @@ function menusToRoutes(menus, parentPath = '', routes = []) {
 const WHITE_LIST = ['/login', '/im-callback', '/im-login']
 /** 已登录时也不加载菜单和路由的页面：回调页、免登入口自行处理登录（令牌可能已过期） */
 const BARE_PAGES = ['/im-callback', '/im-login']
-/** 门户账号没有首页工作台，进入所属门户：供应商 → 供应商门户，经销商 → 经销商门户 */
-const portalHome = (user) => (user?.supplierId ? '/portal/order' : user?.customerId ? '/dealer/order' : null)
 
 router.beforeEach(async (to) => {
   const userStore = useUserStore()
@@ -152,13 +139,11 @@ router.beforeEach(async (to) => {
     return '/'
   }
   if (userStore.routesLoaded) {
-    const home = to.path === '/dashboard' ? portalHome(userStore.user) : null
-    return home || true
+    return true
   }
   try {
     await userStore.loadUser()
-    menusToRoutes(userStore.menus).forEach((route) =>
-      router.addRoute(route.path.startsWith(`${MOBILE_PATH}/`) ? MOBILE_NAME : LAYOUT_NAME, route))
+    menusToRoutes(userStore.menus).forEach((route) => router.addRoute(LAYOUT_NAME, route))
     router.addRoute(LAYOUT_NAME, {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',
@@ -168,10 +153,6 @@ router.beforeEach(async (to) => {
     userStore.routesLoaded = true
     useAppStore().retitleTabs((path) => router.resolve(path).meta?.title)
     // 动态路由刚添加，需要重新匹配一次
-    const home = to.path === '/dashboard' ? portalHome(userStore.user) : null
-    if (home) {
-      return { path: home, replace: true }
-    }
     return { ...to, replace: true }
   } catch (e) {
     userStore.reset()

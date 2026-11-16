@@ -46,25 +46,14 @@
                 </div>
                 <a-space v-perm="'fin:opening:edit'">
                   <span class="sub-text">{{ $t('fin.opening.startPeriod') }}</span>
-                  <PeriodPicker v-model:value="guideStart" :disabled="!!startPeriod && stock.locked" />
+                  <PeriodPicker v-model:value="guideStart" />
                   <a-button :disabled="!guideStart" @click="stockInImportOpen = true">
                     <template #icon><ImportOutlined /></template>{{ $t('fin.opening.importStock') }}
                   </a-button>
                 </a-space>
               </div>
               <div class="guide-step">
-                <div :class="['guide-no', { done: summary.stock.saved }]">4</div>
-                <div class="guide-body">
-                  <div class="guide-title">{{ $t('fin.opening.stockTab') }}</div>
-                  <div class="sub-text">
-                    {{ $t('fin.opening.step4Tip') }}
-                    {{ summary.stock.saved ? $t('fin.opening.savedAt', { period: periodText(summary.stock.openingPeriod) }) : $t('fin.opening.notSaved') }}
-                  </div>
-                </div>
-                <a-button @click="tab = 'stock'">{{ $t('fin.opening.goEnter') }}</a-button>
-              </div>
-              <div class="guide-step">
-                <div :class="['guide-no', { done: summary.bills.AR.count || summary.bills.AP.count }]">5</div>
+                <div :class="['guide-no', { done: summary.bills.AR.count || summary.bills.AP.count }]">4</div>
                 <div class="guide-body">
                   <div class="guide-title">{{ $t('fin.opening.step5') }}</div>
                   <div class="sub-text">{{ $t('fin.opening.step5Tip') }}</div>
@@ -132,88 +121,6 @@
             </template>
           </a-table>
         </a-tab-pane>
-
-        <!-- ---------------------------------------------------------------- 存货期初 -->
-        <a-tab-pane key="stock" :tab="$t('fin.opening.stockTab')">
-          <a-alert type="info" show-icon class="tip">
-            <template #message>
-              {{ $t('fin.opening.stockTip') }}
-            </template>
-          </a-alert>
-          <div class="toolbar">
-            <span>{{ $t('fin.opening.startPeriod') }}</span>
-            <PeriodPicker :value="startPeriod" :disabled="stock.locked" @update:value="changeStart" />
-            <a-tag v-if="stock.locked" color="orange" :bordered="false">{{ $t('fin.opening.locked') }}</a-tag>
-            <span class="spacer" />
-            <span v-for="c in stock.checks" :key="c.accountCode" :class="['balance', { bad: Number(c.stockAmount) !== Number(c.ledgerAmount) }]">
-              {{ $t('fin.opening.stockCheck', { code: c.accountCode, name: c.accountName, stock: money(c.stockAmount), ledger: money(c.ledgerAmount) }) }}
-            </span>
-            <a-button v-perm="'fin:opening:edit'" :disabled="stock.locked || !startPeriod" @click="stockImportOpen = true">
-              <template #icon><ImportOutlined /></template>{{ $t('common.action.import') }}
-            </a-button>
-            <a-button
-              v-perm="'fin:opening:edit'"
-              type="primary"
-              :disabled="stock.locked || !startPeriod"
-              :loading="savingStock"
-              @click="submitStock"
-            >
-              {{ $t('fin.opening.saveStock') }}
-            </a-button>
-          </div>
-          <a-table
-            row-key="key"
-            size="small"
-            bordered
-            :columns="stockColumns"
-            :data-source="stockRows"
-            :loading="loadingStock"
-            :pagination="{ pageSize: 50, showSizeChanger: false, showTotal: (total) => $t('fin.opening.totalMaterials', { total }) }"
-            :scroll="{ x: stockScrollX, y: '100%' }"
-            :locale="{ emptyText: startPeriod ? $t('fin.opening.noStock') : $t('fin.opening.selectStartFirst') }"
-          >
-            <template #bodyCell="{ column, record, index }">
-              <template v-if="column.key === 'material'">
-                <MaterialSelect
-                  v-if="!record.materialCode"
-                  :value="record.materialId"
-                  @update:value="(v) => (record.materialId = v)"
-                  @select="(m) => Object.assign(record, { materialCode: m.code, materialName: m.name, spec: m.spec, unit: m.unit })"
-                />
-                <template v-else>
-                  <div>{{ record.materialCode }} {{ record.materialName }}</div>
-                  <div class="sub-text">{{ record.spec }}</div>
-                </template>
-              </template>
-              <template v-else-if="column.key === 'bookQty'">{{ record.bookQty == null ? '-' : formatQty(record.bookQty) }} {{ record.unit }}</template>
-              <template v-else-if="column.key === 'qty'">
-                <a-input-number v-model:value="record.qty" :min="0" :precision="4" :disabled="stock.locked" size="small" class="full" />
-              </template>
-              <template v-else-if="column.key === 'price'">
-                <a-input-number
-                  :value="record.qty ? Math.round((record.amount / record.qty) * 10000) / 10000 : undefined"
-                  :min="0"
-                  :precision="4"
-                  :disabled="stock.locked || !record.qty"
-                  size="small"
-                  class="full"
-                  @change="(v) => (record.amount = Math.round((v || 0) * record.qty * 100) / 100)"
-                />
-              </template>
-              <template v-else-if="column.key === 'amount'">
-                <a-input-number v-model:value="record.amount" :min="0" :precision="2" :disabled="stock.locked" size="small" class="full" />
-              </template>
-              <template v-else-if="column.key === 'action'">
-                <a-button v-if="record.bookQty == null && !stock.locked" type="link" danger size="small" @click="stockRows.splice(index, 1)">
-                  <DeleteOutlined />
-                </a-button>
-              </template>
-            </template>
-          </a-table>
-          <a-button v-if="!stock.locked && startPeriod" type="dashed" block class="add-row" @click="addStockRow">
-            <template #icon><PlusOutlined /></template>{{ $t('fin.opening.addMaterial') }}
-          </a-button>
-        </a-tab-pane>
       </a-tabs>
     </a-card>
     <ImportModal
@@ -229,7 +136,7 @@
       :columns="stockInImportColumns"
       :importer="(data) => importOpeningStock(guideStart, data)"
       :sample="{ warehouse: $t('fin.opening.sampleWarehouse'), materialCode: 'M0001', qty: 100 }"
-      @success="loadSummary(); loadStock(guideStart)"
+      @success="loadSummary"
     />
     <ImportModal
       v-model:open="billImportOpen"
@@ -239,13 +146,6 @@
       :sample="{ partner: billImportKind === BillKind.AR ? 'C0001' : 'S0001', billDate: '2026-01-31', amount: 10000 }"
       @success="loadSummary"
     />
-    <ImportModal
-      v-model:open="stockImportOpen"
-      :title="$t('fin.opening.stockTab')"
-      :columns="stockImportColumns"
-      :importer="fillStock"
-      :sample="{ code: 'M0001', qty: 100, amount: 1000 }"
-    />
   </div>
 </template>
 
@@ -253,15 +153,13 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { useI18n } from 'vue-i18n'
-import { DeleteOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { ImportOutlined } from '@ant-design/icons-vue'
 import DictTag from '@/components/DictTag.vue'
 import ImportModal from '@/components/ImportModal.vue'
 import PeriodPicker from '@/components/fin/PeriodPicker.vue'
-import MaterialSelect from '@/components/wms/MaterialSelect.vue'
-import { accountOpenings, importOpeningBills, importOpeningStock, openingSummary, saveAccountOpenings, saveStockOpening, stockOpening } from '@/api/fin'
-import { materialOptions } from '@/api/wms/material'
-import { formatMoney, periodText } from '@/components/fin/fin'
-import { formatQty, rowKey } from '@/components/wms/wms'
+import { accountOpenings, importOpeningBills, importOpeningStock, openingSummary, saveAccountOpenings } from '@/api/fin'
+import { formatMoney } from '@/components/fin/fin'
+import { formatQty } from '@/components/wms/wms'
 import { useDict } from '@/composables/useDict'
 import { useUserStore } from '@/store/user'
 
@@ -387,106 +285,8 @@ async function submitAccounts() {
     )
     message.success(t('fin.opening.accountsSaved'))
     loadAccounts()
-    loadStock()
   } finally {
     savingAccounts.value = false
-  }
-}
-
-// ---------------------------------------------------------------- 存货期初
-const stockColumns = [
-  { title: t('fin.opening.material'), key: 'material', width: 290 },
-  { title: t('fin.opening.bookQty'), key: 'bookQty', width: 130, align: 'right' },
-  { title: t('fin.opening.openingQty'), key: 'qty', width: 140 },
-  { title: t('common.field.price'), key: 'price', width: 140 },
-  { title: t('fin.opening.openingAmount'), key: 'amount', width: 160 },
-  { title: '', key: 'action', width: 50 }
-]
-const stockScrollX = stockColumns.reduce((sum, c) => sum + c.width, 0)
-const stock = ref({ locked: false, checks: [], rows: [] })
-const stockRows = ref([])
-const startPeriod = ref()
-const loadingStock = ref(false)
-const savingStock = ref(false)
-
-async function loadStock(period) {
-  loadingStock.value = true
-  try {
-    stock.value = await stockOpening(period)
-    startPeriod.value = stock.value.startPeriod ?? period
-    guideStart.value ??= startPeriod.value
-    stockRows.value = stock.value.rows.map((r) => ({ ...r, key: rowKey(), qty: Number(r.qty), amount: Number(r.amount) }))
-  } finally {
-    loadingStock.value = false
-  }
-}
-
-function changeStart(p) {
-  startPeriod.value = p
-  loadStock(p)
-}
-
-function addStockRow() {
-  stockRows.value.push({ key: rowKey(), materialId: undefined, bookQty: null, qty: null, amount: null })
-}
-
-const stockImportOpen = ref(false)
-const stockImportColumns = [
-  { title: t('fin.opening.materialCode'), key: 'code', required: true },
-  { title: t('fin.opening.materialName'), key: 'name' },
-  { title: t('fin.opening.openingQty'), key: 'qty', type: 'number', required: true },
-  { title: t('fin.opening.openingAmount'), key: 'amount', type: 'number', required: true }
-]
-async function fillStock({ rows }) {
-  const byCode = new Map(stockRows.value.filter((r) => r.materialCode).map((r) => [r.materialCode, r]))
-  const errors = []
-  const found = new Map()
-  for (const { rowNum, data } of rows) {
-    if (data.qty < 0 || data.amount < 0) {
-      errors.push({ rowNum, message: t('fin.opening.qtyAmountNegative') })
-      continue
-    }
-    if (!data.qty && data.amount) {
-      errors.push({ rowNum, message: t('fin.opening.zeroQtyAmount') })
-      continue
-    }
-    if (byCode.has(data.code)) continue
-    const m = (await materialOptions(data.code)).find((x) => x.code === data.code)
-    if (m) found.set(data.code, m)
-    else errors.push({ rowNum, message: t('fin.opening.materialNotFound', { code: data.code }) })
-  }
-  if (!errors.length) {
-    rows.forEach(({ data }) => {
-      let r = byCode.get(data.code)
-      if (!r) {
-        const m = found.get(data.code)
-        r = { key: rowKey(), materialId: m.id, materialCode: m.code, materialName: m.name, spec: m.spec, unit: m.unit, bookQty: null }
-        stockRows.value.push(r)
-        byCode.set(data.code, r)
-      }
-      Object.assign(r, { qty: data.qty, amount: data.amount })
-    })
-    message.info(t('fin.opening.filledStock'))
-  }
-  return { total: rows.length, imported: errors.length ? 0 : rows.length, errors }
-}
-
-async function submitStock() {
-  const items = stockRows.value.filter((r) => r.materialId)
-  if (items.some((r) => !r.qty && Number(r.amount))) {
-    message.warning(t('fin.opening.zeroQtyAmount'))
-    return
-  }
-  savingStock.value = true
-  try {
-    await saveStockOpening({
-      startPeriod: startPeriod.value,
-      items: items.map((r) => ({ materialId: r.materialId, qty: r.qty || 0, amount: r.amount || 0 }))
-    })
-    message.success(t('fin.opening.stockSaved'))
-    loadStock()
-  } finally {
-    savingStock.value = false
   }
 }
 
@@ -497,7 +297,6 @@ watch(tab, (t) => {
 onMounted(() => {
   loadSummary()
   loadAccounts()
-  loadStock()
 })
 </script>
 
@@ -527,10 +326,6 @@ onMounted(() => {
 }
 .full {
   width: 100%;
-}
-.add-row {
-  flex: none;
-  margin-top: 8px;
 }
 .sub-text {
   color: var(--app-text-3);

@@ -6,7 +6,6 @@ import com.lemon.erp.modules.bi.dto.PivotResult;
 import com.lemon.erp.modules.bi.model.BiAlertMetric;
 import com.lemon.erp.modules.bi.model.BiCube;
 import com.lemon.erp.modules.bi.service.BiDecisionService;
-import com.lemon.erp.modules.fin.dto.BudgetExecution;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -37,11 +36,7 @@ public class BiAlertAiSource implements AiAlertSource {
             BiAlertMetric.STOCK_BELOW_SAFETY, List.of("bi.inventory", "bi.purchase", "bi.sales"),
             BiAlertMetric.STOCK_ABOVE_MAX, List.of("bi.inventory", "bi.purchase", "bi.sales"),
             BiAlertMetric.SLOW_MOVING, List.of("bi.inventory", "bi.sales", "bi.purchase"),
-            BiAlertMetric.GROSS_MARGIN, List.of("bi.sales", "bi.purchase"),
-            BiAlertMetric.WO_LATE, List.of("mes.production", "mes.quality"),
-            BiAlertMetric.BUDGET_OVERRUN, List.of("fin.finance"),
-            BiAlertMetric.TICKET_OVERDUE, List.of(),
-            BiAlertMetric.TASK_OVERDUE, List.of());
+            BiAlertMetric.GROSS_MARGIN, List.of("bi.sales", "bi.purchase"));
 
     private final BiDecisionService decisionService;
     private final BiReportPivots pivots;
@@ -83,18 +78,7 @@ public class BiAlertAiSource implements AiAlertSource {
                     .map(r -> new BiInventoryReportSource.SlowItem(r.getCode(), r.getName(), r.getQty(), r.getAmount(), r.getIdleDays()))
                     .toList();
         }
-        if (metric == BiAlertMetric.BUDGET_OVERRUN) {
-            int month = LocalDate.now().getMonthValue();
-            return decisionService.overBudget().stream().limit(DETAIL_ROWS)
-                    .map(e -> overrun(e, month)).toList();
-        }
         return List.of();
-    }
-
-    private static BudgetOverrun overrun(BudgetExecution e, int month) {
-        BigDecimal budget = BiDecisionService.ytd(e.budgets(), month);
-        BigDecimal actual = BiDecisionService.ytd(e.actuals(), month);
-        return new BudgetOverrun(e.deptName(), e.accountCode(), e.accountName(), budget, actual, actual.subtract(budget));
     }
 
     /**
@@ -104,8 +88,4 @@ public class BiAlertAiSource implements AiAlertSource {
     public record MonthMargin(String period, BigDecimal salesAmount, BigDecimal grossProfit, BigDecimal marginPct) {
     }
 
-    /** 本年累计超支的预算科目（元） */
-    public record BudgetOverrun(String dept, String accountCode, String accountName, BigDecimal budgetYtd, BigDecimal actualYtd,
-                                BigDecimal overAmount) {
-    }
 }

@@ -70,7 +70,6 @@ export default {
   ref: {
     title: 'Price Reference',
     keywordPh: 'Partner code or name',
-    quotations: 'Quotes',
     sales: 'Sales',
     purchases: 'Purchases',
     customerCompare: 'Customers',

@@ -9,9 +9,8 @@ export default {
   },
   group: {
     office: '办公',
-    sales: '销售与服务',
-    warehouse: '仓储生产',
-    quality: '设备与质量'
+    sales: '销售',
+    warehouse: '仓储'
   },
   ok: '确定',
   cancel: '取消',
@@ -90,7 +89,6 @@ export default {
     statTodo: '待我审批',
     statRunning: '审批中',
     statUnread: '未读消息',
-    statAnnual: '年假（天）',
     tenant: '租户',
     dept: '部门',
     phone: '手机号',

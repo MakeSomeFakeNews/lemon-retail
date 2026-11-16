@@ -58,7 +58,7 @@
           <span>{{ $t('login.tagWorkflow') }}</span>
           <span>{{ $t('login.tagDataPerm') }}</span>
           <span>{{ $t('login.tagCurrency') }}</span>
-          <span>{{ $t('login.tagCost') }}</span>
+          <span>{{ $t('login.tagJxc') }}</span>
           <span>{{ $t('login.tagAnalytics') }}</span>
         </div>
       </section>
@@ -140,13 +140,9 @@ import { message } from 'ant-design-vue'
 import { useI18n } from 'vue-i18n'
 import {
   AccountBookOutlined,
-  ApartmentOutlined,
   BarChartOutlined,
   DatabaseOutlined,
-  HeartOutlined,
-  IdcardOutlined,
   LockOutlined,
-  ProjectOutlined,
   SafetyOutlined,
   ShopOutlined,
   ShoppingCartOutlined,
@@ -177,12 +173,8 @@ const year = new Date().getFullYear()
 
 const modules = [
   { icon: ShoppingCartOutlined, name: t('login.modScm'), color: '#1677ff' },
-  { icon: ApartmentOutlined, name: t('login.modMes'), color: '#fa8c16' },
   { icon: DatabaseOutlined, name: t('login.modWms'), color: '#13c2c2' },
   { icon: AccountBookOutlined, name: t('login.modFin'), color: '#faad14' },
-  { icon: IdcardOutlined, name: t('login.modHr'), color: '#eb2f96' },
-  { icon: HeartOutlined, name: t('login.modCrm'), color: '#f5222d' },
-  { icon: ProjectOutlined, name: t('login.modPm'), color: '#722ed1' },
   { icon: BarChartOutlined, name: t('login.modBi'), color: '#52c41a' }
 ]
 

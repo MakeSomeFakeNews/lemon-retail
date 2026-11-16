@@ -1,9 +1,7 @@
 package com.lemon.erp.modules.scm.service;
 
-import com.lemon.erp.common.exception.BizException;
 import com.lemon.erp.common.util.Decimals;
 import com.lemon.erp.modules.scm.dto.OrderRequest;
-import com.lemon.erp.modules.scm.entity.ScmOrder;
 import com.lemon.erp.modules.scm.entity.ScmOrderItem;
 import com.lemon.erp.modules.scm.model.OrderKind;
 import lombok.RequiredArgsConstructor;
@@ -11,7 +9,6 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.function.Supplier;
 
 import static com.lemon.erp.modules.scm.model.ScmConstants.amount;
 import static com.lemon.erp.modules.scm.model.ScmConstants.tax;
@@ -24,40 +21,15 @@ import static com.lemon.erp.modules.scm.model.ScmConstants.tax;
 @RequiredArgsConstructor
 public class ScmOrderPricingService {
 
-    private final ScmContractUsageService contractUsage;
     private final ScmPromotionService promotionService;
-    private final ScmRebateService rebateService;
     private final ScmPriceControlService priceControl;
     private final ScmCustomerService customerService;
     private final ScmTaxRates taxRates;
 
-    /** 采购订单引用采购合同：按合同价下单并校验 */
-    public void applyContract(OrderKind kind, OrderRequest req, List<ScmOrderItem> items, Long orderId) {
-        if (req.contractId() == null) {
-            return;
-        }
-        if (kind != OrderKind.PURCHASE) {
-            throw new BizException("scm.error.onlyPurchaseOrdersReferencePurchaseContract");
-        }
-        contractUsage.apply(req.contractId(), req.partnerId(), req.orderDate(), req.currency(), items, orderId);
-    }
-
-    /**
-     * 审核时校验合同的剩余数量 / 金额、有效期
-     *
-     * @param items 订单明细，引用了合同时才读取
-     */
-    public void checkContractOnApprove(ScmOrder order, Supplier<List<ScmOrderItem>> items) {
-        if (order.getContractId() != null) {
-            contractUsage.checkOnApprove(order.getContractId(), order.getPartnerId(), order.getOrderDate(), items.get(), order.getId());
-        }
-    }
-
-    /** 应用促销、返利抵扣，并按调整后的单价重算金额 */
-    public ScmPromotionService.Applied promote(OrderRequest req, List<ScmOrderItem> items, Long orderId) {
-        rebateService.checkBalance(req.partnerId(), req.rebateAmount(), orderId);
+    /** 应用促销，并按调整后的单价重算金额 */
+    public ScmPromotionService.Applied promote(OrderRequest req, List<ScmOrderItem> items) {
         ScmPromotionService.Applied applied = promotionService.apply(customerService.get(req.partnerId()), req.orderDate(), items,
-                req.rebateAmount(), taxRates.fallback(req.invoiceKind()));
+                taxRates.fallback(req.invoiceKind()));
         for (ScmOrderItem item : applied.items()) {
             item.setAmount(amount(item.getQty(), item.getPrice()));
             item.setTaxAmount(tax(item.getAmount(), item.getTaxRate()));
@@ -65,15 +37,10 @@ public class ScmOrderPricingService {
         return applied;
     }
 
-    /** 整单优惠（在促销、返利抵扣之后）：按行金额分摊到各行，返回订单记录的优惠金额 */
+    /** 整单优惠（在促销之后）：按行金额分摊到各行，返回订单记录的优惠金额 */
     public static BigDecimal applyWholeDiscount(OrderRequest req, List<ScmOrderItem> items) {
         WholeDiscounts.apply(items, req.wholeDiscount());
         return Decimals.money(req.wholeDiscount());
-    }
-
-    /** 订单记录的返利抵扣金额 */
-    public static BigDecimal rebateOf(OrderRequest req) {
-        return Decimals.money(req.rebateAmount());
     }
 
     /** 限价：控制方式为禁止保存的物料，销售单价不能低于最低销售价、采购单价不能高于最高采购价 */

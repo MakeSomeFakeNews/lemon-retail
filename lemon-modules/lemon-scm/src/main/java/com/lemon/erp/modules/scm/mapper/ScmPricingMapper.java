@@ -16,7 +16,6 @@ import java.util.List;
 @Mapper
 public interface ScmPricingMapper {
 
-    List<PricingViews.HistoryRow> selectQuotationHistory(@Param("q") PricingViews.ReferenceQuery q);
 
     /**
      * @param kind  销售出库或采购入库

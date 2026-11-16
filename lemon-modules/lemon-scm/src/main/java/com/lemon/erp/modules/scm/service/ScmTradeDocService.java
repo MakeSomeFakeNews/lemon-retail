@@ -37,10 +37,8 @@ import com.lemon.erp.modules.scm.model.TradeKind;
 import com.lemon.erp.modules.wms.dto.StockDocItemRequest;
 import com.lemon.erp.modules.wms.dto.StockDocRequest;
 import com.lemon.erp.modules.wms.entity.WmsStockDoc;
-import com.lemon.erp.modules.wms.model.HoldLine;
 import com.lemon.erp.modules.wms.model.LineWarehouses;
 import com.lemon.erp.modules.wms.service.DocNoService;
-import com.lemon.erp.modules.wms.service.StockHoldService;
 import com.lemon.erp.modules.wms.service.WmsStockDocService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -87,7 +85,6 @@ public class ScmTradeDocService {
     private final WmsStockDocService stockDocService;
     private final DocNoService docNoService;
     private final ApplicationEventPublisher eventPublisher;
-    private final StockHoldService holdService;
     private final ScmReservationService reservationService;
     private final ScmStockCosts stockCosts;
     private final DirectGifts directGifts;
@@ -186,7 +183,7 @@ public class ScmTradeDocService {
             lines.add(new OrderItemRequest(r.materialId(), r.qty(), r.price(), r.taxRate(), req.bizDate(), r.remark(), r.unitName()));
         }
         ScmOrder order = orderService.createDirect(kind.getOrderKind(), new OrderRequest(req.partnerId(), req.bizDate(), req.bizDate(),
-                req.warehouseId(), req.remark(), lines, null, null, null, null, req.wholeDiscount(), req.invoiceKind()), req.salesmanId(),
+                req.warehouseId(), req.remark(), lines, null, null, req.wholeDiscount(), req.invoiceKind()), req.salesmanId(),
                 kind.isReturns());
         // 订单明细按插入顺序与请求的普通明细一一对应，买赠促销生成的赠品行在其后
         List<ScmOrderItem> orderItems = orderItemMapper.selectByOrderId(order.getId());
@@ -302,19 +299,11 @@ public class ScmTradeDocService {
         StockDocRequest stockReq = stockCosts.enrich(kind, order, items, new StockDocRequest(kind.getStockBizType().name(),
                 req.warehouseId(), null, req.bizDate(), req.remark(),
                 items.stream().map(ScmTradeDocService::toStockItem).toList()));
-        if (kind == TradeKind.PURCHASE_RETURN) {
-            // 退货先解冻该订单的不合格、待检库存
-            holdService.releaseForReturn(order.getId(), holdLines(req.warehouseId(), items));
-        }
         if (kind == TradeKind.SALES_OUT) {
             // 先核销本订单的预留，出库不受自己的预留限制
             items.forEach(i -> reservationService.consume(i.getOrderItemId(), warehouseOf(i, req.warehouseId()), i.getQty()));
         }
         WmsStockDoc stockDoc = stockDocService.createConfirmed(kind.getStockKind(), stockReq, docNo);
-        if (kind == TradeKind.PURCHASE_IN) {
-            // 需要来料检验的物料冻结为待检，检验合格后放行
-            holdService.holdForInspection(docNo, order.getId(), order.getPartnerId(), holdLines(req.warehouseId(), items));
-        }
 
         LoginUser user = SecurityUtils.getLoginUser();
         Long deptId = origin != null ? origin.deptId() : user.deptId();
@@ -550,11 +539,6 @@ public class ScmTradeDocService {
     /** 明细的实际仓库：明细仓库，为空取表头仓库 */
     private static Long warehouseOf(ScmTradeDocItem item, Long headerWarehouseId) {
         return item.getWarehouseId() != null ? item.getWarehouseId() : headerWarehouseId;
-    }
-
-    private static List<HoldLine> holdLines(Long warehouseId, List<ScmTradeDocItem> items) {
-        return items.stream().map(i -> new HoldLine(warehouseId, i.getLocationId() == null ? 0L : i.getLocationId(),
-                i.getMaterialId(), i.getBatchNo() == null ? "" : i.getBatchNo(), i.getQty())).toList();
     }
 
     private static StockDocItemRequest toStockItem(ScmTradeDocItem i) {

@@ -94,7 +94,7 @@
             <template v-if="column.key === 'billAmount'">{{ formatMoney(record.billAmount) }}</template>
             <template v-else-if="column.key === 'source'">
               <DictTag type="fin_bill_source" :value="record.sourceType" />
-              <SourceDocLink class="sub-text" :type="record.sourceType" :id="record.sourceId" :no="record.sourceNo" :bill-kind="record.billKind" :project-id="record.projectId" />
+              <SourceDocLink class="sub-text" :type="record.sourceType" :id="record.sourceId" :no="record.sourceNo" :bill-kind="record.billKind" />
             </template>
             <template v-else-if="column.key === 'advanceOffset'">{{ Number(record.advanceOffset) ? formatMoney(record.advanceOffset) : '' }}</template>
             <template v-else-if="column.key === 'discount'">
@@ -217,8 +217,8 @@ const remove = useAction((id) => deleteSettlement(props.kind, id), { successKey:
 // ---------------------------------------------------------------- 新增、修改草稿、确认
 const formRef = ref()
 const openCreate = () => formRef.value.open()
-/** 草稿、已拒绝的付款单可以修改（票据业务生成的除外） */
-const editable = (r) => (r.status === ApproveStatus.DRAFT || r.status === ApproveStatus.REJECTED) && r.method !== 'NOTE'
+/** 草稿、已拒绝的付款单可以修改 */
+const editable = (r) => r.status === ApproveStatus.DRAFT || r.status === ApproveStatus.REJECTED
 const openEdit = (r) => formRef.value.open({ id: r.id })
 function onSaved() {
   load()

@@ -21,37 +21,12 @@ public class ScmFlowBusinesses {
                 text("orderNo", "scm.label.orderNo"));
     }
 
-    /** 变量与 {@link ScmPurchaseContractService#submit} 发起时传入的一致 */
-    @Bean
-    public FlowBusiness purchaseContractFlow() {
-        return FlowBusiness.of(ScmPurchaseContractService.PROCESS_KEY, "scm.label.purchaseContractApproval",
-                number("amount", "scm.label.contractAmount"),
-                dict("contractType", "scm.label.contractType", "scm_contract_type"),
-                text("contractNo", "scm.label.contractNo"));
-    }
-
     @Bean
     public FlowBusiness salesOrderFlow() {
         return FlowBusiness.of("scm_sales_order", "scm.label.salesOrderApproval",
                 number("amount", "scm.label.orderAmount"),
                 number("wholeDiscount", "scm.label.flowWholeDiscount"),
                 text("orderNo", "scm.label.orderNo"));
-    }
-
-    @Bean
-    public FlowBusiness requisitionFlow() {
-        return FlowBusiness.of("scm_requisition", "scm.label.purchaseRequisitionApproval",
-                text("reqNo", "scm.label.requisitionNo"));
-    }
-
-    @Bean
-    public FlowBusiness quotationFlow() {
-        return FlowBusiness.of("scm_quotation", "scm.label.salesQuotationApproval",
-                number("totalAmount", "scm.label.quotationAmount"),
-                number("discountRate", "scm.label.lowestDiscountRateEGMeans"),
-                number("wholeDiscount", "scm.label.flowWholeDiscount"),
-                number("wholeDiscountRate", "scm.label.flowWholeDiscountRate"),
-                text("quoteNo", "scm.label.quotationNo"));
     }
 
     @Bean

@@ -20,7 +20,7 @@ import { deptTree } from '@/api/system/dept'
 import { cached } from './fin'
 import { t } from '@/locales'
 
-/** 部门选择（凭证分录辅助核算、资产使用部门、预算部门） */
+/** 部门选择（凭证分录辅助核算） */
 defineProps({
   value: Number,
   placeholder: { type: String, default: () => t('fin.deptSelect.placeholder') }

@@ -35,10 +35,6 @@ public class BiScreenShare extends BaseEntity {
     /** 轮播间隔（秒） */
     private Integer intervalSeconds;
 
-    /** 生产车间、生产进度大屏只显示该工作中心，为空显示全部（修改时可清空） */
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
-    private Long workCenterId;
-
     /** 有效期至，为空长期有效（修改时可清空） */
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -53,7 +49,4 @@ public class BiScreenShare extends BaseEntity {
 
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private Long createBy;
-
-    @TableField(exist = false)
-    private String workCenterName;
 }

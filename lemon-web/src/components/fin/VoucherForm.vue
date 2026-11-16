@@ -52,7 +52,6 @@
                     :label="record[a.name]"
                     class="aux-input"
                   />
-                  <ProjectSelect v-else-if="a.value === AuxItem.PROJECT" v-model:value="record.projectId" class="aux-input" />
                   <MaterialSelect v-else v-model:value="record.materialId" :label="record.materialName" :placeholder="$t('fin.voucherForm.materialPlaceholder')" class="aux-input" />
                   <a-button v-if="a.value !== AuxItem.DEPT && !isRequired(record, a.value)" type="text" size="small" :title="$t('fin.voucherForm.remove')" @click="removeAux(record, a)">
                     <CloseOutlined />
@@ -113,7 +112,6 @@ import { CloseOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons-v
 import FormDrawer from '@/components/FormDrawer.vue'
 import AccountSelect from './AccountSelect.vue'
 import DeptSelect from './DeptSelect.vue'
-import ProjectSelect from '@/components/pm/ProjectSelect.vue'
 import PartnerSelect from '@/components/scm/PartnerSelect.vue'
 import MaterialSelect from '@/components/wms/MaterialSelect.vue'
 import { accountOptions, addVoucher, getVoucher, updateVoucher } from '@/api/fin'

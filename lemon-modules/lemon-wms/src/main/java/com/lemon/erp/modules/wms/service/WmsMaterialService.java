@@ -28,7 +28,6 @@ import com.lemon.erp.modules.wms.mapper.WmsAssemblyItemMapper;
 import com.lemon.erp.modules.wms.mapper.WmsAssemblyMapper;
 import com.lemon.erp.modules.wms.entity.WmsVariantValue;
 import com.lemon.erp.modules.wms.mapper.WmsVariantValueMapper;
-import com.lemon.erp.modules.wms.model.CostMethod;
 import com.lemon.erp.modules.wms.entity.WmsMaterialUnit;
 import com.lemon.erp.modules.wms.entity.WmsStockDocItem;
 import com.lemon.erp.modules.wms.mapper.WmsCheckItemMapper;
@@ -57,7 +56,7 @@ public class WmsMaterialService {
 
     /** 记录变更历史的字段 */
     private static final Map<String, String> CHANGE_FIELDS = ChangeLogger.fields("code", "物料编码", "name", "物料名称", "spec", "规格型号", "unit", "计量单位", "category", "分类", "brand", "品牌", // i18n-ignore 字段名写入变更记录
-            "batchEnabled", "批次管理", "serialEnabled", "序列号管理", "iqcRequired", "来料检验", "safetyStock", "安全库存", "maxStock", "库存上限", "alertMode", "库存预警方式", "reorderPoint", "再订货点", "reorderQty", "再订货量", "barcode", "条码", "defaultWarehouseId", "默认仓库", "refCost", "参考成本价", "costMethod", "计价方法", "remark", "备注", // i18n-ignore
+            "batchEnabled", "批次管理", "serialEnabled", "序列号管理", "safetyStock", "安全库存", "maxStock", "库存上限", "alertMode", "库存预警方式", "reorderPoint", "再订货点", "reorderQty", "再订货量", "barcode", "条码", "defaultWarehouseId", "默认仓库", "refCost", "参考成本价", "remark", "备注", // i18n-ignore
             "retailPrice", "零售价", "wholesalePrice1", "批发价1", "wholesalePrice2", "批发价2", "wholesalePrice3", "批发价3", // i18n-ignore
             "wholesalePrice4", "批发价4", "wholesalePrice5", "批发价5", "wholesalePrice6", "批发价6", "wholesalePrice7", "批发价7", // i18n-ignore
             "wholesalePrice8", "批发价8"); // i18n-ignore
@@ -401,10 +400,6 @@ public class WmsMaterialService {
         material.setCategory(StringUtils.hasText(material.getCategory()) ? material.getCategory().trim() : null);
         material.setBatchEnabled(Integer.valueOf(1).equals(material.getBatchEnabled()) ? 1 : 0);
         material.setSerialEnabled(Integer.valueOf(1).equals(material.getSerialEnabled()) ? 1 : 0);
-        material.setIqcRequired(Integer.valueOf(1).equals(material.getIqcRequired()) ? 1 : 0);
-        if (material.getCostMethod() == null) {
-            material.setCostMethod(CostMethod.WEIGHTED);
-        }
     }
 
     /** 条码不能与其他物料（含辅助单位的包装条码）重复；默认库位须属于默认仓库；品牌须为业务字典中的值 */

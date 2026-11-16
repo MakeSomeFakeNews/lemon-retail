@@ -4,7 +4,7 @@
 
     <sql id="viewSelect">
         SELECT d.*, o.order_no, c.name AS customer_name, w.name AS warehouse_name, t.doc_no AS trade_doc_no,
-               u.nickname AS create_by_name, pu.nickname AS pick_by_name, wv.wave_no,
+               u.nickname AS create_by_name, pu.nickname AS pick_by_name,
                (SELECT SUM(i.qty) FROM scm_delivery_item i WHERE i.delivery_id = d.id) AS total_qty
         FROM scm_delivery d
         JOIN scm_order o ON o.id = d.order_id
@@ -13,7 +13,6 @@
         LEFT JOIN scm_trade_doc t ON t.id = d.trade_doc_id
         LEFT JOIN sys_user u ON u.id = d.create_by
         LEFT JOIN sys_user pu ON pu.id = d.pick_by
-        LEFT JOIN scm_wave wv ON wv.id = d.wave_id
     </sql>
 
     <select id="selectPageList" resultType="com.lemon.erp.modules.scm.entity.ScmDelivery">
@@ -28,12 +27,6 @@
             <if test="orderId != null">AND d.order_id = #{orderId}</if>
         </where>
         ORDER BY d.id DESC
-    </select>
-
-    <select id="selectByWave" resultType="com.lemon.erp.modules.scm.entity.ScmDelivery">
-        <include refid="viewSelect"/>
-        WHERE d.wave_id = #{waveId}
-        ORDER BY d.id
     </select>
 
     <select id="selectDetail" resultType="com.lemon.erp.modules.scm.entity.ScmDelivery">

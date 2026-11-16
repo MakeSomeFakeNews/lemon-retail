@@ -74,7 +74,6 @@ public final class PricingViews {
     /**
      * 价格参考：没有权限的分区为 null（不输出），有权限但没有数据为空列表
      *
-     * @param quotations      报价历史（销售）
      * @param sales           销售历史（销售出库）
      * @param purchases       进货历史（采购入库）
      * @param purchaseQty     进货数量（按供应商汇总）
@@ -82,7 +81,7 @@ public final class PricingViews {
      * @param customerCompare 客户对比（销售价格记忆）
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record Reference(List<HistoryRow> quotations, List<HistoryRow> sales, List<HistoryRow> purchases,
+    public record Reference(List<HistoryRow> sales, List<HistoryRow> purchases,
                             List<PartnerQtyRow> purchaseQty, List<MemoryRow> supplierCompare, List<MemoryRow> customerCompare) {
     }
 

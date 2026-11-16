@@ -62,19 +62,16 @@ import AccountSelect from '@/components/fin/AccountSelect.vue'
 import { cached } from '@/components/fin/fin'
 
 /**
- * 凭证科目设置：业务单据自动生成凭证时各用途使用的科目。存货、收入、成本可按物料分类，工资费用可按职位类别，其他出入库的对方科目可按收发类别分别设置；
+ * 凭证科目设置：业务单据自动生成凭证时各用途使用的科目。存货、收入、成本可按物料分类分别设置；
  * 优先级为 分类设置 → 用途设置 → 预置科目
  */
 const { t } = useI18n()
 const userStore = useUserStore()
 const canEdit = computed(() => userStore.hasPerm('fin:accountRule:edit'))
-const dict = useDict('wms_material_category', 'hr_position_category', 'wms_in_category', 'wms_out_category')
+const dict = useDict('wms_material_category')
 /** 维度 → 名称（与后端 AccountRole.Dimension 一致） */
 const DIMENSION_LABELS = {
-  MATERIAL_CATEGORY: 'fin.accountRule.materialCategory',
-  POSITION_CATEGORY: 'fin.accountRule.positionCategory',
-  IN_CATEGORY: 'fin.accountRule.inCategory',
-  OUT_CATEGORY: 'fin.accountRule.outCategory'
+  MATERIAL_CATEGORY: 'fin.accountRule.materialCategory'
 }
 
 const roles = ref([])
@@ -105,33 +102,20 @@ function accountText(code, scope) {
   return a ? `${a.code} ${a.name}` : t('fin.accountRule.invalidAccount', { code })
 }
 
-const roleByName = computed(() => new Map(roles.value.map((r) => [r.role, r])))
-
 function idText(id) {
   const a = accountById.value.get(id)
   return a ? `${a.code} ${a.name}` : id
 }
 
-/** 用途实际使用的科目：用途设置 → 后备用途（如其他出入库对方科目沿用待处理财产损溢）→ 预置科目 */
-function effectiveText(role) {
-  const id = edits[role.role]?.accountId
-  if (id) return idText(id)
-  const fallback = role.fallback && roleByName.value.get(role.fallback)
-  return fallback ? effectiveText(fallback) : accountText(role.defaultCode, role.scope)
-}
-
-/** 用途未设置时的提示：有后备用途的显示「同 xx」，否则显示预置科目 */
+/** 用途未设置时的提示：预置科目 */
 function rolePlaceholder(role) {
-  const fallback = role.fallback && roleByName.value.get(role.fallback)
-  if (fallback) return t('fin.accountRule.sameAsRole', { role: fallback.label, account: effectiveText(fallback) })
   return t('fin.accountRule.preset', { account: accountText(role.defaultCode, role.scope) })
 }
 
-/** 分类未设置时实际使用的科目：用途设置 → 后备用途 → 该分类的预置科目 */
+/** 分类未设置时实际使用的科目：用途设置 → 该分类的预置科目 */
 function dimPlaceholder(role, value) {
   const id = edits[role.role].accountId
   if (id) return t('fin.accountRule.sameAsAbove', { account: idText(id) })
-  if (role.fallback) return rolePlaceholder(role)
   return t('fin.accountRule.preset', { account: accountText(role.dimensionDefaults?.[value] || role.defaultCode) })
 }
 

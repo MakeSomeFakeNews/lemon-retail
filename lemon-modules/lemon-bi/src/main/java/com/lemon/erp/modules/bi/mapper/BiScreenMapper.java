@@ -13,33 +13,6 @@ public interface BiScreenMapper {
 
     // ---------------------------------------------------------------- 生产车间
 
-    /** 报工合计：{good, scrap, hours} */
-    BiScreen.ReportSum reportSum(@Param("begin") LocalDate begin, @Param("end") LocalDate end, @Param("wc") Long wc);
-
-    /** 每日报工：[{day, good, scrap}] */
-    List<BiScreen.ReportDay> reportTrend(@Param("begin") LocalDate begin, @Param("end") LocalDate end, @Param("wc") Long wc);
-
-    /** 工作中心当日负荷：[{name, capacity, hours, good, scrap}] */
-    List<BiScreen.WorkCenterLoad> workCenterLoad(@Param("day") LocalDate day, @Param("wc") Long wc);
-
-    /** 设备：[{code, name, status, statusLabel, workCenter, good（当日）, stopHours（本月）}] */
-    List<BiScreen.Equipment> equipments(@Param("day") LocalDate day, @Param("monthBegin") LocalDate monthBegin, @Param("wc") Long wc);
-
-    /** 停机原因：[{label, hours}] */
-    List<BiScreen.StopReason> stopReasons(@Param("begin") LocalDate begin, @Param("end") LocalDate end, @Param("wc") Long wc);
-
-    /** 在制工单（已下达、生产中），按计划完工日期：[{woNo, product, qty, finishedQty, doneQty, currentOp, planEnd, status}] */
-    List<BiScreen.ActiveWorkOrder> activeWorkOrders(@Param("wc") Long wc, @Param("limit") int limit);
-
-    /** 工单数量：{active, overdue, completed（当日完工）} */
-    BiScreen.WorkOrderCounts workOrderCounts(@Param("day") LocalDate day, @Param("nextDay") LocalDate nextDay, @Param("wc") Long wc);
-
-    /** 最新报工：[{time, woNo, op, operator, equipment, good, scrap}] */
-    List<BiScreen.RecentReport> recentReports(@Param("wc") Long wc, @Param("limit") int limit);
-
-    /** 当日完工入库数量 */
-    java.math.BigDecimal finishedInQty(@Param("day") LocalDate day);
-
     // ---------------------------------------------------------------- 仓储物流
 
     /** 已完成的出入库单：[{kind, docs, qty}] */
@@ -123,32 +96,9 @@ public interface BiScreenMapper {
 
     // ---------------------------------------------------------------- 质量管理
 
-    /** 已确认的检验单按类型：[{type, label, total, pass, fail, concession}] */
-    List<BiScreen.InspectionType> inspectionByType(@Param("begin") LocalDate begin, @Param("end") LocalDate end);
-
-    /** 每日检验：[{day, total, pass}] */
-    List<BiScreen.InspectionDay> inspectionTrend(@Param("begin") LocalDate begin, @Param("end") LocalDate end);
-
-    /** 不良类型（不合格、让步接收的检验）：[{label, times, qty}] */
-    List<BiScreen.DefectType> defectTypes(@Param("begin") LocalDate begin, @Param("end") LocalDate end, @Param("limit") int limit);
-
-    /** 供应商来料质量，按不合格率：[{name, total, fail}] */
-    List<BiScreen.SupplierQuality> supplierQuality(@Param("begin") LocalDate begin, @Param("end") LocalDate end, @Param("limit") int limit);
-
-    /** 不合格品处理：{open, created（期间新建）, done（期间处置完成）} */
-    BiScreen.NcrCounts ncrCounts(@Param("begin") LocalDate begin, @Param("nextDay") LocalDate nextDay);
-
-    /** 未处置的不合格品：[{ncrNo, material, qty, sourceLabel, defectLabel, statusLabel, time}] */
-    List<BiScreen.OpenNcr> openNcrs(@Param("limit") int limit);
-
-    /** 最近的检验：[{inspNo, typeLabel, material, result, resultLabel, defectQty, date}] */
-    List<BiScreen.RecentInspection> recentInspections(@Param("limit") int limit);
-
     // ---------------------------------------------------------------- 通用
 
     /** 租户（企业）名称 */
     String tenantName(@Param("tenantId") Long tenantId);
 
-    /** 工作中心名称 */
-    String workCenterName(@Param("id") Long id);
 }

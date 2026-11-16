@@ -17,21 +17,7 @@ public enum BillSource {
     PURCHASE_RETURN,
     /** 期初 / 手工 */
     MANUAL,
-    /** 项目开票 */
-    PROJECT,
-    /** 运费 */
-    SHIPMENT,
-    /** 服务收费 */
-    TICKET,
-    /** 固定资产 */
-    ASSET,
-    /** 票据拒付 */
-    NOTE,
-    /** 质量索赔 */
-    QUALITY_CLAIM,
-    /** 销售返利 */
-    REBATE,
-    /** 冲账单（垫付运费、返利、三包赔偿等抵扣往来款，红字） */
+    /** 冲账单（垫付运费、返利、赔偿等抵扣往来款，红字） */
     OFFSET,
     /** 订单尾差调整：部分出入库的订单关闭时，已出入库金额与订单口径的差额（蓝字或红字） */
     ORDER_ADJUST,

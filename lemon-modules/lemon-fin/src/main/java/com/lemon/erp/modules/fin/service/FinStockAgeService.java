@@ -16,7 +16,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.lemon.erp.modules.fin.model.FinConstants.periodOf;
 
 /**
  * 库龄分析：截至日期的结存按先进先出对应到最近的入库记录（结存来自最后几次入库），按入库距今天数分段统计数量和金额。
@@ -61,7 +60,7 @@ public class FinStockAgeService {
             List<Long> chunk = ids.subList(i, Math.min(i + CHUNK, ids.size()));
             ageMapper.selectInflows(date, warehouseId, chunk).forEach(r ->
                     inflows.computeIfAbsent(r.getMaterialId(), k -> new ArrayList<>()).add(r));
-            ageMapper.selectUnitCosts(periodOf(date), chunk).forEach(r -> units.put(r.getMaterialId(), dec(r.getUnitCost())));
+            ageMapper.selectUnitCosts(chunk).forEach(r -> units.put(r.getMaterialId(), dec(r.getUnitCost())));
         }
         int n = limits.size() + 1;
         BigDecimal[] totalQty = zeros(n);

@@ -76,9 +76,6 @@ public class FinAccountRuleService {
                 break;
             }
         }
-        if (rule == null && role.fallback() != null) {
-            return account(role.fallback(), null);
-        }
         if (rule == null) {
             String preset = dims.stream().filter(d -> role.dimensionDefaults().containsKey(d)).findFirst().orElse(null);
             return accountService.leafByCode(role.defaultCode(preset));
@@ -103,7 +100,7 @@ public class FinAccountRuleService {
             rules.stream().filter(r -> !NO_DIM.equals(r.getDimValue())).forEach(r -> items.put(r.getDimValue(), r.getAccountId()));
             // 分组、用途名称返回给页面显示，按请求语言翻译
             views.add(new RoleView(role.name(), Messages.get(role.groupKey()), Messages.get(role.labelKey()), role.dimension().name(), role.dimension().dictType(),
-                    role.defaultCode(), role.dimensionDefaults(), role.fallback() == null ? null : role.fallback().name(), role.scope(), accountId, items));
+                    role.defaultCode(), role.dimensionDefaults(), role.scope(), accountId, items));
         }
         return views;
     }
@@ -161,16 +158,15 @@ public class FinAccountRuleService {
     /**
      * 一个用途的设置
      *
-     * @param dimension         维度（NONE、MATERIAL_CATEGORY、POSITION_CATEGORY、IN_CATEGORY、OUT_CATEGORY）
+     * @param dimension         维度（NONE、MATERIAL_CATEGORY）
      * @param dictType          维度取值所在的字典
      * @param defaultCode       预置科目编码
      * @param dimensionDefaults 维度取值 → 预置科目编码（没有的取 defaultCode）
-     * @param fallback          没有设置时沿用的用途，没有为空
      * @param scope             科目范围用途：设置的科目及其下级都属于该用途，可以选上级科目
      * @param accountId         设置的默认科目，未设置为空
      * @param items             维度取值 → 设置的科目
      */
     public record RoleView(String role, String group, String label, String dimension, String dictType, String defaultCode,
-                           Map<String, String> dimensionDefaults, String fallback, boolean scope, Long accountId, Map<String, Long> items) {
+                           Map<String, String> dimensionDefaults, boolean scope, Long accountId, Map<String, Long> items) {
     }
 }

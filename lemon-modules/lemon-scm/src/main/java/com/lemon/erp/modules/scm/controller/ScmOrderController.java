@@ -36,7 +36,7 @@ public class ScmOrderController {
     /** 订单列表、详情：入库 / 出库、退货页面需要选择订单并读取明细，生产计划可由销售订单生成 */
     private static final String READ_PERMS = "#kind == 'purchase'"
             + " ? @ss.hasAnyPerm('scm:purchase:list', 'scm:purchaseIn:add', 'scm:purchaseReturn:add')"
-            + " : @ss.hasAnyPerm('scm:sales:list', 'scm:salesOut:add', 'scm:salesReturn:add', 'mes:plan:add')";
+            + " : @ss.hasAnyPerm('scm:sales:list', 'scm:salesOut:add', 'scm:salesReturn:add')";
 
     private final ScmOrderService orderService;
     private final com.lemon.erp.modules.scm.service.ScmOrderChangeService changeService;
